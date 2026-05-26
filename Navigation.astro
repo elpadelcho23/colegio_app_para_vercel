@@ -1,0 +1,54 @@
+---
+// src/components/Navigation.astro
+const { currentPath } = Astro.props;
+---
+
+<nav class="nav-principal">
+    <div class="nav-container">
+        <span class="logo">SGE <small>v1.0</small></span>
+        <div class="links">
+            <a href="/" class={currentPath === "/" ? "active" : ""}>
+                👥 Alumnos
+            </a>
+            <a href="/materias" class={currentPath === "/materias" ? "active" : ""}>
+                📚 Materias
+            </a>
+            <a href="/cursos" class={currentPath === "/cursos" ? "active" : ""}>
+                📖 Cursos
+            </a>
+        </div>
+    </div>
+</nav>
+
+<style>
+    .nav-principal {
+        background: #1e2025;
+        border-bottom: 1px solid #444;
+        padding: 1rem 0;
+        margin-bottom: 2rem;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+    .nav-container {
+        max-width: 800px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 1.5rem;
+    }
+    .logo { font-weight: bold; color: #4dabf7; font-size: 1.2rem; }
+    .links { display: flex; gap: 1.5rem; }
+    
+    a {
+        text-decoration: none;
+        color: #888;
+        font-weight: 500;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+    a:hover { color: white; background: #2b2e36; }
+    a.active { color: white; background: #4dabf7; }
+</style>

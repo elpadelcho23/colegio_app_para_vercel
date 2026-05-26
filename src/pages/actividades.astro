@@ -1,0 +1,158 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Actividades">
+  <main class="page" data-activities data-calendar>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Agenda docente</p>
+        <h1>Actividades y calendario</h1>
+        <p>Avisos de evaluacion, TP, entregas y fechas importantes en una sola pantalla.</p>
+      </div>
+      <a class="btn btn-secondary" href="/notas">Ir a calificaciones</a>
+    </header>
+
+    <section class="grid-2">
+      <form class="panel form-grid" data-activity-form>
+        <label>
+          <span>Colegio</span>
+          <select name="colegio" required></select>
+        </label>
+        <label>
+          <span>Turno</span>
+          <select name="turno" required></select>
+        </label>
+        <label>
+          <span>Curso</span>
+          <select name="cursoId" required></select>
+        </label>
+        <label>
+          <span>Materia</span>
+          <select name="materiaId" required></select>
+        </label>
+        <label class="span-2">
+          <span>Titulo</span>
+          <input name="titulo" placeholder="Evaluacion integradora, TP de investigacion..." required />
+        </label>
+        <label>
+          <span>Fecha de publicación</span>
+          <input type="date" name="fechaPublicacion" />
+        </label>
+        <label>
+          <span>Fecha de entrega del TP</span>
+          <input type="date" name="fechaVencimiento" />
+        </label>
+
+        <div class="activity-template-picker span-2" role="radiogroup" aria-label="Tipo de actividad">
+          <label class="template-card">
+            <input type="radio" name="tipo" value="evaluacion" checked />
+            <strong>Aviso de evaluación</strong>
+            <span>Fecha, materia, curso y descripción.</span>
+          </label>
+          <label class="template-card">
+            <input type="radio" name="tipo" value="tp" />
+            <strong>Publicación del TP</strong>
+            <span>Consigna, entrega y seguimiento.</span>
+          </label>
+        </div>
+
+        <section class="activity-editor span-2" data-activity-editor></section>
+
+        <div class="button-row span-2">
+          <button class="btn btn-secondary" type="button" id="btn-descargar-word">Descargar Word</button>
+          <button class="btn btn-secondary" type="button" id="btn-descargar-pdf">Descargar PDF</button>
+          <button class="btn btn-primary" type="submit">Guardar actividad</button>
+        </div>
+      </form>
+
+      <div class="panel">
+        <div class="section-title">
+          <h2>Actividades preparadas</h2>
+          <p>La lista y el calendario comparten curso, materia y fecha.</p>
+        </div>
+        <div class="list" data-activity-list></div>
+      </div>
+    </section>
+
+    <section class="panel calendar-panel">
+      <div class="section-title">
+        <h2>Calendario</h2>
+        <p>Fechas importantes, avisos, evaluaciones y entregas.</p>
+      </div>
+      <div class="filters">
+        <input type="month" data-calendar-month aria-label="Mes" />
+        <select data-calendar-course aria-label="Curso"></select>
+        <select data-calendar-subject aria-label="Materia"></select>
+      </div>
+    </section>
+
+    <section class="panel calendar-panel">
+      <div class="section-title">
+        <h2>Agregar evento al calendario</h2>
+        <p>Marcá faltas, lluvia, salidas educativas, actos o jornada institucional.</p>
+      </div>
+      <form class="form-grid" data-calendar-event-form>
+        <label>
+          <span>Tipo</span>
+          <select name="tipo" required>
+            <option value="ausencia">Falta docente</option>
+            <option value="lluvia">Día de lluvia</option>
+            <option value="salida_educativa">Salida educativa</option>
+            <option value="acto">Acto escolar</option>
+            <option value="jornada">Jornada institucional</option>
+          </select>
+        </label>
+        <label>
+          <span>Fecha</span>
+          <input type="date" name="fecha" required />
+        </label>
+        <label>
+          <span>Curso</span>
+          <select name="cursoId"></select>
+        </label>
+        <label>
+          <span>Materia</span>
+          <select name="materiaId"></select>
+        </label>
+        <label class="span-2">
+          <span>Título</span>
+          <input name="titulo" placeholder="Se completa solo si lo dejás vacío" />
+        </label>
+        <label class="span-2">
+          <span>Descripción</span>
+          <textarea name="descripcion" rows="3" placeholder="Detalle opcional del evento"></textarea>
+        </label>
+        <button class="btn btn-primary span-2" type="submit">Guardar evento</button>
+      </form>
+    </section>
+
+    <section class="calendar-layout">
+      <div class="calendar-grid" data-calendar-grid></div>
+      <aside class="panel calendar-day-panel">
+        <div class="section-title">
+          <h2 data-calendar-selected-title>Selecciona un dia</h2>
+          <p data-calendar-selected-summary>Los eventos del dia aparecen aca.</p>
+        </div>
+        <div class="list" data-calendar-day-events></div>
+      </aside>
+    </section>
+
+    <dialog class="modal" data-calendar-opt-in>
+      <form method="dialog" class="panel modal-panel">
+        <div class="section-title">
+          <h2>Recordatorios</h2>
+          <p>Podemos avisarte cuando se acerquen evaluaciones, entregas y fechas importantes.</p>
+        </div>
+        <label>
+          <span>Dias de anticipacion</span>
+          <input type="number" min="1" max="30" value="3" data-calendar-lead-days />
+        </label>
+        <div class="button-row">
+          <button class="btn btn-primary" value="accept" data-calendar-alerts-accept>Activar recordatorios</button>
+          <button class="btn btn-secondary" value="dismiss" data-calendar-alerts-dismiss>Ahora no</button>
+        </div>
+      </form>
+    </dialog>
+  </main>
+</Layout>

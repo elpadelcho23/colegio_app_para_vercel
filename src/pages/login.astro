@@ -1,0 +1,42 @@
+---
+import '../styles/global.css';
+const error = Astro.url.searchParams.get('error');
+const registered = Astro.url.searchParams.get('registered');
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login | Aula Clara</title>
+  </head>
+  <body>
+    <main class="login-page">
+      <section class="login-card">
+        <p class="eyebrow">Acceso seguro</p>
+        <h1 style="font-size: 2rem;">Aula Clara</h1>
+        <p>Ingresa con tu cuenta docente o admin.</p>
+        {registered && <p class="tag ok">Cuenta creada. Ahora puedes iniciar sesión.</p>}
+        {error && <p class="tag danger">Credenciales inválidas</p>}
+        <form method="post" action="/api/auth/login">
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" placeholder="usuario@ejemplo.com" required />
+          </label>
+          <label>
+            <span>Contraseña</span>
+            <input type="password" name="password" placeholder="********" required />
+          </label>
+          <button class="btn btn-primary" type="submit">Entrar</button>
+        </form>
+        <p style="margin-top: 1rem; color: var(--muted); font-size: .9rem;">
+          ¿No tienes cuenta? <a href="/register">Regístrate aquí</a>.
+        </p>
+        <p style="margin-top: 1rem; color: var(--muted); font-size: .9rem;">
+          Demo docente: docente@aulaclara.test / Docente123!
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

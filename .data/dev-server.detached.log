@@ -1,0 +1,11 @@
+
+> software-colegio@0.0.1 dev
+> astro dev --host 127.0.0.1 --port 4321
+
+[2m23:26:20[22m [34m[@astrojs/node][39m Enabling sessions with filesystem storage
+[vite] connected.
+[2m23:26:23[22m [34m[types][39m Generated [2m3ms[22m
+[33m[1m23:26:23[22m [WARN] [content][39m Content config not loaded
+[42m[1m astro [22m[49m [32mv6.1.9[39m [2mready in[22m 2886 [2mms[22m
+[2m┃[22m Local    [36mhttp://127.0.0.1:4321/[39m
+[2m23:26:23[22m [32mwatching for file changes...[39m

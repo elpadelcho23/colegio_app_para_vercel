@@ -1,0 +1,47 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Cursos">
+  <main class="page" data-courses>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Organizacion</p>
+        <h1>Cursos y divisiones</h1>
+        <p>Crea cursos reutilizables para inscripcion, asistencia y reportes.</p>
+      </div>
+      <a class="btn btn-secondary" href="/registro">Cargar alumnos</a>
+    </header>
+
+    <section class="grid-2">
+      <form class="panel form-grid" data-course-form>
+        <label>
+          <span>Escuela</span>
+          <input name="escuela" required />
+        </label>
+        <label>
+          <span>Curso</span>
+          <input name="nombre" placeholder="6to 1ra" required />
+        </label>
+        <label class="span-2">
+          <span>Turno</span>
+          <select name="turno" required>
+            <option value="">Seleccionar turno</option>
+            <option>Manana</option>
+            <option>Tarde</option>
+            <option>Noche</option>
+          </select>
+        </label>
+        <button class="btn btn-primary span-2" type="submit">Crear curso</button>
+      </form>
+
+      <div class="panel">
+        <div class="section-title">
+          <h2>Cursos activos</h2>
+          <p>Resumen de cantidad de alumnos por curso.</p>
+        </div>
+        <div class="list" data-course-list></div>
+      </div>
+    </section>
+  </main>
+</Layout>

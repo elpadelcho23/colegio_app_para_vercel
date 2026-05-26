@@ -1,0 +1,24 @@
+{
+  "appliedMutationIds": [
+    "mutation-test-1",
+    "mutation-test-2"
+  ],
+  "attendance": [
+    {
+      "id": "attendance:al-1:programacion:2026-05-05",
+      "estado": "presente",
+      "fecha": "2026-05-05",
+      "studentId": "al-1",
+      "subjectId": "programacion",
+      "updatedAt": "2026-05-05T03:20:00.000Z"
+    },
+    {
+      "id": "attendance:al-2:programacion:2026-05-05",
+      "estado": "ausente",
+      "fecha": "2026-05-05",
+      "studentId": "al-2",
+      "subjectId": "programacion",
+      "updatedAt": "2026-05-05T03:25:00.000Z"
+    }
+  ]
+}

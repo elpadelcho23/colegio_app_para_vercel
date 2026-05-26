@@ -1,0 +1,46 @@
+---
+import '../styles/global.css';
+const error = Astro.url.searchParams.get('error');
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Registro | Aula Clara</title>
+  </head>
+  <body>
+    <main class="login-page">
+      <section class="login-card">
+        <p class="eyebrow">Registro de cuenta</p>
+        <h1 style="font-size: 2rem;">Aula Clara</h1>
+        <p>Registra tu cuenta docente con nombre completo, email y contraseña.</p>
+        {error === '1' && <p class="tag danger">Completa todos los campos y verifica las contraseñas.</p>}
+        {error === '2' && <p class="tag danger">Ya existe una cuenta con ese email.</p>}
+        <form method="post" action="/api/auth/register">
+          <label>
+            <span>Nombre completo</span>
+            <input type="text" name="nombre" autocomplete="name" required />
+          </label>
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" autocomplete="email" required />
+          </label>
+          <label>
+            <span>Contraseña</span>
+            <input type="password" name="password" minlength="8" required />
+          </label>
+          <label>
+            <span>Confirmar contraseña</span>
+            <input type="password" name="confirm" minlength="8" required />
+          </label>
+          <button class="btn btn-primary" type="submit">Registrar cuenta</button>
+        </form>
+        <p style="margin-top: 1rem; color: var(--muted); font-size: .9rem;">
+          ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,64 @@
+---
+const { currentPath = '/' } = Astro.props;
+const user = Astro.locals.user;
+
+const links = [
+  { href: '/', label: 'Panel' },
+  { href: '/registro', label: 'Alumnos' },
+  { href: '/asistencia', label: 'Asistencia' },
+  { href: '/notas', label: 'Calificaciones' },
+  { href: '/actividades', label: 'Actividades' },
+  ...(user?.rol === 'admin' ? [{ href: '/admin/usuarios', label: 'Admin' }] : []),
+];
+
+const isActive = (href: string) =>
+  href === '/' ? currentPath === '/' : currentPath.startsWith(href);
+---
+
+<header class="app-shell">
+  <div class="institution-strip">
+    <div>
+      <strong>Escuela Tecnica 1</strong>
+      <span>Seguimiento escolar simple para docentes</span>
+    </div>
+    {user && <span>{user.nombre} - {user.rol}</span>}
+  </div>
+  <nav class="topbar" aria-label="Navegacion principal">
+    <a class="brand" href="/" aria-label="Ir al panel principal">
+      <span class="brand-mark">AC</span>
+      <span>
+        <strong>Aula Clara</strong>
+        <small>Gestion docente</small>
+      </span>
+    </a>
+
+    <button
+      class="menu-toggle"
+      type="button"
+      aria-label="Abrir menu"
+      aria-controls="main-navigation-menu"
+      aria-expanded="false"
+      data-menu-toggle
+    >
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <div class="nav-links" id="main-navigation-menu" data-nav-menu>
+      {links.map((link) => (
+        <a href={link.href} class:list={[{ active: isActive(link.href) }]}>
+          {link.label}
+        </a>
+      ))}
+      {user ? (
+        <form method="post" action="/api/auth/logout" class="nav-form">
+          <button type="submit">Salir</button>
+        </form>
+      ) : (
+        <a href="/login" class:list={[{ active: currentPath === '/login' }]}>Login</a>
+      )}
+      <button class="theme-toggle" type="button" data-theme-toggle>Modo oscuro</button>
+    </div>
+  </nav>
+</header>

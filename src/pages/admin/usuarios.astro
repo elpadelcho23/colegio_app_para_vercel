@@ -1,0 +1,136 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { listBackups } from '../../server/backup';
+import { db } from '../../server/db';
+
+const docentes = db.prepare(`
+  SELECT usuarios.id, usuarios.nombre, usuarios.email, usuarios.rol, usuarios.created_at, tenants.nombre AS tenant
+  FROM usuarios
+  LEFT JOIN tenants ON tenants.id = usuarios.tenant_id
+  ORDER BY created_at DESC
+`).all() as Array<{ id: string; nombre: string; email: string; rol: string; tenant: string; created_at: string }>;
+
+const cursos = db.prepare(`
+  SELECT id, escuela, nombre, turno
+  FROM cursos
+  ORDER BY escuela, nombre
+`).all() as Array<{ id: string; escuela: string; nombre: string; turno: string }>;
+
+const materias = db.prepare(`
+  SELECT id, nombre
+  FROM materias
+  WHERE activo = 1
+  ORDER BY nombre
+`).all() as Array<{ id: string; nombre: string }>;
+
+const backups = listBackups();
+---
+
+<Layout title="Administracion">
+  <main class="page">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Administracion institucional</p>
+        <h1>Usuarios y respaldos</h1>
+        <p>Alta controlada de profesores, asignacion pedagogica y resguardo de base de datos.</p>
+      </div>
+      <a class="btn btn-secondary" href="/">Volver al panel</a>
+    </header>
+
+    <section class="grid-2">
+      <form class="panel form-grid" method="post" action="/api/admin/register-teacher">
+        <div class="section-title span-2">
+          <h2>Registrar profesor</h2>
+          <p>El registro es administrado: solo un admin puede crear usuarios docentes.</p>
+        </div>
+        <label>
+          <span>Nombre</span>
+          <input name="nombre" required />
+        </label>
+        <label>
+          <span>Email</span>
+          <input type="email" name="email" required />
+        </label>
+        <label class="span-2">
+          <span>Contrasena temporal</span>
+          <input type="password" name="password" minlength="10" required />
+        </label>
+        <fieldset class="span-2 checkbox-grid">
+          <legend>Cursos asignados</legend>
+          {cursos.map((curso) => (
+            <label>
+              <input type="checkbox" name="cursoIds" value={curso.id} />
+              <span>{curso.escuela} - {curso.nombre} - {curso.turno}</span>
+            </label>
+          ))}
+        </fieldset>
+        <fieldset class="span-2 checkbox-grid">
+          <legend>Materias asignadas</legend>
+          {materias.map((materia) => (
+            <label>
+              <input type="checkbox" name="materiaIds" value={materia.id} />
+              <span>{materia.nombre}</span>
+            </label>
+          ))}
+        </fieldset>
+        <button class="btn btn-primary span-2" type="submit">Crear profesor</button>
+      </form>
+
+      <div class="panel">
+        <div class="section-title">
+          <h2>Usuarios</h2>
+          <p>Lista de cuentas institucionales registradas.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cuenta</th></tr>
+            </thead>
+            <tbody>
+              {docentes.map((docente) => (
+                <tr>
+                  <td>{docente.nombre}</td>
+                  <td>{docente.email}</td>
+                  <td><span class="tag">{docente.rol}</span></td>
+                  <td>{docente.tenant}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel institutional-panel">
+      <div class="section-title">
+        <h2>Backups SQLite</h2>
+        <p>Se generan automaticamente y tambien pueden crearse antes de operaciones sensibles.</p>
+      </div>
+      <form method="post" action="/api/admin/backup/create" class="button-row">
+        <button class="btn btn-primary" type="submit">Crear backup ahora</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Archivo</th><th>Fecha</th><th>Tamano</th><th>Restaurar</th></tr>
+          </thead>
+          <tbody>
+            {backups.map((backup) => (
+              <tr>
+                <td>{backup.name}</td>
+                <td>{new Date(backup.createdAt).toLocaleString('es-AR')}</td>
+                <td>{Math.round(backup.size / 1024)} KB</td>
+                <td>
+                  <form method="post" action="/api/admin/backup/restore" onsubmit="return confirm('Restaurar este backup reemplazara los datos actuales. Se creara un backup previo automaticamente. Continuar?')">
+                    <input type="hidden" name="name" value={backup.name} />
+                    <button class="btn btn-danger" type="submit">Restaurar</button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</Layout>

@@ -1,0 +1,537 @@
+---
+// Importa tu navegacion si es una pagina completa
+import Navigation from '../components/Navigation.astro';
+---
+
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Asistencias | SGE</title>
+    <style>
+        body { background-color: #13151a; color: white; font-family: system-ui; }
+        .filtros { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .alumno-fila { display: flex; justify-content: space-between; gap: 15px; padding: 10px; border-bottom: 1px solid #333; align-items: center; }
+        .btn-asistencia { margin-left: 5px; cursor: pointer; }
+        .presente { background-color: #28a745; color: white; border: none; padding: 5px 10px; }
+        .ausente { background-color: #dc3545; color: white; border: none; padding: 5px 10px; }
+        .btn-secundario { background: #444; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+        .btn-accion { border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+        .btn-quitar { background: #f59e0b; color: #111; }
+        .btn-perfil { background: #2b2e36; color: white; border: 1px solid #555; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+        .estado-asistencia { display: inline-block; margin-top: 5px; padding: 3px 8px; border-radius: 999px; font-size: 0.8rem; background: #333; color: #ddd; }
+        .estado-asistencia.presente { background: #1f7a3b; color: white; }
+        .estado-asistencia.ausente { background: #9f2430; color: white; }
+        .lista-acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .modal-resumen { display: none; margin: 15px 0 5px; padding: 10px; border-radius: 8px; background: #13151a; color: #ddd; }
+        .modal-resumen.visible { display: block; }
+        .modal-footer { display: flex; gap: 10px; justify-content: center; margin-top: 15px; flex-wrap: wrap; }
+        .modal-footer button:disabled { opacity: 0.45; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <Navigation currentPath="/asistencias" />
+
+    <main style="max-width: 800px; margin: 0 auto; padding: 20px;">
+        <h1>Control de Asistencias</h1>
+
+        <div class="filtros">
+            <input type="date" id="filtro-fecha" />
+
+            <select id="filtro-escuela"><option value="">Todas las Escuelas</option></select>
+            <select id="filtro-curso"><option value="">Todos los Cursos</option></select>
+            <select id="filtro-turno">
+                <option value="">Todos los Turnos</option>
+                <option value="Ma&ntilde;ana">Ma&ntilde;ana</option>
+                <option value="Tarde">Tarde</option>
+                <option value="Noche">Noche</option>
+            </select>
+            <select id="filtro-materia"><option value="">Todas las Materias</option></select>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <button id="btn-tomar-lista" style="padding: 10px 20px; font-size: 1.1rem; background: #4f46e5; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Modo Tomar Lista
+            </button>
+            <button id="btn-exportar-asistencia" class="btn-secundario" style="margin-left: 8px;">
+                Exportar lista
+            </button>
+        </div>
+
+        <dialog id="modal-tomar-lista" class="modal">
+            <div class="modal-content" style="text-align: center; max-width: 400px;">
+                <button id="btn-cerrar-lista" class="btn-cerrar">x</button>
+
+                <h2 style="margin-bottom: 5px;">Tomando Lista</h2>
+                <p id="progreso-lista" style="background: #333; padding: 5px 10px; border-radius: 20px; display: inline-block; font-size: 0.9rem;">Alumno 1 de X</p>
+
+                <div style="margin-top: 20px;">
+                    <img id="lista-foto" src="" alt="Foto" class="avatar" style="width: 120px; height: 120px; margin-bottom: 10px;" />
+                    <h2 id="lista-nombre" style="font-size: 1.5rem; margin: 0;">Nombre</h2>
+                    <p id="lista-curso" style="color: #aaa; margin-top: 5px;">Curso - Turno</p>
+                </div>
+
+                <div style="display: flex; gap: 15px; justify-content: center; margin: 30px 0;">
+                    <button id="btn-lista-ausente" class="btn-asistencia ausente" style="flex: 1; padding: 20px; font-size: 1.2rem; border-radius: 10px; cursor: pointer;">Ausente</button>
+                    <button id="btn-lista-presente" class="btn-asistencia presente" style="flex: 1; padding: 20px; font-size: 1.2rem; border-radius: 10px; cursor: pointer;">Presente</button>
+                </div>
+
+                <p id="resumen-lista" class="modal-resumen"></p>
+
+                <div style="display: flex; justify-content: space-between; border-top: 1px solid #444; padding-top: 15px;">
+                    <button id="btn-lista-prev" style="padding: 8px 15px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer;">Anterior</button>
+                    <button id="btn-lista-next" style="padding: 8px 15px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer;">Siguiente</button>
+                </div>
+
+                <div class="modal-footer">
+                    <button id="btn-enviar-lista" class="btn-secundario" disabled>Enviar lista</button>
+                    <button id="btn-exportar-lista-modal" class="btn-secundario" disabled>Exportar Excel</button>
+                </div>
+            </div>
+        </dialog>
+
+        <div id="lista-asistencia">
+            <p>Selecciona los filtros para ver los alumnos.</p>
+        </div>
+
+        <dialog id="modal-perfil" class="modal">
+            <div class="modal-content">
+                <button id="btn-cerrar-modal" class="btn-cerrar">x</button>
+
+                <div class="perfil-header">
+                    <img id="perfil-foto" src="" alt="Foto de perfil" class="avatar" />
+                    <h2 id="perfil-nombre">Nombre del Alumno</h2>
+                    <p id="perfil-curso" class="badge">Curso - Turno</p>
+                </div>
+
+                <div class="perfil-stats">
+                    <div class="stat-box">
+                        <span class="stat-label">Promedio</span>
+                        <span id="perfil-promedio" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">Notas</span>
+                        <span id="perfil-cant-notas" class="stat-value">0</span>
+                    </div>
+                </div>
+
+                <div class="perfil-detalles">
+                    <h3>Cargar Nueva Nota</h3>
+                    <div class="form-nota">
+                        <select id="nota-materia">
+                            <option value="">Materia</option>
+                        </select>
+                        <select id="nota-tipo">
+                            <option value="Evaluacion">Evaluacion</option>
+                            <option value="Trabajo Practico">Trabajo Practico</option>
+                            <option value="Participacion">Participacion</option>
+                        </select>
+                        <input type="number" id="nota-valor" placeholder="Nota" min="1" max="10">
+                        <input type="text" id="nota-desc" placeholder="Tema">
+                        <button id="btn-guardar-nota" class="btn-guardar-mini">Cargar</button>
+                    </div>
+
+                    <h3>Desempeno por Materia</h3>
+                    <div id="materias-desempeno" class="materias-desempeno"></div>
+                </div>
+            </div>
+        </dialog>
+    </main>
+
+    <script is:inline>
+        let alumnosFiltradosActuales = [];
+        let indiceLista = 0;
+        let alumnoSeleccionadoId = null;
+        const modalPerfil = document.getElementById('modal-perfil');
+        const modalLista = document.getElementById('modal-tomar-lista');
+
+        const listaUI = document.getElementById('lista-asistencia');
+        const filtroFecha = document.getElementById('filtro-fecha');
+        const filtroEscuela = document.getElementById('filtro-escuela');
+        const filtroCurso = document.getElementById('filtro-curso');
+        const filtroTurno = document.getElementById('filtro-turno');
+        const filtroMateria = document.getElementById('filtro-materia');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            filtroFecha.valueAsDate = new Date();
+            cargarFiltrosDinamicos();
+            renderizarLista();
+
+            [filtroEscuela, filtroCurso, filtroTurno, filtroMateria, filtroFecha].forEach(el => {
+                el.addEventListener('change', renderizarLista);
+            });
+
+            document.getElementById('btn-cerrar-modal')?.addEventListener('click', () => modalPerfil.close());
+            document.getElementById('btn-guardar-nota')?.addEventListener('click', guardarNotaDesdeAsistencia);
+            document.getElementById('btn-tomar-lista')?.addEventListener('click', iniciarModoLista);
+            document.getElementById('btn-exportar-asistencia')?.addEventListener('click', exportarListaExcel);
+            document.getElementById('btn-cerrar-lista')?.addEventListener('click', () => {
+                modalLista.close();
+                renderizarLista();
+            });
+
+            document.getElementById('btn-lista-presente')?.addEventListener('click', () => registrarYAvanzar('Presente'));
+            document.getElementById('btn-lista-ausente')?.addEventListener('click', () => registrarYAvanzar('Ausente'));
+            document.getElementById('btn-lista-prev')?.addEventListener('click', () => moverIndice(-1));
+            document.getElementById('btn-lista-next')?.addEventListener('click', () => moverIndice(1));
+            document.getElementById('btn-enviar-lista')?.addEventListener('click', enviarListaTomada);
+            document.getElementById('btn-exportar-lista-modal')?.addEventListener('click', exportarListaExcel);
+        });
+
+        function cargarFiltrosDinamicos() {
+            const alumnos = JSON.parse(localStorage.getItem('alumnos') || '[]');
+            const materias = JSON.parse(localStorage.getItem('materias') || '[]');
+
+            const escuelas = [...new Set(alumnos.map(a => a.escuela).filter(Boolean))];
+            const cursos = [...new Set(alumnos.map(a => a.curso).filter(Boolean))];
+
+            escuelas.forEach(esc => {
+                filtroEscuela.innerHTML += `<option value="${escaparHtml(esc)}">${escaparHtml(esc)}</option>`;
+            });
+            cursos.forEach(cur => {
+                filtroCurso.innerHTML += `<option value="${escaparHtml(cur)}">${escaparHtml(cur)}</option>`;
+            });
+            materias.forEach(mat => {
+                filtroMateria.innerHTML += `<option value="${escaparHtml(mat.id)}">${escaparHtml(mat.nombre)}</option>`;
+            });
+        }
+
+        function renderizarLista() {
+            const alumnos = JSON.parse(localStorage.getItem('alumnos') || '[]');
+            const materias = JSON.parse(localStorage.getItem('materias') || '[]');
+
+            const escSel = filtroEscuela.value;
+            const curSel = filtroCurso.value;
+            const turSel = filtroTurno.value;
+            const matSel = filtroMateria.value;
+
+            let filtrados = alumnos.filter(al => {
+                return (!escSel || al.escuela === escSel) &&
+                    (!curSel || al.curso === curSel) &&
+                    (!turSel || al.turno === turSel);
+            });
+
+            if (matSel) {
+                const materia = materias.find(m => m.id === matSel);
+                filtrados = materia ? filtrados.filter(al => materia.alumnosIds.includes(al.id)) : [];
+            }
+
+            alumnosFiltradosActuales = filtrados;
+
+            if (filtrados.length === 0) {
+                listaUI.innerHTML = '<p>No hay alumnos que coincidan con estos filtros.</p>';
+                return;
+            }
+
+            listaUI.innerHTML = filtrados.map(al => {
+                const estado = obtenerEstadoAsistencia(al.id);
+                const estadoClase = estado ? estado.toLowerCase() : '';
+                const textoEstado = estado ? `Lista tomada: ${estado}` : 'Sin tomar';
+                const textoPresente = estado === 'Presente' ? 'Quitar Presente' : 'Presente';
+                const textoAusente = estado === 'Ausente' ? 'Quitar Ausente' : 'Ausente';
+
+                return `
+                    <div class="alumno-fila">
+                        <div>
+                            <strong>${escaparHtml(al.nombre)}</strong> <small>(${escaparHtml(al.curso)} - ${escaparHtml(al.turno)})</small>
+                            <br><span class="estado-asistencia ${estadoClase}">${textoEstado}</span>
+                        </div>
+                        <div class="lista-acciones">
+                            <button class="btn-accion ${estado === 'Presente' ? 'btn-quitar' : 'presente'}" onclick="toggleAsistencia(${al.id}, 'Presente')">${textoPresente}</button>
+                            <button class="btn-accion ${estado === 'Ausente' ? 'btn-quitar' : 'ausente'}" onclick="toggleAsistencia(${al.id}, 'Ausente')">${textoAusente}</button>
+                            <button class="btn-perfil" onclick="abrirPerfilAlumno(${al.id})">Ver Perfil</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function obtenerDatosAsistencia() {
+            return {
+                fecha: filtroFecha.value,
+                materiaId: filtroMateria.value || 'General'
+            };
+        }
+
+        function obtenerRegistroAsistencia(alumnoId) {
+            const { fecha, materiaId } = obtenerDatosAsistencia();
+            const registroAsistencias = JSON.parse(localStorage.getItem('asistencias') || '[]');
+            return registroAsistencias.find(a =>
+                a.alumnoId === alumnoId && a.fecha === fecha && a.materiaId === materiaId
+            );
+        }
+
+        function obtenerEstadoAsistencia(alumnoId) {
+            const asistencia = obtenerRegistroAsistencia(alumnoId);
+            if (!asistencia) return null;
+            return asistencia.estado === 'A' ? 'Ausente' : asistencia.estado;
+        }
+
+        function guardarAsistencia(alumnoId, estado) {
+            const { fecha, materiaId } = obtenerDatosAsistencia();
+            if (!fecha) return alert("Selecciona una fecha.");
+
+            const registroAsistencias = JSON.parse(localStorage.getItem('asistencias') || '[]');
+            const index = registroAsistencias.findIndex(a =>
+                a.alumnoId === alumnoId && a.fecha === fecha && a.materiaId === materiaId
+            );
+
+            if (!estado) {
+                if (index !== -1) registroAsistencias.splice(index, 1);
+                localStorage.setItem('asistencias', JSON.stringify(registroAsistencias));
+                return;
+            }
+
+            const nuevaAsistencia = { id: Date.now(), alumnoId, materiaId, fecha, estado };
+
+            if (index !== -1) registroAsistencias[index] = nuevaAsistencia;
+            else registroAsistencias.push(nuevaAsistencia);
+
+            localStorage.setItem('asistencias', JSON.stringify(registroAsistencias));
+        }
+
+        function toggleAsistencia(alumnoId, estado) {
+            const estadoActual = obtenerEstadoAsistencia(alumnoId);
+            guardarAsistencia(alumnoId, estadoActual === estado ? null : estado);
+            renderizarLista();
+            if (modalLista.open) actualizarVistaModalLista();
+        }
+
+        function abrirPerfilAlumno(id) {
+            alumnoSeleccionadoId = id;
+            const alumnos = JSON.parse(localStorage.getItem('alumnos') || '[]');
+            const alumno = alumnos.find(a => a.id === id);
+            const materias = JSON.parse(localStorage.getItem('materias') || '[]');
+            const materiasAlumno = materias.filter(m => m.alumnosIds.includes(id));
+
+            if (alumno && modalPerfil) {
+                if (!alumno.notas) alumno.notas = [];
+
+                document.getElementById('perfil-foto').src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${alumno.id}`;
+                document.getElementById('perfil-nombre').textContent = alumno.nombre;
+                document.getElementById('perfil-curso').textContent = `${alumno.curso} - Turno ${alumno.turno}`;
+
+                const promedio = alumno.notas.length > 0
+                    ? (alumno.notas.reduce((acc, n) => acc + n.valor, 0) / alumno.notas.length).toFixed(2)
+                    : "-";
+                document.getElementById('perfil-promedio').textContent = promedio;
+                document.getElementById('perfil-cant-notas').textContent = alumno.notas.length;
+
+                renderizarMateriaSelect(materiasAlumno);
+                renderizarDesempeno(alumno.notas, materiasAlumno);
+                modalPerfil.showModal();
+            }
+        }
+
+        function renderizarMateriaSelect(materias) {
+            const select = document.getElementById('nota-materia');
+            if (!select) return;
+            select.innerHTML = '<option value="">Seleccionar Materia</option>' +
+                materias.map(m => `<option value="${escaparHtml(m.id)}">${escaparHtml(m.nombre)}</option>`).join('');
+        }
+
+        function renderizarDesempeno(notas, materias) {
+            const contenedor = document.getElementById('materias-desempeno');
+            if (!contenedor) return;
+            contenedor.innerHTML = materias.map(m => {
+                const notasMateria = notas.filter(n => n.materiaId === m.id);
+                return `<div><strong>${escaparHtml(m.nombre)}:</strong> ${notasMateria.map(n => escaparHtml(n.valor)).join(', ') || 'Sin notas'}</div>`;
+            }).join('');
+        }
+
+        function iniciarModoLista() {
+            if (alumnosFiltradosActuales.length === 0) {
+                return alert("No hay alumnos para tomar lista con los filtros actuales.");
+            }
+            indiceLista = 0;
+            actualizarVistaModalLista();
+            modalLista.showModal();
+        }
+
+        function actualizarVistaModalLista() {
+            const alumno = alumnosFiltradosActuales[indiceLista];
+            const estadoActual = obtenerEstadoAsistencia(alumno.id);
+            const resumenLista = obtenerResumenLista();
+
+            document.getElementById('progreso-lista').textContent = `Alumno ${indiceLista + 1} de ${alumnosFiltradosActuales.length}`;
+            document.getElementById('lista-foto').src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${alumno.id}`;
+            document.getElementById('lista-nombre').textContent = alumno.nombre;
+            document.getElementById('lista-curso').textContent = `${alumno.curso} - ${alumno.turno}`;
+            document.getElementById('btn-lista-presente').textContent = estadoActual === 'Presente' ? 'Quitar Presente' : 'Presente';
+            document.getElementById('btn-lista-ausente').textContent = estadoActual === 'Ausente' ? 'Quitar Ausente' : 'Ausente';
+
+            document.getElementById('btn-lista-prev').disabled = indiceLista === 0;
+            document.getElementById('btn-lista-prev').style.opacity = indiceLista === 0 ? "0.5" : "1";
+            document.getElementById('btn-lista-next').disabled = indiceLista === alumnosFiltradosActuales.length - 1;
+            document.getElementById('btn-lista-next').style.opacity = indiceLista === alumnosFiltradosActuales.length - 1 ? "0.5" : "1";
+
+            const resumen = document.getElementById('resumen-lista');
+            resumen.textContent = `${resumenLista.tomados} de ${resumenLista.total} alumnos tomados. Presentes: ${resumenLista.presentes}. Ausentes: ${resumenLista.ausentes}.`;
+            resumen.classList.toggle('visible', resumenLista.tomados > 0);
+
+            const listaCompleta = resumenLista.total > 0 && resumenLista.tomados === resumenLista.total;
+            document.getElementById('btn-enviar-lista').disabled = !listaCompleta;
+            document.getElementById('btn-exportar-lista-modal').disabled = !listaCompleta;
+        }
+
+        function registrarYAvanzar(estado) {
+            const alumno = alumnosFiltradosActuales[indiceLista];
+            const estadoActual = obtenerEstadoAsistencia(alumno.id);
+
+            if (estadoActual === estado) {
+                guardarAsistencia(alumno.id, null);
+                actualizarVistaModalLista();
+                renderizarLista();
+                return;
+            }
+
+            guardarAsistencia(alumno.id, estado);
+
+            if (indiceLista < alumnosFiltradosActuales.length - 1) {
+                indiceLista++;
+                actualizarVistaModalLista();
+            } else {
+                actualizarVistaModalLista();
+                const resumen = obtenerResumenLista();
+                if (resumen.tomados === resumen.total) {
+                    alert("Terminaste de tomar lista. Ahora podes enviarla o exportarla.");
+                }
+            }
+            renderizarLista();
+        }
+
+        function moverIndice(direccion) {
+            const nuevoIndice = indiceLista + direccion;
+            if (nuevoIndice >= 0 && nuevoIndice < alumnosFiltradosActuales.length) {
+                indiceLista = nuevoIndice;
+                actualizarVistaModalLista();
+            }
+        }
+
+        function obtenerResumenLista() {
+            const estados = alumnosFiltradosActuales.map(al => obtenerEstadoAsistencia(al.id));
+            const presentes = estados.filter(estado => estado === 'Presente').length;
+            const ausentes = estados.filter(estado => estado === 'Ausente').length;
+            return {
+                total: alumnosFiltradosActuales.length,
+                tomados: presentes + ausentes,
+                presentes,
+                ausentes
+            };
+        }
+
+        function enviarListaTomada() {
+            const resumen = obtenerResumenLista();
+            if (resumen.tomados !== resumen.total) {
+                alert("Todavia faltan alumnos por tomar.");
+                return;
+            }
+
+            const listasEnviadas = JSON.parse(localStorage.getItem('listas_enviadas') || '[]');
+            const { fecha, materiaId } = obtenerDatosAsistencia();
+            const alumnosIds = alumnosFiltradosActuales.map(al => al.id);
+            const clave = `${fecha}-${materiaId}-${alumnosIds.join('_')}`;
+            const registro = {
+                id: clave,
+                fecha,
+                materiaId,
+                alumnosIds,
+                resumen,
+                enviadaEn: new Date().toISOString()
+            };
+            const index = listasEnviadas.findIndex(lista => lista.id === clave);
+            if (index !== -1) listasEnviadas[index] = registro;
+            else listasEnviadas.push(registro);
+
+            localStorage.setItem('listas_enviadas', JSON.stringify(listasEnviadas));
+            alert("Lista enviada correctamente.");
+            modalLista.close();
+            renderizarLista();
+        }
+
+        function exportarListaExcel() {
+            if (alumnosFiltradosActuales.length === 0) {
+                return alert("No hay alumnos para exportar con los filtros actuales.");
+            }
+
+            const { fecha, materiaId } = obtenerDatosAsistencia();
+            const materias = JSON.parse(localStorage.getItem('materias') || '[]');
+            const materia = materias.find(m => m.id === materiaId);
+            const nombreMateria = materia?.nombre || 'General';
+            const filas = alumnosFiltradosActuales.map(al => ({
+                nombre: al.nombre,
+                curso: al.curso,
+                turno: al.turno,
+                escuela: al.escuela || '',
+                estado: obtenerEstadoAsistencia(al.id) || 'Sin tomar'
+            }));
+
+            const html = `
+                <html>
+                <head><meta charset="utf-8" /></head>
+                <body>
+                    <table border="1">
+                        <tr><th colspan="5">Lista de asistencia - ${escaparHtml(fecha)} - ${escaparHtml(nombreMateria)}</th></tr>
+                        <tr>
+                            <th>Alumno</th>
+                            <th>Curso</th>
+                            <th>Turno</th>
+                            <th>Escuela</th>
+                            <th>Estado</th>
+                        </tr>
+                        ${filas.map(fila => `
+                            <tr>
+                                <td>${escaparHtml(fila.nombre)}</td>
+                                <td>${escaparHtml(fila.curso)}</td>
+                                <td>${escaparHtml(fila.turno)}</td>
+                                <td>${escaparHtml(fila.escuela)}</td>
+                                <td>${escaparHtml(fila.estado)}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                </body>
+                </html>
+            `;
+
+            const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `asistencia-${fecha || 'sin-fecha'}-${nombreMateria.replace(/\s+/g, '-')}.xls`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function escaparHtml(valor) {
+            return String(valor ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        function guardarNotaDesdeAsistencia() {
+            const valor = parseFloat(document.getElementById('nota-valor').value);
+            const materiaId = document.getElementById('nota-materia').value;
+            if (!valor || !materiaId) return alert("Faltan datos");
+
+            const alumnos = JSON.parse(localStorage.getItem('alumnos') || '[]');
+            const idx = alumnos.findIndex(a => a.id === alumnoSeleccionadoId);
+
+            if (idx !== -1) {
+                if (!alumnos[idx].notas) alumnos[idx].notas = [];
+                alumnos[idx].notas.push({
+                    valor,
+                    materiaId,
+                    tipo: document.getElementById('nota-tipo').value,
+                    fecha: new Date().toLocaleDateString()
+                });
+                localStorage.setItem('alumnos', JSON.stringify(alumnos));
+                abrirPerfilAlumno(alumnoSeleccionadoId);
+            }
+        }
+    </script>
+</body>
+</html>

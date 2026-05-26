@@ -1,0 +1,33 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Asistencia">
+  <main class="page" data-attendance>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Control diario</p>
+        <h1>Toma de asistencia</h1>
+        <p>Filtra por curso y materia, marca presentes o ausentes y obtiene el resumen al instante.</p>
+      </div>
+      <a class="btn btn-secondary" href="/notas">Ver notas</a>
+    </header>
+
+    <section class="panel">
+      <div class="filters">
+        <input type="date" data-attendance-date aria-label="Fecha de asistencia" />
+        <select data-filter-course aria-label="Curso"></select>
+        <select data-filter-subject aria-label="Materia"></select>
+        <button class="btn btn-ghost" type="button" data-sync-button>Sincronizar</button>
+        <button class="btn btn-secondary" type="button" data-export-excel>Exportar Excel</button>
+      </div>
+      <div class="sync-line">
+        <span class="tag" data-connection-status>Detectando...</span>
+        <p class="sync-status" data-sync-status>0 pendientes · 0 sincronizadas · 0 con error</p>
+      </div>
+    </section>
+
+    <section class="summary-strip" data-attendance-summary></section>
+    <section class="list" data-attendance-list></section>
+  </main>
+</Layout>

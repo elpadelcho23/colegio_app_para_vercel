@@ -1,0 +1,37 @@
+---
+import Navigation from '../components/Navigation.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = 'Gestion escolar para docentes: asistencia, notas y seguimiento academico.',
+} = Astro.props;
+
+const currentPath = Astro.url.pathname;
+const user = Astro.locals.user;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title} | Aula Clara</title>
+  </head>
+  <body>
+    <Navigation currentPath={currentPath} />
+    <slot />
+    <script define:vars={{ user }}>
+      window.__AULA_CLARA_USER__ = user;
+    </script>
+    <script>
+      import '../scripts/school-app.js';
+    </script>
+  </body>
+</html>
