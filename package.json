@@ -13,15 +13,14 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^6.1.9",
     "@astrojs/vercel": "^10.0.8",
+    "astro": "^6.1.9",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.9.0",
     "exceljs": "^4.4.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.6.0",
     "typescript": "^5.9.3",

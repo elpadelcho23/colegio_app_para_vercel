@@ -1,5 +1,5 @@
 import { defineConfig } from 'astro/config';
-import node from '@astrojs/node';
+import vercel from '@astrojs/vercel';
 import { fileURLToPath } from 'node:url';
 
 const astroPrerenderEntry = fileURLToPath(
@@ -13,9 +13,7 @@ export default defineConfig({
   devToolbar: {
     enabled: false,
   },
-  adapter: node({
-    mode: 'standalone',
-  }),
+  adapter: vercel(),
   vite: {
     optimizeDeps: {
       noDiscovery: true,
