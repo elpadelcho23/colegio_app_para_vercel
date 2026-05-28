@@ -5,8 +5,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 
-export const dbPath = join(dirname(fileURLToPath(import.meta.url)), '../../.data/aula-clara.sqlite');
-mkdirSync(dirname(dbPath), { recursive: true });
+const localDbDir = join(dirname(fileURLToPath(import.meta.url)), '../../.data');
+const vercelDbDir = '/tmp/aula-clara-data';
+export const dbPath = join(process.env.VERCEL ? vercelDbDir : localDbDir, 'aula-clara.sqlite');
+mkdirSync(process.env.VERCEL ? vercelDbDir : localDbDir, { recursive: true });
 
 export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
