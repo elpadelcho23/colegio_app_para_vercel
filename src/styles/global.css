@@ -380,16 +380,16 @@ h3 {
 
 .nav-links {
   position: fixed;
-  top: var(--app-shell-height, 108px);
-  right: 0;
-  bottom: 0;
-  z-index: 35;
+  inset: var(--app-shell-height, 108px) 0 0 auto;
+  z-index: 50;
   display: grid;
   width: min(360px, 100%);
+  height: calc(100vh - var(--app-shell-height, 108px));
   align-content: start;
   gap: 0.3rem;
   padding: var(--space-4);
   overflow-y: auto;
+  box-sizing: border-box;
   border-left: 1px solid var(--line);
   background: var(--surface);
   box-shadow: -22px 0 54px rgba(17, 24, 39, 0.16);
@@ -403,7 +403,7 @@ h3 {
 .nav-links[data-menu-open="true"] {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0);
+  transform: none;
   visibility: visible;
 }
 
