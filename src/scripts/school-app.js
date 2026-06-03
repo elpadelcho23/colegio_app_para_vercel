@@ -1,5 +1,6 @@
 import { countPendingOperations, getOperationStatusCounts, queueOfflineOperation, saveAttendanceOffline } from './offline-db.ts';
 import { startAutoSync, syncPendingOperations } from './sync-client.ts';
+import { initMobileNav, openMenu, closeMenu } from './ui-nav.js';
 
 const currentUser = window.__AULA_CLARA_USER__ || null;
 
@@ -210,7 +211,7 @@ function applySuggestedContextTo(selects = {}, options = {}) {
 }
 
 function describeContext(context) {
-  if (!context) return 'Configura tu horario para ver sugerencias automaticas.';
+  if (!context) return 'Configurá tu horario para ver sugerencias automáticas.';
   const course = courseById(context.cursoId);
   const subject = subjectById(context.materiaId);
   return `${context.escuela || course?.escuela || 'Escuela'} - ${course?.nombre || 'Curso'} - ${subject?.nombre || 'Materia'} (${context.desde || '--:--'} a ${context.hasta || '--:--'})`;
@@ -249,53 +250,7 @@ function initTheme() {
   });
 }
 
-function initMobileMenu() {
-  const menuToggle = document.querySelector('[data-menu-toggle]');
-  const navMenu = document.querySelector('[data-nav-menu]');
-  const appShell = document.querySelector('.app-shell');
-
-  if (!menuToggle || !navMenu) return;
-
-  const setShellHeight = () => {
-    const height = appShell?.offsetHeight || 112;
-    document.documentElement.style.setProperty('--app-shell-height', `${height}px`);
-  };
-
-  const setMenuState = (isOpen) => {
-    navMenu.setAttribute('data-menu-open', String(isOpen));
-    menuToggle.setAttribute('aria-expanded', String(isOpen));
-    document.body.classList.toggle('mobile-menu-open', isOpen);
-  };
-
-  setShellHeight();
-  setMenuState(false);
-  window.addEventListener('resize', () => {
-    setShellHeight();
-    if (window.innerWidth >= 769) setMenuState(false);
-  });
-
-  menuToggle.addEventListener('click', () => {
-    const isOpen = navMenu.getAttribute('data-menu-open') === 'true';
-    setMenuState(!isOpen);
-  });
-
-  navMenu.querySelectorAll('a, .nav-form button').forEach((element) => {
-    element.addEventListener('click', () => setMenuState(false));
-  });
-
-  document.addEventListener('click', (e) => {
-    const isClickInsideMenu = navMenu.contains(e.target);
-    const isClickOnToggle = menuToggle.contains(e.target);
-
-    if (!isClickInsideMenu && !isClickOnToggle) {
-      setMenuState(false);
-    }
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') setMenuState(false);
-  });
-}
+// Mobile nav handled in ui-nav.js
 
 function enhanceResponsiveTables(root = document) {
   const nestedTables = root.querySelectorAll ? [...root.querySelectorAll('.table-wrap table')] : [];
@@ -403,8 +358,8 @@ function renderDashboard(root) {
   const alerts = document.querySelector('[data-alerts]');
   if (alerts) {
     alerts.innerHTML = risk === 0
-      ? '<div class="empty"><h3>Sin alertas en este contexto</h3><p>El filtro actual no muestra riesgo academico o de asistencia.</p></div>'
-      : `<div class="empty"><h3>${risk} alumnos requieren seguimiento</h3><p>El calculo respeta escuela, curso y materia seleccionados.</p></div>`;
+      ? '<div class="empty"><h3>Sin alertas en este contexto</h3><p>El filtro actual no muestra riesgo académico o de asistencia.</p></div>'
+      : `<div class="empty"><h3>${risk} alumnos requieren seguimiento</h3><p>El cálculo respeta escuela, curso y materia seleccionados.</p></div>`;
   }
 }
 
@@ -428,7 +383,7 @@ function initTeacherContext() {
     const data = new FormData(form);
     const dias = data.getAll('dias').map(String);
     if (!dias.length) {
-      alert('Elegi al menos un dia.');
+      alert('Elegí al menos un día.');
       return;
     }
 
@@ -463,7 +418,7 @@ function initTeacherContext() {
 function renderTeacherContextList(list) {
   const items = read(KEYS.teacherContext);
   if (!items.length) {
-    list.innerHTML = '<div class="empty"><h3>Sin horario cargado</h3><p>Agrega tus clases habituales para activar sugerencias automaticas.</p></div>';
+    list.innerHTML = '<div class="empty"><h3>Sin horario cargado</h3><p>Agregá tus clases habituales para activar sugerencias automáticas.</p></div>';
     return;
   }
 
@@ -499,7 +454,7 @@ function initStudents() {
     const data = Object.fromEntries(new FormData(form));
     const editingId = form.dataset.editingId;
     const students = read(KEYS.students);
-    const selectedSubjects = Array.from(form.querySelectorAll('[name="subjectIds"]:checked')).map((input) => input.value);
+    const selectedSubjects = Array.from(form.querySelectorAll('[name="subjectIds"]')).map((input) => input.value);
     const newSubjectName = String(data.nuevaMateria || '').trim();
     if (newSubjectName) {
       const existing = activeSubjects().find((subject) => subject.nombre.toLowerCase() === newSubjectName.toLowerCase());
@@ -562,14 +517,63 @@ function initStudents() {
 
 function renderStudentSubjectPicker(container, selectedIds = []) {
   if (!container) return;
-  const selected = new Set(selectedIds);
+
   const subjects = activeSubjects();
-  container.innerHTML = subjects.length ? subjects.map((subject) => `
-    <label>
-      <input type="checkbox" name="subjectIds" value="${esc(subject.id)}" ${selected.has(subject.id) ? 'checked' : ''} />
-      <span>${esc(subject.nombre)}</span>
+  const selected = new Set(selectedIds);
+  const availableSubjects = subjects.filter((subject) => !selected.has(subject.id));
+
+  container.innerHTML = `
+    <label class="subject-search-label">
+      <span>Buscar materia</span>
+      <input type="search" data-subject-filter placeholder="Ej: Matemática, Programación" autocomplete="off" />
     </label>
-  `).join('') : '<p class="muted">Todavia no hay materias cargadas.</p>';
+    <div class="selected-subjects" data-selected-subjects>
+      ${subjects.filter((subject) => selected.has(subject.id)).map((subject) => `
+        <span class="subject-chip" data-subject-id="${esc(subject.id)}">
+          ${esc(subject.nombre)}
+          <button type="button" aria-label="Eliminar ${esc(subject.nombre)}" data-remove-subject>×</button>
+          <input type="hidden" name="subjectIds" value="${esc(subject.id)}" />
+        </span>
+      `).join('')}
+    </div>
+    <div class="subject-suggestions" data-subject-suggestions>
+      ${availableSubjects.length ? availableSubjects.map((subject) => `
+        <button type="button" class="subject-suggestion" data-add-subject="${esc(subject.id)}">${esc(subject.nombre)}</button>
+      `).join('') : '<p class="muted">No hay materias disponibles para seleccionar.</p>'}
+    </div>
+  `;
+
+  const filterInput = container.querySelector('[data-subject-filter]');
+  const suggestions = container.querySelector('[data-subject-suggestions]');
+
+  const updateSuggestions = (query = '') => {
+    const value = String(query).trim().toLowerCase();
+    const filtered = availableSubjects.filter((subject) => subject.nombre.toLowerCase().includes(value));
+    suggestions.innerHTML = filtered.length ? filtered.map((subject) => `
+      <button type="button" class="subject-suggestion" data-add-subject="${esc(subject.id)}">${esc(subject.nombre)}</button>
+    `).join('') : '<p class="muted">No se encontraron materias con ese nombre.</p>';
+  };
+
+  if (filterInput) {
+    filterInput.addEventListener('input', () => updateSuggestions(filterInput.value));
+  }
+
+  suggestions.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-add-subject]');
+    if (!button) return;
+    const subjectId = button.dataset.addSubject;
+    if (!subjectId) return;
+    renderStudentSubjectPicker(container, [...selected, subjectId]);
+  });
+
+  container.addEventListener('click', (event) => {
+    const remove = event.target.closest('[data-remove-subject]');
+    if (!remove) return;
+    const chip = remove.closest('[data-subject-id]');
+    if (!chip) return;
+    const subjectId = chip.dataset.subjectId;
+    renderStudentSubjectPicker(container, selectedIds.filter((id) => id !== subjectId));
+  });
 }
 
 function renderStudents(list) {
@@ -831,11 +835,11 @@ function initGrades() {
       updatedAt: nowIso(),
     };
     if (!payload.subjectId) {
-      alert('Elegi una materia.');
+      alert('Elegí una materia.');
       return;
     }
     if (payload.valor !== null && (Number.isNaN(payload.valor) || payload.valor < 1 || payload.valor > 10)) {
-      alert('La nota numerica debe estar entre 1 y 10.');
+      alert('La nota numérica debe estar entre 1 y 10.');
       return;
     }
     const grades = read(KEYS.grades);
@@ -847,7 +851,7 @@ function initGrades() {
     importanceSelect.value = String(importanceByType(typeSelect.value));
     subjectSelect.value = subjectFilter?.value || subjectSelect.value;
     updateMode();
-    form.querySelector('button[type="submit"]').textContent = 'Guardar calificacion';
+    form.querySelector('button[type="submit"]').textContent = 'Guardar calificación';
     renderAll();
   });
 
@@ -870,11 +874,11 @@ function initGrades() {
       form.peso.value = grade.peso;
       form.fecha.value = grade.fecha;
       form.fechaEntrega.value = grade.fechaEntrega || '';
-      form.querySelector('button[type="submit"]').textContent = 'Actualizar calificacion';
+      form.querySelector('button[type="submit"]').textContent = 'Actualizar calificación';
     }
     if (remove) {
       const id = remove.dataset.deleteGrade;
-      if (!confirm('Eliminar esta calificacion? El promedio se recalculara automaticamente.')) return;
+      if (!confirm('¿Eliminar esta calificación? El promedio se recalculará automáticamente.')) return;
       write(KEYS.grades, grades.filter((grade) => grade.id !== id));
       await queue('grade', 'delete', { id, updatedAt: nowIso() });
       renderAll();
@@ -1611,7 +1615,7 @@ function formatSyncStatus(counts = {}) {
 
 seed();
 initTheme();
-initMobileMenu();
+initMobileNav();
 initResponsiveTables();
 startAutoSync();
 initDashboard();

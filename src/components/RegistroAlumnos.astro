@@ -1,5 +1,6 @@
 ---
 // src/components/RegistroAlumnos.astro
+import '../styles/global.css';
 
 interface Nota {
     id: number;
@@ -29,7 +30,7 @@ interface Materia {
 }
 ---
 
-<div class="modulo-registro">
+<div class="modulo-registro panel">
     <h3>Registrar Nuevo Alumno</h3>
     <form id="form-alumno" class="form-grid">
         <input type="text" id="nombre" placeholder="Nombre Completo" required />
@@ -57,7 +58,7 @@ interface Materia {
             </label>
         </div>
 
-        <button type="submit" class="btn-guardar">Guardar Alumno</button>
+        <button type="submit" class="btn btn-primary btn-block">Guardar Alumno</button>
     </form>
 
     <hr />
@@ -101,7 +102,7 @@ interface Materia {
                 </select>
                 <input type="number" id="nota-valor" placeholder="Nota" min="1" max="10">
                 <input type="text" id="nota-desc" placeholder="Tema">
-                <button id="btn-guardar-nota" class="btn-guardar-mini">Cargar</button>
+                <button id="btn-guardar-nota" class="btn btn-primary btn-block">Cargar</button>
             </div>
 
             <h3>Desempeño por Materia</h3>
@@ -238,7 +239,7 @@ interface Materia {
                     <span class="badge">${al.curso} · Turno ${al.turno}</span>
                 </div>
                 <div class="btn-container">
-                    <button class="btn-ver" data-id="${al.id}">Ver Alumno</button>
+                    <button class="btn btn-secondary btn-block btn-ver" data-id="${al.id}">Ver Alumno</button>
                 </div>
             </li>
         `).reverse().join('');
@@ -372,146 +373,242 @@ interface Materia {
 </script>
 
 <style>
-    /* Estilos del Formulario base */
     .modulo-registro {
-        background: #1e2025;
-        padding: 1.5rem;
-        border-radius: 8px;
-        border: 1px solid #444;
+        padding: 0;
     }
-    .form-grid { display: grid; gap: 1.2rem; margin-bottom: 1.5rem; }
-    .input-group { display: flex; flex-direction: column; gap: 0.4rem; }
-    input, select {
-        padding: 0.8rem; background: #13151a; border: 1px solid #444; color: white; border-radius: 4px; width: 100%;
+
+    .modulo-registro h3 {
+        margin-top: 0;
     }
-    .checkbox-label { font-size: 0.8rem; color: #aaa; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
-    .checkbox-label input { width: auto; }
-    .btn-guardar { background: #4dabf7; color: white; border: none; padding: 0.8rem; font-weight: bold; margin-top: 0.5rem; cursor: pointer; border-radius: 4px;}
-    
-    hr { border-color: #333; margin: 1.5rem 0; }
-    .hint { font-size: 0.85rem; color: #aaa; margin-bottom: 1rem; }
-    
-    /* Estilos de la Lista y el Botón Deslizante */
-    .alumno-list { list-style: none; padding: 0; }
+
+    .form-grid {
+        margin-bottom: var(--space-4);
+    }
+
+    .checkbox-label {
+        font-size: 0.9rem;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+    }
+
+    .checkbox-label input {
+        width: 1.1rem;
+        min-width: 1.1rem;
+        min-height: 1.1rem;
+    }
+
+    hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: var(--space-5) 0;
+    }
+
+    .hint {
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin-bottom: var(--space-3);
+    }
+
+    .alumno-list {
+        list-style: none;
+        padding: 0;
+        display: grid;
+        gap: var(--space-3);
+    }
+
     .alumno-item {
-        background: #13151a;
-        margin-bottom: 0.5rem;
-        border-left: 4px solid #4dabf7;
-        border-radius: 4px;
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--brand);
+        border-radius: var(--radius);
         overflow: hidden;
         cursor: pointer;
-        transition: background 0.2s;
+        transition: background var(--transition-fast);
     }
-    .alumno-item:hover { background: #1a1d24; }
-    
-    .alumno-info { padding: 0.8rem; }
-    
+
+    .alumno-item:hover {
+        background: var(--surface-2);
+    }
+
+    .alumno-info {
+        padding: var(--space-4);
+    }
+
     .btn-container {
         max-height: 0;
         opacity: 0;
-        transition: all 0.3s ease-out;
-        padding: 0 0.8rem;
+        overflow: hidden;
+        padding: 0 var(--space-4);
+        transition: all 0.28s ease-out;
     }
-    
+
     .alumno-item.expandido .btn-container {
-        max-height: 50px;
+        max-height: 72px;
         opacity: 1;
-        padding-bottom: 0.8rem;
+        padding-bottom: var(--space-4);
     }
 
-    .btn-ver {
-        width: 100%;
-        padding: 0.5rem;
-        background: #2b2e36;
-        color: #4dabf7;
-        border: 1px solid #4dabf7;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-    }
-    .btn-ver:hover { background: #4dabf7; color: white; }
-
-    /* Estilos del Modal (Pop-up) */
-    .modal {
-        margin: auto;
-        border: none;
-        border-radius: 12px;
-        background: #1e2025;
-        color: white;
-        padding: 0;
-        width: 90%;
-        max-width: 500px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        z-index: 1000;
-    }
-    .modal::backdrop {
-        background: rgba(0, 0, 0, 0.7);
-        backdrop-filter: blur(3px);
-    }
-    .modal-content { position: relative; padding: 2rem; max-height: 80vh; overflow-y: auto; }
-    
-    .btn-cerrar {
-        position: absolute;
-        top: 1rem; right: 1rem;
-        background: none; border: none;
-        color: #888; font-size: 1.2rem;
-        cursor: pointer;
-    }
-    .btn-cerrar:hover { color: white; }
-
-    .perfil-header { text-align: center; margin-bottom: 1.5rem; }
-    .avatar {
-        width: 100px; height: 100px;
-        border-radius: 50%;
-        background: #fff;
-        margin-bottom: 1rem;
-        border: 3px solid #4dabf7;
-    }
     .badge {
         display: inline-block;
-        background: #2b2e36;
-        padding: 0.3rem 0.8rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        color: #aaa;
-        margin-top: 0.5rem;
+        margin-top: 0.35rem;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        background: var(--surface-2);
+        color: var(--muted);
+        font-size: 0.82rem;
+    }
+
+    .modal {
+        width: min(560px, calc(100% - 32px));
+        border: 0;
+        padding: 0;
+        color: var(--ink);
+        background: transparent;
+    }
+
+    .modal::backdrop {
+        background: rgba(11, 18, 15, 0.48);
+    }
+
+    .modal-content {
+        position: relative;
+        max-height: 86vh;
+        overflow-y: auto;
+        padding: var(--space-5);
+        border: 1px solid var(--line);
+        border-radius: calc(var(--radius) + 2px);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .btn-cerrar {
+        position: absolute;
+        top: var(--space-4);
+        right: var(--space-4);
+        min-height: 36px;
+        padding: 0.35rem 0.55rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        color: var(--muted);
+        background: var(--surface-2);
+        cursor: pointer;
+    }
+
+    .perfil-header {
+        text-align: center;
+        margin-bottom: var(--space-5);
+    }
+
+    .avatar {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: var(--surface-2);
+        margin-bottom: var(--space-3);
+        border: 3px solid var(--brand);
     }
 
     .perfil-stats {
-        display: flex; justify-content: space-between;
-        background: #13151a; padding: 1rem;
-        border-radius: 8px; margin-bottom: 1.5rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-3);
+        background: var(--surface-muted);
+        padding: var(--space-4);
+        border-radius: var(--radius);
+        margin-bottom: var(--space-5);
     }
-    .stat-box { text-align: center; }
-    .stat-label { display: block; font-size: 0.75rem; color: #888; text-transform: uppercase; }
-    .stat-value { font-size: 1.2rem; font-weight: bold; color: #4dabf7; }
 
-    .perfil-detalles h3 { font-size: 1rem; margin-bottom: 0.8rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem; }
-    .perfil-detalles p { font-size: 0.9rem; color: #ccc; margin-bottom: 0.5rem; line-height: 1.4; }
+    .stat-box {
+        text-align: center;
+    }
 
-    /* Estilos del Formulario de Notas */
-    .form-nota { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-    .form-nota input, .form-nota select { flex: 1; min-width: 100px; padding: 0.5rem; background: #13151a; border: 1px solid #444; color: white; border-radius: 4px; }
-    .btn-guardar-mini { background: #4dabf7; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; }
-    .btn-guardar-mini:hover { background: #3e94d4; }
+    .stat-label {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--muted);
+        text-transform: uppercase;
+    }
 
-    .materias-desempeno { display: grid; gap: 1rem; margin-top: 1rem; }
+    .stat-value {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: var(--brand);
+    }
+
+    .perfil-detalles h3 {
+        font-size: 1rem;
+        margin-bottom: var(--space-3);
+        padding-bottom: var(--space-2);
+        border-bottom: 1px solid var(--line);
+    }
+
+    .form-nota {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--space-2);
+        margin-bottom: var(--space-4);
+    }
+
+    @media (min-width: 520px) {
+        .form-nota {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .form-nota .btn {
+            grid-column: 1 / -1;
+        }
+    }
+
+    .materias-desempeno {
+        display: grid;
+        gap: var(--space-3);
+    }
+
     .materia-desempeno-card {
-        background: #13151a;
-        border: 1px solid #333;
-        border-radius: 8px;
-        padding: 1rem;
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--space-4);
     }
-    .materia-desempeno-titulo { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
-    .materia-desempeno-lista { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
-    .materia-desempeno-promedio { color: #4dabf7; font-weight: bold; }
-    .nota-tag { background: #2b2e36; color: #fff; padding: 0.35rem 0.7rem; border-radius: 999px; font-size: 0.85rem; }
-    .sin-notas { color: #aaa; font-size: 0.95rem; }
-    
-    /* Estilos de la Tabla */
-    .tabla-container { background: #13151a; border-radius: 8px; overflow: hidden; margin-top: 1rem; }
-    .tabla-notas { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .tabla-notas th { background: #2b2e36; padding: 0.8rem; text-align: left; color: #888; font-weight: 600; }
-    .tabla-notas td { padding: 0.8rem; border-bottom: 1px solid #222; }
-    .tabla-notas tbody tr:hover { background: #1a1d24; }
+
+    .materia-desempeno-titulo {
+        display: flex;
+        justify-content: space-between;
+        gap: var(--space-2);
+        margin-bottom: var(--space-3);
+        flex-wrap: wrap;
+    }
+
+    .materia-desempeno-lista {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-bottom: var(--space-3);
+    }
+
+    .materia-desempeno-promedio {
+        color: var(--brand-strong);
+        font-weight: 800;
+    }
+
+    .nota-tag {
+        background: var(--surface-2);
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+    }
+
+    .sin-notas {
+        color: var(--muted);
+    }
+
+    @media (min-width: 720px) {
+        .materias-desempeno {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
 </style>

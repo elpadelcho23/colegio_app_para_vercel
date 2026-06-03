@@ -1,8 +1,9 @@
 ---
 // src/components/GestionMaterias.astro
+import '../styles/global.css';
 ---
 
-<div class="modulo-materias">
+<div class="modulo-materias panel">
     <h2>Sección de Cátedras: "Dar Materia"</h2>
     
     <form id="form-materia" class="form-grid">
@@ -24,7 +25,7 @@
             </div>
         </div>
 
-        <button type="submit" class="btn-crear">Registrar Materia y Alumnos</button>
+        <button type="submit" class="btn btn-primary btn-block">Registrar Materia y Alumnos</button>
     </form>
 
     <hr />
@@ -123,60 +124,106 @@
 
 <style>
     .modulo-materias {
-        background: #1e2025;
-        padding: 1.5rem;
-        border-radius: 8px;
-        border: 1px solid #444;
-        color: white;
+        padding: 0;
     }
-    .form-grid { display: grid; gap: 1.2rem; }
-    .input-group { display: flex; flex-direction: column; gap: 0.5rem; }
-    
-    input {
-        padding: 0.8rem; background: #13151a; border: 1px solid #444; color: white; border-radius: 4px;
+
+    .modulo-materias h2,
+    .modulo-materias h3 {
+        margin-top: 0;
+    }
+
+    .form-grid {
+        gap: var(--space-4);
+    }
+
+    .input-group label {
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 800;
     }
 
     .scroll-lista {
-        max-height: 200px;
+        max-height: 220px;
         overflow-y: auto;
-        background: #13151a;
-        padding: 1rem;
-        border: 1px solid #333;
-        border-radius: 4px;
-        margin-top: 0.5rem;
+        -webkit-overflow-scrolling: touch;
+        background: var(--surface-muted);
+        padding: var(--space-3);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        margin-top: var(--space-2);
     }
 
     .alumno-checkbox {
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 0.5rem;
-        border-bottom: 1px solid #222;
+        gap: 0.75rem;
+        min-height: 44px;
+        padding: 0.55rem 0.35rem;
+        border-bottom: 1px solid var(--line);
         cursor: pointer;
     }
-    .alumno-checkbox:hover { background: #1a1d24; }
-    .alumno-checkbox input { width: auto; }
-    .alumno-checkbox small { color: #888; }
 
-    .btn-crear {
-        background: #51cf66;
-        color: white;
-        border: none;
-        padding: 1rem;
-        font-weight: bold;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background 0.2s;
+    .alumno-checkbox:last-child {
+        border-bottom: 0;
     }
-    .btn-crear:hover { background: #40c057; }
 
-    .materia-list { list-style: none; padding: 0; display: grid; gap: 1rem; }
+    .alumno-checkbox:hover {
+        background: var(--surface-2);
+    }
+
+    .alumno-checkbox input {
+        width: 1.1rem;
+        min-width: 1.1rem;
+        min-height: 1.1rem;
+    }
+
+    .alumno-checkbox small {
+        color: var(--muted);
+    }
+
+    .materia-list {
+        list-style: none;
+        padding: 0;
+        display: grid;
+        gap: var(--space-3);
+        grid-template-columns: 1fr;
+    }
+
     .materia-card {
-        background: #13151a;
-        padding: 1rem;
-        border-radius: 6px;
-        border-left: 4px solid #51cf66;
+        background: var(--surface-muted);
+        padding: var(--space-4);
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--ok);
     }
-    .materia-header { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
-    .warn { color: #ff922b; font-size: 0.9rem; }
+
+    .materia-header {
+        display: flex;
+        justify-content: space-between;
+        gap: var(--space-3);
+        margin-bottom: 0.45rem;
+        flex-wrap: wrap;
+    }
+
+    .warn {
+        color: var(--warning);
+        font-size: 0.9rem;
+    }
+
+    .hint {
+        color: var(--muted);
+        font-size: 0.88rem;
+    }
+
+    hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: var(--space-5) 0;
+    }
+
+    @media (min-width: 720px) {
+        .materia-list {
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        }
+    }
 </style>

@@ -26,13 +26,13 @@ const materias = db.prepare(`
 const backups = listBackups();
 ---
 
-<Layout title="Administracion">
-  <main class="page">
+<Layout title="Administración">
+  <main class="page page-stack">
     <header class="page-header">
       <div>
-        <p class="eyebrow">Administracion institucional</p>
+        <p class="eyebrow">Administración institucional</p>
         <h1>Usuarios y respaldos</h1>
-        <p>Alta controlada de profesores, asignacion pedagogica y resguardo de base de datos.</p>
+        <p>Alta controlada de profesores, asignación pedagógica y resguardo de base de datos.</p>
       </div>
       <a class="btn btn-secondary" href="/">Volver al panel</a>
     </header>
@@ -52,7 +52,7 @@ const backups = listBackups();
           <input type="email" name="email" required />
         </label>
         <label class="span-2">
-          <span>Contrasena temporal</span>
+          <span>Contraseña temporal</span>
           <input type="password" name="password" minlength="10" required />
         </label>
         <fieldset class="span-2 checkbox-grid">
@@ -89,10 +89,10 @@ const backups = listBackups();
             <tbody>
               {docentes.map((docente) => (
                 <tr>
-                  <td>{docente.nombre}</td>
-                  <td>{docente.email}</td>
-                  <td><span class="tag">{docente.rol}</span></td>
-                  <td>{docente.tenant}</td>
+                  <td data-label="Nombre">{docente.nombre}</td>
+                  <td data-label="Email">{docente.email}</td>
+                  <td data-label="Rol"><span class="tag">{docente.rol}</span></td>
+                  <td data-label="Cuenta">{docente.tenant}</td>
                 </tr>
               ))}
             </tbody>
@@ -104,7 +104,7 @@ const backups = listBackups();
     <section class="panel institutional-panel">
       <div class="section-title">
         <h2>Backups SQLite</h2>
-        <p>Se generan automaticamente y tambien pueden crearse antes de operaciones sensibles.</p>
+        <p>Se generan automáticamente y también pueden crearse antes de operaciones sensibles.</p>
       </div>
       <form method="post" action="/api/admin/backup/create" class="button-row">
         <button class="btn btn-primary" type="submit">Crear backup ahora</button>
@@ -112,16 +112,16 @@ const backups = listBackups();
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Archivo</th><th>Fecha</th><th>Tamano</th><th>Restaurar</th></tr>
+            <tr><th>Archivo</th><th>Fecha</th><th>Tamaño</th><th>Restaurar</th></tr>
           </thead>
           <tbody>
             {backups.map((backup) => (
               <tr>
-                <td>{backup.name}</td>
-                <td>{new Date(backup.createdAt).toLocaleString('es-AR')}</td>
-                <td>{Math.round(backup.size / 1024)} KB</td>
-                <td>
-                  <form method="post" action="/api/admin/backup/restore" onsubmit="return confirm('Restaurar este backup reemplazara los datos actuales. Se creara un backup previo automaticamente. Continuar?')">
+                <td data-label="Archivo">{backup.name}</td>
+                <td data-label="Fecha">{new Date(backup.createdAt).toLocaleString('es-AR')}</td>
+                <td data-label="Tamaño">{Math.round(backup.size / 1024)} KB</td>
+                <td data-label="Restaurar">
+                  <form method="post" action="/api/admin/backup/restore" onsubmit="return confirm('Restaurar este backup reemplazará los datos actuales. Se creará un backup previo automáticamente. ¿Continuar?')">
                     <input type="hidden" name="name" value={backup.name} />
                     <button class="btn btn-danger" type="submit">Restaurar</button>
                   </form>

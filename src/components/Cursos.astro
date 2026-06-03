@@ -1,14 +1,15 @@
 ---
 // src/components/Cursos.astro
+import '../styles/global.css';
 ---
 
-<section class="modulo-cursos">
+<section class="modulo-cursos panel">
     <div class="encabezado">
         <div>
             <h2>Cursos</h2>
             <p>Vista por escuela, turno y curso, vinculada con alumnos, materias, notas y asistencias.</p>
         </div>
-        <button id="btn-refrescar-cursos" class="btn-secundario">Actualizar</button>
+        <button id="btn-refrescar-cursos" class="btn btn-secondary">Actualizar</button>
     </div>
 
     <div id="vista-cursos" class="vista-cursos"></div>
@@ -218,7 +219,7 @@
         const alertas = situaciones.filter(s => s.alerta === 'riesgo' || s.alerta === 'atencion').length;
 
         vistaDetalle.innerHTML = `
-            <button class="btn-link" data-volver-cursos>Volver a cursos</button>
+            <button class="btn btn-ghost" data-volver-cursos>Volver a cursos</button>
 
             <div class="detalle-header">
                 <div>
@@ -265,7 +266,7 @@
                         <h3>${escapeHtml(materia.nombre)}</h3>
                         <p>Profesor: ${escapeHtml(materia.profesor || 'Sin profesor asignado')}</p>
                     </div>
-                    <button class="btn-secundario" data-exportar-curso>Exportar Excel</button>
+                    <button class="btn btn-secondary" data-exportar-curso>Exportar Excel</button>
                 </div>
 
                 <div class="dos-columnas">
@@ -281,7 +282,7 @@
                             <input type="number" id="tp-peso" min="1" max="100" value="40" title="Peso en el promedio" />
                         </div>
                         <input type="date" id="tp-fecha-entrega" />
-                        <button class="btn-primario" type="submit">Agregar seguimiento</button>
+                        <button class="btn btn-primary btn-block" type="submit">Agregar seguimiento</button>
                     </form>
 
                     <form id="form-diario" class="mini-panel">
@@ -289,7 +290,7 @@
                         <input type="date" id="diario-fecha" value="${fechaHoy()}" />
                         <input type="text" id="diario-tema" placeholder="Tema dado hoy" required />
                         <textarea id="diario-observaciones" rows="3" placeholder="Observaciones breves"></textarea>
-                        <button class="btn-primario" type="submit">Guardar clase</button>
+                        <button class="btn btn-primary btn-block" type="submit">Guardar clase</button>
                     </form>
                 </div>
 
@@ -746,7 +747,7 @@
             <form id="form-observacion-ficha" class="observacion-form">
                 <h3>Observaciones</h3>
                 <textarea id="texto-observacion-ficha" rows="3" placeholder="Ej: Se retiro antes por turno medico"></textarea>
-                <button type="submit" class="btn-primario">Agregar observacion</button>
+                <button type="submit" class="btn btn-primary btn-block">Agregar observacion</button>
             </form>
 
             <div class="observaciones-lista">
@@ -843,11 +844,7 @@
 
 <style>
     .modulo-cursos {
-        color: white;
-        background: #1e2025;
-        border: 1px solid #444;
-        border-radius: 8px;
-        padding: 1.5rem;
+        padding: 0;
     }
 
     .encabezado,
@@ -858,7 +855,8 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 1rem;
+        gap: var(--space-4);
+        flex-wrap: wrap;
     }
 
     .encabezado h2,
@@ -867,61 +865,55 @@
         margin: 0;
     }
 
-    .encabezado p,
-    .detalle-header p,
-    .panel-titulo p,
-    .muted {
-        color: #aaa;
-        margin: 0.35rem 0 0;
-    }
-
     .vista-cursos,
     .vista-detalle-curso {
-        margin-top: 1.5rem;
+        margin-top: var(--space-5);
     }
 
-    .oculto { display: none; }
+    .oculto {
+        display: none;
+    }
 
     .bloque-escuela {
-        border-top: 1px solid #333;
-        padding-top: 1rem;
-        margin-top: 1rem;
+        border-top: 1px solid var(--line);
+        padding-top: var(--space-4);
+        margin-top: var(--space-4);
     }
 
     .titulo-escuela span {
-        color: #aaa;
+        color: var(--muted);
         font-size: 0.9rem;
     }
 
     .grid-cursos {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-        gap: 0.9rem;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: var(--space-3);
     }
 
     .curso-card {
-        background: #13151a;
-        border: 1px solid #333;
-        border-left: 4px solid #4dabf7;
-        border-radius: 8px;
-        padding: 1rem;
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--brand);
+        border-radius: var(--radius);
+        padding: var(--space-4);
         cursor: pointer;
-        transition: transform 0.15s, border-color 0.15s;
+        transition: transform var(--transition-fast), border-color var(--transition-fast);
     }
 
     .curso-card:hover {
         transform: translateY(-2px);
-        border-color: #4dabf7;
+        border-color: var(--brand);
     }
 
     .curso-card h4 {
         margin: 0;
-        font-size: 1.2rem;
+        font-size: 1.15rem;
     }
 
     .curso-card p {
-        color: #aaa;
-        margin: 0.3rem 0 0.8rem;
+        color: var(--muted);
+        margin: 0.3rem 0 0.75rem;
     }
 
     .curso-metricas {
@@ -931,150 +923,97 @@
     }
 
     .curso-metricas span,
-    .tabs-materias button,
-    .btn-secundario,
-    .btn-link,
-    .acciones-tabla button,
-    .trabajo-item button {
-        background: #2b2e36;
-        color: white;
-        border: 1px solid #444;
-        border-radius: 6px;
-        padding: 0.45rem 0.7rem;
+    .tabs-materias button {
+        background: var(--surface-2);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 0.35rem 0.65rem;
+        font-size: 0.82rem;
         cursor: pointer;
     }
 
     .curso-metricas .riesgo {
-        background: #6f1d1b;
-        border-color: #b91c1c;
+        background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+        border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+        color: var(--danger);
     }
 
     .resumen-grid {
         display: grid;
-        grid-template-columns: repeat(5, minmax(90px, 1fr));
-        gap: 0.6rem;
+        grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+        gap: var(--space-3);
     }
 
     .resumen-grid div {
-        background: #13151a;
-        border: 1px solid #333;
-        border-radius: 8px;
-        padding: 0.8rem;
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--space-3);
         text-align: center;
     }
 
     .resumen-grid strong {
         display: block;
-        color: #4dabf7;
+        color: var(--brand);
         font-size: 1.2rem;
     }
 
     .resumen-grid span {
-        color: #aaa;
+        color: var(--muted);
         font-size: 0.8rem;
     }
 
     .tabs-materias {
         display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        margin: 1.2rem 0;
+        gap: var(--space-2);
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        margin: var(--space-4) 0;
+        padding-bottom: 0.25rem;
+        -webkit-overflow-scrolling: touch;
     }
 
     .tabs-materias button.activo {
-        background: #4dabf7;
-        border-color: #4dabf7;
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #fff;
     }
 
     .panel-materia,
     .mini-panel,
     .tabla-panel,
     .empty {
-        background: #13151a;
-        border: 1px solid #333;
-        border-radius: 8px;
-        padding: 1rem;
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--space-4);
     }
 
     .dos-columnas {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 1rem;
-        margin: 1rem 0;
-    }
-
-    .mini-panel h4,
-    .tabla-panel h4 {
-        margin: 0 0 0.8rem;
-    }
-
-    input,
-    select,
-    textarea {
-        width: 100%;
-        box-sizing: border-box;
-        background: #1e2025;
-        border: 1px solid #444;
-        color: white;
-        border-radius: 6px;
-        padding: 0.7rem;
-        margin-bottom: 0.6rem;
-        font: inherit;
+        gap: var(--space-4);
+        margin: var(--space-4) 0;
     }
 
     .fila-form {
         display: grid;
         grid-template-columns: 1fr 90px;
-        gap: 0.6rem;
-    }
-
-    .btn-primario {
-        background: #4dabf7;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 0.7rem 1rem;
-        cursor: pointer;
-        font-weight: 700;
+        gap: var(--space-2);
     }
 
     .tabla-scroll {
         overflow-x: auto;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        min-width: 760px;
-    }
-
-    th,
-    td {
-        padding: 0.75rem;
-        border-bottom: 1px solid #252832;
-        text-align: left;
-        vertical-align: top;
-    }
-
-    th {
-        color: #aaa;
-        background: #1e2025;
-        font-size: 0.8rem;
-        text-transform: uppercase;
-    }
-
-    td small {
-        display: block;
-        color: #888;
-        margin-top: 0.2rem;
+        -webkit-overflow-scrolling: touch;
     }
 
     tr.riesgo {
-        background: rgba(185, 28, 28, 0.18);
+        background: color-mix(in srgb, var(--danger) 14%, transparent);
     }
 
     tr.atencion {
-        background: rgba(245, 158, 11, 0.15);
+        background: color-mix(in srgb, var(--warning) 12%, transparent);
     }
 
     .nota-mini {
@@ -1089,102 +1028,102 @@
         flex-wrap: wrap;
     }
 
+    .acciones-tabla button {
+        min-height: 40px;
+        padding: 0.45rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        cursor: pointer;
+    }
+
     .acciones-tabla button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
     }
 
-    .trabajos-lista {
+    .trabajos-lista,
+    .grafico-barras,
+    .observaciones-lista {
         display: grid;
-        gap: 0.5rem;
+        gap: var(--space-3);
     }
 
     .trabajo-item,
     .diario-item,
     .observaciones-lista article {
-        display: grid;
-        gap: 0.25rem;
-        background: #1e2025;
-        border: 1px solid #333;
-        border-radius: 6px;
-        padding: 0.75rem;
-    }
-
-    .trabajo-item span,
-    .trabajo-item small,
-    .diario-item p {
-        color: #aaa;
-        margin: 0;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: var(--space-3);
     }
 
     .modal-ficha {
-        margin: auto;
-        width: min(760px, 92vw);
-        border: none;
-        border-radius: 12px;
-        background: #1e2025;
-        color: white;
+        width: min(760px, calc(100% - 32px));
+        border: 0;
         padding: 0;
+        color: var(--ink);
+        background: transparent;
     }
 
     .modal-ficha::backdrop {
-        background: rgba(0, 0, 0, 0.75);
+        background: rgba(11, 18, 15, 0.48);
     }
 
     .modal-contenido {
         position: relative;
-        padding: 1.5rem;
         max-height: 85vh;
         overflow: auto;
+        padding: var(--space-5);
+        border: 1px solid var(--line);
+        border-radius: calc(var(--radius) + 2px);
+        background: var(--surface);
+        box-shadow: var(--shadow);
     }
 
     .btn-cerrar {
         position: absolute;
-        top: 0.8rem;
-        right: 0.8rem;
-        background: transparent;
-        border: none;
-        color: #aaa;
-        font-size: 1.2rem;
+        top: var(--space-3);
+        right: var(--space-3);
+        min-height: 36px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
+        color: var(--muted);
         cursor: pointer;
     }
 
     .ficha-header {
         display: flex;
-        gap: 1rem;
+        gap: var(--space-4);
         align-items: center;
-        margin-bottom: 1rem;
+        margin-bottom: var(--space-4);
+        flex-wrap: wrap;
     }
 
     .ficha-header img {
         width: 92px;
         height: 92px;
         border-radius: 50%;
-        background: white;
-        border: 3px solid #4dabf7;
+        background: var(--surface-2);
+        border: 3px solid var(--brand);
     }
 
     .ficha-grid {
         grid-template-columns: repeat(3, 1fr);
-        margin-bottom: 1rem;
-    }
-
-    .grafico-barras {
-        display: grid;
-        gap: 0.7rem;
-        margin-bottom: 1rem;
+        margin-bottom: var(--space-4);
     }
 
     .barra-row {
         display: grid;
         grid-template-columns: minmax(110px, 1fr) 2fr 48px;
-        gap: 0.7rem;
+        gap: var(--space-3);
         align-items: center;
     }
 
     .barra {
         height: 12px;
-        background: #2b2e36;
+        background: var(--surface-2);
         border-radius: 999px;
         overflow: hidden;
     }
@@ -1192,7 +1131,7 @@
     .barra i {
         display: block;
         height: 100%;
-        background: #4dabf7;
+        background: var(--brand);
     }
 
     @media (max-width: 680px) {
@@ -1202,7 +1141,7 @@
         .tabla-header,
         .titulo-escuela,
         .ficha-header {
-            align-items: flex-start;
+            align-items: stretch;
             flex-direction: column;
         }
 

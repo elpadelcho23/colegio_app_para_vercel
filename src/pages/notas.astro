@@ -3,46 +3,44 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Calificaciones">
-  <main class="page" data-grades>
+  <main class="page page-stack" data-grades>
     <header class="page-header">
-      <div>
+      <div class="header-content">
         <p class="eyebrow">Calificaciones</p>
-        <h1>Curso, materia y evaluaciones</h1>
-        <p>Carga notas, mira promedios y revisa entregas desde una sola pantalla.</p>
+        <h1>Carga de notas</h1>
+        <p>Promedios, entregas y estado académico por curso y materia.</p>
       </div>
-      <a class="btn btn-secondary" href="/api/export">Exportar Excel</a>
+      <a class="btn btn-secondary btn-block" href="/api/export">Exportar Excel</a>
     </header>
 
     <section class="panel context-workbar">
       <div>
-        <strong>Contexto de trabajo</strong>
-        <span data-grade-context-text>Elegir curso y materia.</span>
+        <strong>Contexto</strong>
+        <p data-grade-context-text>Seleccioná curso y materia.</p>
       </div>
-      <div class="filters">
+      <div class="filters-grid">
         <select data-grade-course-filter aria-label="Curso"></select>
         <select data-grade-subject-filter aria-label="Materia"></select>
       </div>
     </section>
 
-    <section class="grid-2 grades-layout">
-      <div class="panel">
+    <section class="responsive-grid">
+      <form class="panel form-grid" data-grade-form>
         <div class="section-title">
-          <h2>Cargar evaluacion</h2>
-          <p>El tipo sugiere automaticamente la importancia, pero podes ajustarla.</p>
+          <h2>Cargar evaluación</h2>
         </div>
-        <form class="form-grid" data-grade-form>
-          <label class="span-2">
-            <span>Alumno</span>
-            <select name="studentId" required></select>
-          </label>
-          <input type="hidden" name="subjectId" />
+
+        <label class="full-width"><span>Alumno</span><select name="studentId" required></select></label>
+        <input type="hidden" name="subjectId" />
+
+        <div class="input-row full-width">
           <label>
             <span>Tipo</span>
             <select name="tipoEvaluacion" data-evaluation-type>
-              <option value="TP">TP</option>
-              <option value="Oral">Oral</option>
-              <option value="Integrador">Integrador</option>
-              <option value="Evaluacion">Evaluacion</option>
+              <option>TP</option>
+              <option>Oral</option>
+              <option>Integrador</option>
+              <option value="Evaluacion">Evaluación</option>
             </select>
           </label>
           <label>
@@ -53,55 +51,45 @@ import Layout from '../layouts/Layout.astro';
               <option value="100">Alta</option>
             </select>
           </label>
-          <label class="span-2">
-            <span>Nombre de la evaluacion</span>
-            <input name="titulo" placeholder="TP 1, oral de lectura, integrador..." required />
-          </label>
-          <label>
-            <span>Forma de calificar</span>
-            <select name="modoCalificacion" data-grade-mode>
-              <option value="numerica">Nota del 1 al 10</option>
-              <option value="conceptual">Bien / Regular / Mal</option>
-              <option value="trayectoria">TEP / TED / TEA</option>
-            </select>
-          </label>
-          <label data-numeric-grade-field>
-            <span>Nota</span>
-            <input name="valor" type="number" min="1" max="10" step="0.1" />
-          </label>
-          <label class="is-hidden" data-text-grade-field>
-            <span>Calificacion</span>
-            <select name="calificacionTexto"></select>
-          </label>
-          <label>
-            <span>Fecha</span>
-            <input name="fecha" type="date" />
-          </label>
-          <label>
-            <span>Entrega de notas</span>
-            <input name="fechaEntrega" type="date" />
-          </label>
-          <button class="btn btn-primary span-2" type="submit">Guardar calificacion</button>
-        </form>
-      </div>
+        </div>
+
+        <label class="full-width"><span>Título</span><input name="titulo" placeholder="Ej: TP 1" required /></label>
+
+        <label class="full-width">
+          <span>Modo de calificación</span>
+          <select name="modoCalificacion" data-grade-mode>
+            <option value="numerica">Numérica (1-10)</option>
+            <option value="conceptual">Conceptual</option>
+            <option value="trayectoria">Trayectoria</option>
+          </select>
+        </label>
+
+        <label data-numeric-grade-field><span>Nota</span><input name="valor" type="number" min="1" max="10" step="0.1" /></label>
+        <label class="is-hidden" data-text-grade-field><span>Calificación</span><select name="calificacionTexto"></select></label>
+
+        <div class="input-row full-width">
+          <label><span>Fecha</span><input name="fecha" type="date" /></label>
+          <label><span>Entrega</span><input name="fechaEntrega" type="date" /></label>
+        </div>
+
+        <button class="btn btn-primary btn-block" type="submit">Guardar calificación</button>
+      </form>
 
       <div class="stack">
         <section class="panel">
           <div class="section-title">
             <h2>Materias</h2>
-            <p>Agrega materias sin salir de esta pantalla.</p>
           </div>
           <form class="inline-form" data-inline-subject-form>
-            <input name="nombre" placeholder="Nueva materia" />
-            <button class="btn btn-secondary" type="submit">Agregar</button>
+            <input name="nombre" placeholder="Nueva materia" aria-label="Nueva materia" />
+            <button class="btn btn-secondary" type="submit">+</button>
           </form>
           <div class="notes-list" data-inline-subject-list></div>
         </section>
 
         <section class="panel">
           <div class="section-title">
-            <h2>Entregas proximas</h2>
-            <p>Fechas de entrega de notas asociadas a curso, materia y evaluacion.</p>
+            <h2>Entregas próximas</h2>
           </div>
           <div class="list" data-grade-deliveries></div>
         </section>
@@ -110,10 +98,10 @@ import Layout from '../layouts/Layout.astro';
 
     <section class="panel">
       <div class="section-title">
-        <h2>Estado academico</h2>
-        <p>Promedios, asistencia y alertas del curso seleccionado.</p>
+        <h2>Estado académico</h2>
+        <p>Vista consolidada por alumno para lectura rápida.</p>
       </div>
-      <div data-grade-table></div>
+      <div class="table-container" data-grade-table></div>
     </section>
   </main>
 </Layout>

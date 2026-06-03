@@ -3,45 +3,48 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Cursos">
-  <main class="page" data-courses>
+  <main class="page page-stack" data-courses>
     <header class="page-header">
-      <div>
-        <p class="eyebrow">Organizacion</p>
+      <div class="header-content">
+        <p class="eyebrow">Organización</p>
         <h1>Cursos y divisiones</h1>
-        <p>Crea cursos reutilizables para inscripcion, asistencia y reportes.</p>
+        <p>Base de trabajo para inscripciones, asistencia y reportes.</p>
       </div>
-      <a class="btn btn-secondary" href="/registro">Cargar alumnos</a>
+      <a class="btn btn-secondary btn-block" href="/registro">Cargar alumnos</a>
     </header>
 
-    <section class="grid-2">
+    <section class="responsive-grid">
       <form class="panel form-grid" data-course-form>
+        <div class="section-title">
+          <h2>Nuevo curso</h2>
+        </div>
         <label>
           <span>Escuela</span>
           <input name="escuela" required />
         </label>
         <label>
           <span>Curso</span>
-          <input name="nombre" placeholder="6to 1ra" required />
+          <input name="nombre" placeholder="Ej: 6to 1ra" required />
         </label>
-        <label class="span-2">
+        <label>
           <span>Turno</span>
           <select name="turno" required>
             <option value="">Seleccionar turno</option>
-            <option>Manana</option>
+            <option>Mañana</option>
             <option>Tarde</option>
             <option>Noche</option>
           </select>
         </label>
-        <button class="btn btn-primary span-2" type="submit">Crear curso</button>
+        <button class="btn btn-primary btn-block" type="submit">Crear curso</button>
       </form>
 
-      <div class="panel">
+      <section class="panel">
         <div class="section-title">
           <h2>Cursos activos</h2>
-          <p>Resumen de cantidad de alumnos por curso.</p>
+          <p>Resumen de alumnos y materias por división.</p>
         </div>
         <div class="list" data-course-list></div>
-      </div>
+      </section>
     </section>
   </main>
 </Layout>

@@ -9,33 +9,59 @@ const registered = Astro.url.searchParams.get('registered');
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#226c5f" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
     <title>Login | Aula Clara</title>
+    <script is:inline>
+      document.documentElement.dataset.theme =
+        localStorage.getItem('aula_clara_theme') || 'light';
+    </script>
   </head>
-  <body>
-    <main class="login-page">
-      <section class="login-card">
-        <p class="eyebrow">Acceso seguro</p>
-        <h1 style="font-size: 2rem;">Aula Clara</h1>
-        <p>Ingresa con tu cuenta docente o admin.</p>
-        {registered && <p class="tag ok">Cuenta creada. Ahora puedes iniciar sesión.</p>}
-        {error && <p class="tag danger">Credenciales inválidas</p>}
-        <form method="post" action="/api/auth/login">
+  <body class="auth-body">
+    <main class="auth-container">
+      <section class="auth-card">
+        <header class="auth-header">
+          <p class="eyebrow">Acceso seguro</p>
+          <h1>Aula Clara</h1>
+          <p class="muted">Ingresá con tu cuenta docente o admin.</p>
+        </header>
+
+        {registered && <p class="tag ok auth-alert">Cuenta creada. Ahora podés iniciar sesión.</p>}
+        {error && <p class="tag danger auth-alert">Credenciales inválidas</p>}
+
+        <form method="post" action="/api/auth/login" class="auth-form">
           <label>
             <span>Email</span>
-            <input type="email" name="email" placeholder="usuario@ejemplo.com" required />
+            <input
+              type="email"
+              name="email"
+              placeholder="usuario@ejemplo.com"
+              autocomplete="email"
+              required
+            />
           </label>
           <label>
             <span>Contraseña</span>
-            <input type="password" name="password" placeholder="********" required />
+            <input
+              type="password"
+              name="password"
+              placeholder="********"
+              autocomplete="current-password"
+              required
+            />
           </label>
-          <button class="btn btn-primary" type="submit">Entrar</button>
+          <button class="btn btn-primary btn-block" type="submit">Entrar</button>
         </form>
-        <p style="margin-top: 1rem; color: var(--muted); font-size: .9rem;">
-          ¿No tienes cuenta? <a href="/register">Regístrate aquí</a>.
-        </p>
-        <p style="margin-top: 1rem; color: var(--muted); font-size: .9rem;">
-          Demo docente: docente@aulaclara.test / Docente123!
-        </p>
+
+        <footer class="auth-footer">
+          <p>¿No tenés cuenta? <a href="/register">Registrate acá</a>.</p>
+          <p>Demo docente: docente@aulaclara.test / Docente123!</p>
+        </footer>
       </section>
     </main>
   </body>

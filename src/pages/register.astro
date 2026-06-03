@@ -8,17 +8,32 @@ const error = Astro.url.searchParams.get('error');
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#226c5f" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
     <title>Registro | Aula Clara</title>
+    <script is:inline>
+      document.documentElement.dataset.theme =
+        localStorage.getItem('aula_clara_theme') || 'light';
+    </script>
   </head>
-  <body>
-    <main class="login-page">
-      <section class="login-card">
-        <p class="eyebrow">Registro de cuenta</p>
-        <h1 style="font-size: 2rem;">Aula Clara</h1>
-        <p>Registra tu cuenta docente con nombre completo, email y contraseña.</p>
-        {error === '1' && <p class="tag danger">Completa todos los campos y verifica las contraseñas.</p>}
-        {error === '2' && <p class="tag danger">Ya existe una cuenta con ese email.</p>}
-        <form method="post" action="/api/auth/register">
+  <body class="auth-body">
+    <main class="auth-container">
+      <section class="auth-card">
+        <header class="auth-header">
+          <p class="eyebrow">Registro de cuenta</p>
+          <h1>Aula Clara</h1>
+          <p class="muted">Registrá tu cuenta docente para comenzar a organizar tus cursos.</p>
+        </header>
+
+        {error === '1' && <p class="tag danger auth-alert">Completá todos los campos correctamente.</p>}
+        {error === '2' && <p class="tag danger auth-alert">Ya existe una cuenta con ese email.</p>}
+
+        <form method="post" action="/api/auth/register" class="auth-form">
           <label>
             <span>Nombre completo</span>
             <input type="text" name="nombre" autocomplete="name" required />
@@ -29,17 +44,19 @@ const error = Astro.url.searchParams.get('error');
           </label>
           <label>
             <span>Contraseña</span>
-            <input type="password" name="password" minlength="8" required />
+            <input type="password" name="password" autocomplete="new-password" minlength="8" required />
           </label>
           <label>
             <span>Confirmar contraseña</span>
-            <input type="password" name="confirm" minlength="8" required />
+            <input type="password" name="confirm" autocomplete="new-password" minlength="8" required />
           </label>
-          <button class="btn btn-primary" type="submit">Registrar cuenta</button>
+
+          <button class="btn btn-primary btn-block" type="submit">Registrar cuenta</button>
         </form>
-        <p style="margin-top: 1rem; color: var(--muted); font-size: .9rem;">
-          ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>.
-        </p>
+
+        <footer class="auth-footer">
+          <p>¿Ya tenés cuenta? <a href="/login">Iniciá sesión</a></p>
+        </footer>
       </section>
     </main>
   </body>

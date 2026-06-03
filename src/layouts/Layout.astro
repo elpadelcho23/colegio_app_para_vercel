@@ -22,11 +22,21 @@ const user = Astro.locals.user;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
+    <meta name="theme-color" content="#226c5f" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
     <title>{title} | Aula Clara</title>
   </head>
-  <body>
+  <body class="app-body">
+    <a class="skip-link" href="#main-content">Ir al contenido principal</a>
     <Navigation currentPath={currentPath} />
-    <slot />
+    <div class="app-main" id="main-content">
+      <slot />
+    </div>
     <script define:vars={{ user }}>
       window.__AULA_CLARA_USER__ = user;
     </script>

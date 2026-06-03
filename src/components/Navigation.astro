@@ -5,6 +5,7 @@ const user = Astro.locals.user;
 const links = [
   { href: '/', label: 'Panel' },
   { href: '/registro', label: 'Alumnos' },
+  { href: '/cursos', label: 'Cursos' },
   { href: '/asistencia', label: 'Asistencia' },
   { href: '/notas', label: 'Calificaciones' },
   { href: '/actividades', label: 'Actividades' },
@@ -18,24 +19,24 @@ const isActive = (href: string) =>
 <header class="app-shell">
   <div class="institution-strip">
     <div>
-      <strong>Escuela Tecnica 1</strong>
+      <strong>Escuela Técnica 1</strong>
       <span>Seguimiento escolar simple para docentes</span>
     </div>
     {user && <span>{user.nombre} - {user.rol}</span>}
   </div>
-  <nav class="topbar" aria-label="Navegacion principal">
+  <nav class="topbar" aria-label="Navegación principal">
     <a class="brand" href="/" aria-label="Ir al panel principal">
       <span class="brand-mark">AC</span>
       <span>
         <strong>Aula Clara</strong>
-        <small>Gestion docente</small>
+        <small>Gestión docente</small>
       </span>
     </a>
 
     <button
       class="menu-toggle"
       type="button"
-      aria-label="Abrir menu"
+      aria-label="Abrir menú"
       aria-controls="main-navigation-menu"
       aria-expanded="false"
       data-menu-toggle
@@ -45,9 +46,15 @@ const isActive = (href: string) =>
       <span></span>
     </button>
 
-    <div class="nav-links" id="main-navigation-menu" data-nav-menu>
+    <div class="nav-links" id="main-navigation-menu" data-nav-menu role="menu">
+      <p class="nav-section-label">Menú</p>
       {links.map((link) => (
-        <a href={link.href} class:list={[{ active: isActive(link.href) }]}>
+        <a
+          href={link.href}
+          class:list={[{ active: isActive(link.href) }]}
+          aria-current={isActive(link.href) ? 'page' : undefined}
+          role="menuitem"
+        >
           {link.label}
         </a>
       ))}
@@ -62,3 +69,5 @@ const isActive = (href: string) =>
     </div>
   </nav>
 </header>
+
+<!-- Mobile nav behavior handled in src/scripts/ui-nav.js -->

@@ -3,52 +3,53 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Registro de alumnos">
-  <main class="page">
+  <main class="page page-stack">
     <header class="page-header">
-      <div>
+      <div class="header-content">
         <p class="eyebrow">Alumnos</p>
         <h1>Registro simple</h1>
-        <p>Nombre, curso, materias y contacto. El DNI queda como dato opcional.</p>
+        <p>Datos, materias y contacto de cada estudiante en una vista clara.</p>
       </div>
-      <a class="btn btn-secondary" href="/cursos">Organizar cursos</a>
+      <a class="btn btn-secondary btn-block" href="/cursos">Organizar cursos</a>
     </header>
 
-    <section class="grid-2">
+    <section class="responsive-grid">
       <form class="panel form-grid" data-student-form>
-        <label>
-          <span>Nombre completo</span>
-          <input name="nombre" autocomplete="name" required />
-        </label>
-        <label>
-          <span>DNI opcional</span>
-          <input name="dni" inputmode="numeric" />
-        </label>
-        <label class="span-2">
+        <div class="section-title">
+          <h2>Nuevo alumno</h2>
+        </div>
+
+        <div class="input-group full-width">
+          <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /></label>
+          <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
+        </div>
+
+        <label class="full-width">
           <span>Curso</span>
           <select name="cursoId" required></select>
         </label>
-        <fieldset class="span-2 subject-picker">
+
+        <fieldset class="subject-picker">
           <legend>Materias del alumno</legend>
-          <div class="checkbox-grid compact" data-student-subjects></div>
-          <label>
-            <span>Agregar materia si no esta en la lista</span>
-            <input name="nuevaMateria" data-student-new-subject placeholder="Ej: Historia" />
-          </label>
+          <div class="subject-search" data-student-subjects></div>
+          <input name="nuevaMateria" data-student-new-subject placeholder="Agregar materia nueva..." />
         </fieldset>
-        <label class="span-2">
+
+        <label class="full-width">
           <span>Tutor o contacto</span>
           <input name="tutor" />
         </label>
-        <button class="btn btn-primary span-2" type="submit">Guardar alumno</button>
+
+        <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
       </form>
 
-      <div class="panel">
+      <section class="panel">
         <div class="section-title">
           <h2>Alumnos cargados</h2>
-          <p>La lista muestra curso y promedio calculado en tiempo real.</p>
+          <p>Listado con curso, materias y promedio actualizado.</p>
         </div>
         <div class="list" data-student-list></div>
-      </div>
+      </section>
     </section>
   </main>
 </Layout>

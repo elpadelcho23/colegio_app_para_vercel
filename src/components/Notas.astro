@@ -1,16 +1,17 @@
 ---
 // src/components/Notas.astro
+import '../styles/global.css';
 ---
 
-<section class="modulo-notas">
+<section class="modulo-notas panel">
     <div class="notas-header">
         <div>
             <h2>Libreta Digital</h2>
             <p>Notas ponderadas, promedios en tiempo real, alertas y exportacion.</p>
         </div>
         <div class="acciones-header">
-            <button id="btn-exportar-notas-excel" class="btn-secundario">Exportar Excel</button>
-            <button id="btn-exportar-notas-pdf" class="btn-secundario">Exportar PDF</button>
+            <button id="btn-exportar-notas-excel" class="btn btn-secondary">Exportar Excel</button>
+            <button id="btn-exportar-notas-pdf" class="btn btn-secondary">Exportar PDF</button>
         </div>
     </div>
 
@@ -61,7 +62,7 @@
             <input type="date" id="nota-fecha" />
         </div>
         <textarea id="nota-descripcion" rows="2" placeholder="Descripcion u observacion opcional"></textarea>
-        <button type="submit" class="btn-primario">Guardar nota</button>
+        <button type="submit" class="btn btn-primary btn-block">Guardar nota</button>
     </form>
 
     <div id="resumen-notas" class="resumen-notas"></div>
@@ -548,170 +549,86 @@
 
 <style>
     .modulo-notas {
-        background: #1e2025;
-        color: white;
-        border: 1px solid #444;
-        border-radius: 8px;
-        padding: 1.5rem;
+        padding: 0;
     }
 
     .notas-header,
     .acciones-header,
     .filtros-notas {
         display: flex;
-        gap: 0.8rem;
+        gap: var(--space-3);
         align-items: center;
         flex-wrap: wrap;
     }
 
     .notas-header {
         justify-content: space-between;
-        margin-bottom: 1rem;
+        margin-bottom: var(--space-4);
     }
 
     .notas-header h2 {
         margin: 0;
     }
 
-    .notas-header p,
-    .muted {
-        color: #aaa;
-        margin: 0.35rem 0 0;
-    }
-
     .filtros-notas {
-        background: #13151a;
-        border: 1px solid #333;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--space-4);
+        margin-bottom: var(--space-4);
     }
 
     .filtros-notas select {
         flex: 1;
-        min-width: 180px;
+        min-width: 160px;
     }
 
     .panel-carga,
     .tabla-notas,
     .empty {
-        background: #13151a;
-        border: 1px solid #333;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--space-4);
+        margin-bottom: var(--space-4);
     }
 
     .panel-carga h3 {
         margin-top: 0;
     }
 
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 0.75rem;
-        margin-bottom: 0.75rem;
-    }
-
-    input,
-    select,
-    textarea {
-        width: 100%;
-        box-sizing: border-box;
-        background: #1e2025;
-        border: 1px solid #444;
-        color: white;
-        border-radius: 6px;
-        padding: 0.75rem;
-        font: inherit;
-    }
-
-    textarea {
-        margin-bottom: 0.75rem;
-    }
-
-    button {
-        border: none;
-        border-radius: 6px;
-        padding: 0.7rem 1rem;
-        cursor: pointer;
-        font-weight: 700;
-    }
-
-    .btn-primario {
-        background: #4dabf7;
-        color: white;
-    }
-
-    .btn-secundario {
-        background: #2b2e36;
-        color: white;
-        border: 1px solid #444;
-    }
-
     .resumen-notas {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-        gap: 0.75rem;
-        margin-bottom: 1rem;
+        gap: var(--space-3);
+        margin-bottom: var(--space-4);
     }
 
     .resumen-notas div {
-        background: #13151a;
-        border: 1px solid #333;
-        border-radius: 8px;
-        padding: 0.9rem;
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--space-4);
         text-align: center;
     }
 
     .resumen-notas strong {
         display: block;
-        color: #4dabf7;
+        color: var(--brand);
         font-size: 1.35rem;
     }
 
     .resumen-notas span {
-        color: #aaa;
+        color: var(--muted);
         font-size: 0.82rem;
     }
 
-    .tabla-scroll {
-        overflow-x: auto;
-    }
-
-    table {
-        width: 100%;
-        min-width: 780px;
-        border-collapse: collapse;
-    }
-
-    th,
-    td {
-        padding: 0.75rem;
-        border-bottom: 1px solid #252832;
-        text-align: left;
-        vertical-align: top;
-    }
-
-    th {
-        color: #aaa;
-        background: #1e2025;
-        font-size: 0.8rem;
-        text-transform: uppercase;
-    }
-
-    td small {
-        display: block;
-        color: #888;
-        margin-top: 0.2rem;
-    }
-
     tr.riesgo {
-        background: rgba(185, 28, 28, 0.18);
+        background: color-mix(in srgb, var(--danger) 16%, transparent);
     }
 
     tr.atencion {
-        background: rgba(245, 158, 11, 0.15);
+        background: color-mix(in srgb, var(--warning) 14%, transparent);
     }
 
     .estado {
@@ -719,16 +636,16 @@
         border-radius: 999px;
         padding: 0.25rem 0.6rem;
         font-size: 0.8rem;
-        background: #1f7a3b;
-        color: white;
+        background: var(--ok);
+        color: #fff;
     }
 
     .estado.riesgo {
-        background: #b91c1c;
+        background: var(--danger);
     }
 
     .estado.atencion {
-        background: #d97706;
+        background: var(--warning);
     }
 
     .notas-lista {
@@ -741,18 +658,20 @@
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
-        background: #2b2e36;
-        border: 1px solid #444;
+        background: var(--surface-2);
+        border: 1px solid var(--line);
         border-radius: 999px;
         padding: 0.25rem 0.5rem;
         font-size: 0.82rem;
     }
 
     .nota-tag button {
+        min-height: 26px;
+        padding: 0 0.35rem;
+        border: 0;
+        border-radius: var(--radius-sm);
+        color: var(--danger);
         background: transparent;
-        color: #fca5a5;
-        padding: 0;
-        line-height: 1;
     }
 
     .reporte-print {
@@ -793,7 +712,7 @@
 
     @media (max-width: 680px) {
         .notas-header {
-            align-items: flex-start;
+            align-items: stretch;
             flex-direction: column;
         }
 
@@ -803,6 +722,14 @@
 
         .acciones-header button {
             flex: 1;
+        }
+
+        .filtros-notas select {
+            min-width: 120px;
+        }
+
+        .resumen-notas {
+            grid-template-columns: repeat(2, 1fr);
         }
     }
 </style>

@@ -1,107 +1,373 @@
 ---
-// Importa tu navegacion si es una pagina completa
 import Navigation from '../components/Navigation.astro';
+import '../styles/global.css';
 ---
 
 <html lang="es">
 <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Asistencias | SGE</title>
-    <style>
-        body { background-color: #13151a; color: white; font-family: system-ui; }
-        .filtros { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .alumno-fila { display: flex; justify-content: space-between; gap: 15px; padding: 10px; border-bottom: 1px solid #333; align-items: center; }
-        .btn-asistencia { margin-left: 5px; cursor: pointer; }
-        .presente { background-color: #28a745; color: white; border: none; padding: 5px 10px; }
-        .ausente { background-color: #dc3545; color: white; border: none; padding: 5px 10px; }
-        .btn-secundario { background: #444; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
-        .btn-accion { border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-        .btn-quitar { background: #f59e0b; color: #111; }
-        .btn-perfil { background: #2b2e36; color: white; border: 1px solid #555; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-        .estado-asistencia { display: inline-block; margin-top: 5px; padding: 3px 8px; border-radius: 999px; font-size: 0.8rem; background: #333; color: #ddd; }
-        .estado-asistencia.presente { background: #1f7a3b; color: white; }
-        .estado-asistencia.ausente { background: #9f2430; color: white; }
-        .lista-acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-        .modal-resumen { display: none; margin: 15px 0 5px; padding: 10px; border-radius: 8px; background: #13151a; color: #ddd; }
-        .modal-resumen.visible { display: block; }
-        .modal-footer { display: flex; gap: 10px; justify-content: center; margin-top: 15px; flex-wrap: wrap; }
-        .modal-footer button:disabled { opacity: 0.45; cursor: not-allowed; }
+<style>
+        .filtros {
+            margin: 0;
+        }
+
+        #lista-asistencia {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            padding: 0;
+        }
+
+        .alumno-fila {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+            padding: var(--space-4) 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        @media (min-width: 560px) {
+            .alumno-fila {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+            }
+        }
+
+        .alumno-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .alumno-info strong {
+            font-size: 0.98rem;
+        }
+
+        .alumno-info small {
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+
+        .estado-asistencia {
+            display: inline-block;
+            margin-top: 0.35rem;
+            padding: 0.25rem 0.65rem;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            background: var(--surface-2);
+            color: var(--muted);
+        }
+
+        .estado-asistencia.presente {
+            background: color-mix(in srgb, var(--ok) 18%, var(--surface));
+            color: var(--ok);
+        }
+
+        .estado-asistencia.ausente {
+            background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+            color: var(--danger);
+        }
+
+        .lista-acciones {
+            display: flex;
+            gap: var(--space-2);
+            flex-wrap: wrap;
+        }
+
+        .btn-sm {
+            min-height: 40px;
+            padding: 0.45rem 0.8rem;
+            font-size: 0.85rem;
+        }
+
+        .btn-presente {
+            color: #fff;
+            background: var(--ok);
+        }
+
+        .btn-ausente {
+            color: #fff;
+            background: var(--danger);
+        }
+
+        .btn-quitar {
+            color: var(--ink);
+            background: color-mix(in srgb, var(--warning) 22%, var(--surface));
+        }
+
+        .btn-perfil {
+            color: var(--ink);
+            background: var(--surface-2);
+            border: 1px solid var(--line);
+        }
+
+        .modal-content {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: calc(var(--radius) + 2px);
+            padding: var(--space-5);
+            width: min(94vw, 460px);
+            margin: auto;
+            position: relative;
+            color: var(--ink);
+            box-shadow: var(--shadow);
+        }
+
+        .modal-content h2 {
+            font-size: 1.2rem;
+            margin-bottom: var(--space-2);
+        }
+
+        .modal-content h3 {
+            font-size: 1rem;
+            color: var(--muted);
+            margin: var(--space-4) 0 var(--space-2);
+        }
+
+        .btn-cerrar {
+            position: absolute;
+            top: var(--space-3);
+            right: var(--space-3);
+            min-height: 36px;
+            width: 36px;
+            border: 1px solid var(--line);
+            border-radius: 50%;
+            background: var(--surface-2);
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .modal-progreso {
+            display: inline-block;
+            background: var(--surface-2);
+            padding: 0.35rem 0.85rem;
+            border-radius: 999px;
+            font-size: 0.88rem;
+            color: var(--muted);
+            margin-bottom: var(--space-4);
+        }
+
+        .modal-avatar-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-2);
+            margin-bottom: var(--space-5);
+        }
+
+        .avatar {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            border: 2px solid var(--line);
+            object-fit: cover;
+            background: var(--surface-2);
+        }
+
+        .modal-acciones-lista {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+
+        .modal-acciones-lista .btn {
+            width: 100%;
+            min-height: 56px;
+            font-size: 1.05rem;
+        }
+
+        .modal-nav,
+        .modal-footer {
+            display: flex;
+            gap: var(--space-2);
+            flex-wrap: wrap;
+        }
+
+        .modal-nav {
+            justify-content: space-between;
+            padding-top: var(--space-4);
+            border-top: 1px solid var(--line);
+        }
+
+        .modal-footer {
+            justify-content: center;
+            margin-top: var(--space-3);
+        }
+
+        .modal-resumen {
+            display: none;
+            margin: var(--space-3) 0 var(--space-2);
+            padding: var(--space-3);
+            border-radius: var(--radius);
+            background: var(--surface-muted);
+            color: var(--muted);
+            font-size: 0.88rem;
+            text-align: center;
+        }
+
+        .modal-resumen.visible {
+            display: block;
+        }
+
+        .perfil-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-2);
+            text-align: center;
+            margin-bottom: var(--space-4);
+        }
+
+        .badge {
+            display: inline-block;
+            background: var(--surface-2);
+            color: var(--brand);
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+        }
+
+        .perfil-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+
+        .stat-box {
+            background: var(--surface-muted);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: var(--space-3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--brand);
+        }
+
+        .form-nota {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-2);
+        }
+
+        .form-nota .btn-guardar-mini {
+            grid-column: 1 / -1;
+            min-height: 44px;
+            background: var(--brand);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+
+        .materias-desempeno {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+            font-size: 0.88rem;
+            color: var(--muted);
+        }
+
+        .empty-state {
+            padding: var(--space-8) var(--space-4);
+            text-align: center;
+            color: var(--muted);
+        }
     </style>
 </head>
-<body>
+<body class="app-body">
     <Navigation currentPath="/asistencias" />
 
-    <main style="max-width: 800px; margin: 0 auto; padding: 20px;">
-        <h1>Control de Asistencias</h1>
+    <main class="page page-stack">
+        <header class="page-header">
+            <div class="header-content">
+                <p class="eyebrow">Control diario</p>
+                <h1>Control de Asistencias</h1>
+            </div>
+            <div class="hero-actions">
+                <button id="btn-tomar-lista" class="btn btn-primary">Tomar Lista</button>
+                <button id="btn-exportar-asistencia" class="btn btn-secondary">Exportar</button>
+            </div>
+        </header>
 
-        <div class="filtros">
-            <input type="date" id="filtro-fecha" />
+        <section class="panel" aria-label="Filtros">
+            <div class="filters-grid filtros">
+                <input type="date" id="filtro-fecha" aria-label="Fecha" />
+                <select id="filtro-escuela" aria-label="Escuela"><option value="">Todas las Escuelas</option></select>
+                <select id="filtro-curso" aria-label="Curso"><option value="">Todos los Cursos</option></select>
+                <select id="filtro-turno" aria-label="Turno">
+                    <option value="">Todos los Turnos</option>
+                    <option value="Mañana">Mañana</option>
+                    <option value="Tarde">Tarde</option>
+                    <option value="Noche">Noche</option>
+                </select>
+                <select id="filtro-materia" aria-label="Materia"><option value="">Todas las Materias</option></select>
+            </div>
+        </section>
 
-            <select id="filtro-escuela"><option value="">Todas las Escuelas</option></select>
-            <select id="filtro-curso"><option value="">Todos los Cursos</option></select>
-            <select id="filtro-turno">
-                <option value="">Todos los Turnos</option>
-                <option value="Ma&ntilde;ana">Ma&ntilde;ana</option>
-                <option value="Tarde">Tarde</option>
-                <option value="Noche">Noche</option>
-            </select>
-            <select id="filtro-materia"><option value="">Todas las Materias</option></select>
-        </div>
-
-        <div style="margin-bottom: 15px;">
-            <button id="btn-tomar-lista" style="padding: 10px 20px; font-size: 1.1rem; background: #4f46e5; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                Modo Tomar Lista
-            </button>
-            <button id="btn-exportar-asistencia" class="btn-secundario" style="margin-left: 8px;">
-                Exportar lista
-            </button>
-        </div>
-
+        <!-- Modal: Tomar Lista -->
         <dialog id="modal-tomar-lista" class="modal">
-            <div class="modal-content" style="text-align: center; max-width: 400px;">
-                <button id="btn-cerrar-lista" class="btn-cerrar">x</button>
+            <div class="modal-content" style="text-align:center;">
+                <button id="btn-cerrar-lista" class="btn-cerrar" aria-label="Cerrar">×</button>
 
-                <h2 style="margin-bottom: 5px;">Tomando Lista</h2>
-                <p id="progreso-lista" style="background: #333; padding: 5px 10px; border-radius: 20px; display: inline-block; font-size: 0.9rem;">Alumno 1 de X</p>
+                <h2>Tomando Lista</h2>
+                <span id="progreso-lista" class="modal-progreso">Alumno 1 de X</span>
 
-                <div style="margin-top: 20px;">
-                    <img id="lista-foto" src="" alt="Foto" class="avatar" style="width: 120px; height: 120px; margin-bottom: 10px;" />
-                    <h2 id="lista-nombre" style="font-size: 1.5rem; margin: 0;">Nombre</h2>
-                    <p id="lista-curso" style="color: #aaa; margin-top: 5px;">Curso - Turno</p>
+                <div class="modal-avatar-wrap">
+                    <img id="lista-foto" src="" alt="Foto del alumno" class="avatar" />
+                    <h2 id="lista-nombre">Nombre</h2>
+                    <p id="lista-curso" style="color:#8b90a0;font-size:0.9rem;">Curso - Turno</p>
                 </div>
 
-                <div style="display: flex; gap: 15px; justify-content: center; margin: 30px 0;">
-                    <button id="btn-lista-ausente" class="btn-asistencia ausente" style="flex: 1; padding: 20px; font-size: 1.2rem; border-radius: 10px; cursor: pointer;">Ausente</button>
-                    <button id="btn-lista-presente" class="btn-asistencia presente" style="flex: 1; padding: 20px; font-size: 1.2rem; border-radius: 10px; cursor: pointer;">Presente</button>
+                <div class="modal-acciones-lista">
+                    <button id="btn-lista-ausente" class="btn btn-ausente">Ausente</button>
+                    <button id="btn-lista-presente" class="btn btn-presente">Presente</button>
                 </div>
 
                 <p id="resumen-lista" class="modal-resumen"></p>
 
-                <div style="display: flex; justify-content: space-between; border-top: 1px solid #444; padding-top: 15px;">
-                    <button id="btn-lista-prev" style="padding: 8px 15px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer;">Anterior</button>
-                    <button id="btn-lista-next" style="padding: 8px 15px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer;">Siguiente</button>
+                <div class="modal-nav">
+                    <button id="btn-lista-prev" class="btn btn-secondary btn-sm">← Anterior</button>
+                    <button id="btn-lista-next" class="btn btn-secondary btn-sm">Siguiente →</button>
                 </div>
 
                 <div class="modal-footer">
-                    <button id="btn-enviar-lista" class="btn-secundario" disabled>Enviar lista</button>
-                    <button id="btn-exportar-lista-modal" class="btn-secundario" disabled>Exportar Excel</button>
+                    <button id="btn-enviar-lista" class="btn btn-secondary" disabled>Enviar lista</button>
+                    <button id="btn-exportar-lista-modal" class="btn btn-secondary" disabled>Exportar Excel</button>
                 </div>
             </div>
         </dialog>
 
-        <div id="lista-asistencia">
-            <p>Selecciona los filtros para ver los alumnos.</p>
-        </div>
+        <!-- Lista de alumnos -->
+        <section class="panel" id="lista-asistencia" aria-label="Alumnos">
+            <p class="empty-state">Selecciona los filtros para ver los alumnos.</p>
+        </section>
 
+        <!-- Modal: Perfil Alumno -->
         <dialog id="modal-perfil" class="modal">
             <div class="modal-content">
-                <button id="btn-cerrar-modal" class="btn-cerrar">x</button>
+                <button id="btn-cerrar-modal" class="btn-cerrar" aria-label="Cerrar">×</button>
 
-                <div class="perfil-header">
+                <header class="perfil-header">
                     <img id="perfil-foto" src="" alt="Foto de perfil" class="avatar" />
                     <h2 id="perfil-nombre">Nombre del Alumno</h2>
-                    <p id="perfil-curso" class="badge">Curso - Turno</p>
-                </div>
+                    <span id="perfil-curso" class="badge">Curso - Turno</span>
+                </header>
 
                 <div class="perfil-stats">
                     <div class="stat-box">
@@ -114,29 +380,33 @@ import Navigation from '../components/Navigation.astro';
                     </div>
                 </div>
 
-                <div class="perfil-detalles">
+                <section class="perfil-detalles">
                     <h3>Cargar Nueva Nota</h3>
                     <div class="form-nota">
-                        <select id="nota-materia">
+                        <select id="nota-materia" aria-label="Materia">
                             <option value="">Materia</option>
                         </select>
-                        <select id="nota-tipo">
-                            <option value="Evaluacion">Evaluacion</option>
-                            <option value="Trabajo Practico">Trabajo Practico</option>
-                            <option value="Participacion">Participacion</option>
+                        <select id="nota-tipo" aria-label="Tipo de nota">
+                            <option value="Evaluacion">Evaluación</option>
+                            <option value="Trabajo Practico">Trabajo Práctico</option>
+                            <option value="Participacion">Participación</option>
                         </select>
-                        <input type="number" id="nota-valor" placeholder="Nota" min="1" max="10">
-                        <input type="text" id="nota-desc" placeholder="Tema">
-                        <button id="btn-guardar-nota" class="btn-guardar-mini">Cargar</button>
+                        <input type="number" id="nota-valor" placeholder="Nota (1-10)" min="1" max="10" aria-label="Valor de nota" />
+                        <input type="text" id="nota-desc" placeholder="Tema" aria-label="Tema" />
+                        <button id="btn-guardar-nota" class="btn-guardar-mini">Cargar Nota</button>
                     </div>
 
-                    <h3>Desempeno por Materia</h3>
+                    <h3>Desempeño por Materia</h3>
                     <div id="materias-desempeno" class="materias-desempeno"></div>
-                </div>
+                </section>
             </div>
         </dialog>
     </main>
 
+    <script>
+      import { initMobileNav } from '../scripts/ui-nav.js';
+      initMobileNav();
+    </script>
     <script is:inline>
         let alumnosFiltradosActuales = [];
         let indiceLista = 0;
@@ -218,7 +488,7 @@ import Navigation from '../components/Navigation.astro';
             alumnosFiltradosActuales = filtrados;
 
             if (filtrados.length === 0) {
-                listaUI.innerHTML = '<p>No hay alumnos que coincidan con estos filtros.</p>';
+                listaUI.innerHTML = '<p class="empty-state">No hay alumnos que coincidan con estos filtros.</p>';
                 return;
             }
 
@@ -230,17 +500,19 @@ import Navigation from '../components/Navigation.astro';
                 const textoAusente = estado === 'Ausente' ? 'Quitar Ausente' : 'Ausente';
 
                 return `
-                    <div class="alumno-fila">
-                        <div>
-                            <strong>${escaparHtml(al.nombre)}</strong> <small>(${escaparHtml(al.curso)} - ${escaparHtml(al.turno)})</small>
-                            <br><span class="estado-asistencia ${estadoClase}">${textoEstado}</span>
+                    <article class="alumno-fila">
+                        <div class="alumno-info">
+                            <strong>${escaparHtml(al.nombre)}</strong>
+                            <small>(${escaparHtml(al.curso)} - ${escaparHtml(al.turno)})</small>
+                            <br>
+                            <span class="estado-asistencia ${estadoClase}">${textoEstado}</span>
                         </div>
                         <div class="lista-acciones">
-                            <button class="btn-accion ${estado === 'Presente' ? 'btn-quitar' : 'presente'}" onclick="toggleAsistencia(${al.id}, 'Presente')">${textoPresente}</button>
-                            <button class="btn-accion ${estado === 'Ausente' ? 'btn-quitar' : 'ausente'}" onclick="toggleAsistencia(${al.id}, 'Ausente')">${textoAusente}</button>
-                            <button class="btn-perfil" onclick="abrirPerfilAlumno(${al.id})">Ver Perfil</button>
+                            <button class="btn btn-sm ${estado === 'Presente' ? 'btn-quitar' : 'btn-presente'}" onclick="toggleAsistencia(${al.id}, 'Presente')">${textoPresente}</button>
+                            <button class="btn btn-sm ${estado === 'Ausente' ? 'btn-quitar' : 'btn-ausente'}" onclick="toggleAsistencia(${al.id}, 'Ausente')">${textoAusente}</button>
+                            <button class="btn btn-sm btn-perfil" onclick="abrirPerfilAlumno(${al.id})">Ver Perfil</button>
                         </div>
-                    </div>
+                    </article>
                 `;
             }).join('');
         }
@@ -359,10 +631,10 @@ import Navigation from '../components/Navigation.astro';
             document.getElementById('btn-lista-presente').textContent = estadoActual === 'Presente' ? 'Quitar Presente' : 'Presente';
             document.getElementById('btn-lista-ausente').textContent = estadoActual === 'Ausente' ? 'Quitar Ausente' : 'Ausente';
 
-            document.getElementById('btn-lista-prev').disabled = indiceLista === 0;
-            document.getElementById('btn-lista-prev').style.opacity = indiceLista === 0 ? "0.5" : "1";
-            document.getElementById('btn-lista-next').disabled = indiceLista === alumnosFiltradosActuales.length - 1;
-            document.getElementById('btn-lista-next').style.opacity = indiceLista === alumnosFiltradosActuales.length - 1 ? "0.5" : "1";
+            const btnPrev = document.getElementById('btn-lista-prev');
+            const btnNext = document.getElementById('btn-lista-next');
+            btnPrev.disabled = indiceLista === 0;
+            btnNext.disabled = indiceLista === alumnosFiltradosActuales.length - 1;
 
             const resumen = document.getElementById('resumen-lista');
             resumen.textContent = `${resumenLista.tomados} de ${resumenLista.total} alumnos tomados. Presentes: ${resumenLista.presentes}. Ausentes: ${resumenLista.ausentes}.`;
@@ -472,11 +744,7 @@ import Navigation from '../components/Navigation.astro';
                     <table border="1">
                         <tr><th colspan="5">Lista de asistencia - ${escaparHtml(fecha)} - ${escaparHtml(nombreMateria)}</th></tr>
                         <tr>
-                            <th>Alumno</th>
-                            <th>Curso</th>
-                            <th>Turno</th>
-                            <th>Escuela</th>
-                            <th>Estado</th>
+                            <th>Alumno</th><th>Curso</th><th>Turno</th><th>Escuela</th><th>Estado</th>
                         </tr>
                         ${filas.map(fila => `
                             <tr>

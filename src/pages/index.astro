@@ -3,75 +3,66 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Panel docente">
-  <main class="page">
-    <section class="daily-layout">
-      <section class="panel today-card">
-        <p class="eyebrow">Hoy</p>
-        <h1>Panel del dia</h1>
-        <p>El sistema sugiere escuela, curso y materia segun tu horario. Siempre podes cambiarlo a mano.</p>
-        <div class="context-banner" data-context-banner>
-          <strong>Contexto sugerido</strong>
-          <span data-context-summary>Configura tu horario para ver sugerencias automaticas.</span>
-        </div>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="/asistencia">Tomar asistencia</a>
-          <a class="btn btn-secondary" href="/notas">Cargar calificaciones</a>
-          <a class="btn btn-secondary" href="/actividades">Ver actividades</a>
-        </div>
-      </section>
+  <main class="page page-stack">
+    <section class="hero-card">
+      <p class="eyebrow">Hoy</p>
+      <h1>Panel del día</h1>
 
-      <aside class="panel">
-        <div class="section-title">
-          <h2>Resumen del dia</h2>
-          <p>Filtros visibles para trabajar rapido con el grupo correcto.</p>
-        </div>
-        <div class="filters dashboard-filters" data-dashboard-filters>
-          <select name="escuela" aria-label="Escuela"></select>
-          <select name="curso" aria-label="Curso"></select>
-          <select name="materia" aria-label="Materia"></select>
-        </div>
-        <div class="metric-grid" data-dashboard></div>
-        <div data-alerts style="margin-top: 1rem;"></div>
-      </aside>
+      <div class="context-banner" data-context-banner>
+        <strong>Contexto sugerido</strong>
+        <p data-context-summary>Configurá tu horario para sugerencias.</p>
+      </div>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-block" href="/asistencia">Tomar asistencia</a>
+        <a class="btn btn-secondary btn-block" href="/notas">Cargar calificaciones</a>
+        <a class="btn btn-secondary btn-block" href="/actividades">Ver actividades</a>
+      </div>
     </section>
 
-    <section class="panel context-manager" data-teacher-context>
+    <section class="panel">
+      <div class="section-title">
+        <h2>Resumen del día</h2>
+        <p>Filtros rápidos para ver asistencia, cursos y alertas del contexto actual.</p>
+      </div>
+      <div class="filters-grid" data-dashboard-filters>
+        <select name="escuela" aria-label="Escuela"></select>
+        <select name="curso" aria-label="Curso"></select>
+        <select name="materia" aria-label="Materia"></select>
+      </div>
+      <div class="metric-grid" data-dashboard></div>
+      <div data-alerts></div>
+    </section>
+
+    <section class="panel" data-teacher-context>
       <div class="section-title">
         <h2>Mi horario</h2>
-        <p>Carga tus bloques de clase para que Aula Clara sugiera el contexto correcto al entrar.</p>
+        <p>Bloques habituales para sugerir curso y materia al iniciar cada tarea.</p>
       </div>
       <form class="form-grid" data-context-form>
-        <fieldset class="span-2 day-picker">
-          <legend>Dias</legend>
-          <label><input type="checkbox" name="dias" value="1" /> Lun</label>
-          <label><input type="checkbox" name="dias" value="2" /> Mar</label>
-          <label><input type="checkbox" name="dias" value="3" /> Mie</label>
-          <label><input type="checkbox" name="dias" value="4" /> Jue</label>
-          <label><input type="checkbox" name="dias" value="5" /> Vie</label>
+        <fieldset class="day-picker">
+          <legend>Días</legend>
+          <div class="days-checkboxes">
+            <label><input type="checkbox" name="dias" value="1" /> Lun</label>
+            <label><input type="checkbox" name="dias" value="2" /> Mar</label>
+            <label><input type="checkbox" name="dias" value="3" /> Mié</label>
+            <label><input type="checkbox" name="dias" value="4" /> Jue</label>
+            <label><input type="checkbox" name="dias" value="5" /> Vie</label>
+          </div>
         </fieldset>
-        <label>
-          <span>Desde</span>
-          <input type="time" name="desde" required />
-        </label>
-        <label>
-          <span>Hasta</span>
-          <input type="time" name="hasta" required />
-        </label>
-        <label>
-          <span>Escuela</span>
-          <select name="escuela" required></select>
-        </label>
-        <label>
-          <span>Curso</span>
-          <select name="cursoId" required></select>
-        </label>
-        <label class="span-2">
-          <span>Materia</span>
-          <select name="materiaId" required></select>
-        </label>
-        <button class="btn btn-primary span-2" type="submit">Guardar bloque</button>
+
+        <div class="input-group full-width">
+          <label><span>Desde</span><input type="time" name="desde" required /></label>
+          <label><span>Hasta</span><input type="time" name="hasta" required /></label>
+        </div>
+
+        <label><span>Escuela</span><select name="escuela" required></select></label>
+        <label><span>Curso</span><select name="cursoId" required></select></label>
+        <label><span>Materia</span><select name="materiaId" required></select></label>
+
+        <button class="btn btn-primary" type="submit">Guardar bloque</button>
       </form>
-      <div class="list context-list" data-context-list></div>
+      <div class="list" data-context-list></div>
     </section>
   </main>
 </Layout>
