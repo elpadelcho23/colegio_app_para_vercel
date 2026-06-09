@@ -1472,8 +1472,13 @@ td small {
   margin: 0 0 var(--space-3);
 }
 
-.is-hidden {
+.is-hidden,
+.spa-view--hidden {
   display: none !important;
+}
+
+#spa-root {
+  width: 100%;
 }
 
 .full-width {

@@ -1,19 +1,24 @@
 ---
-const { currentPath = '/' } = Astro.props;
+const { currentPath = '/', spaEnabled = false } = Astro.props;
 const user = Astro.locals.user;
 
 const links = [
-  { href: '/', label: 'Panel' },
-  { href: '/registro', label: 'Alumnos' },
-  { href: '/cursos', label: 'Cursos' },
-  { href: '/asistencia', label: 'Asistencia' },
-  { href: '/notas', label: 'Calificaciones' },
-  { href: '/actividades', label: 'Actividades' },
+  { view: 'panel', label: 'Panel' },
+  { view: 'registro', label: 'Alumnos' },
+  { view: 'cursos', label: 'Cursos' },
+  { view: 'asistencia', label: 'Asistencia' },
+  { view: 'notas', label: 'Calificaciones' },
+  { view: 'actividades', label: 'Actividades' },
   ...(user?.rol === 'admin' ? [{ href: '/admin/usuarios', label: 'Admin' }] : []),
 ];
 
-const isActive = (href: string) =>
-  href === '/' ? currentPath === '/' : currentPath.startsWith(href);
+const isActive = (view: string) => {
+  if (!spaEnabled) {
+    const href = view === 'panel' ? '/' : `/${view === 'registro' ? 'registro' : view}`;
+    return view === 'panel' ? currentPath === '/' : currentPath.startsWith(href);
+  }
+  return false;
+};
 ---
 
 <header class="app-shell">
@@ -25,13 +30,23 @@ const isActive = (href: string) =>
     {user && <span>{user.nombre} - {user.rol}</span>}
   </div>
   <nav class="topbar" aria-label="Navegación principal">
-    <a class="brand" href="/" aria-label="Ir al panel principal">
-      <span class="brand-mark">AC</span>
-      <span>
-        <strong>Aula Clara</strong>
-        <small>Gestión docente</small>
-      </span>
-    </a>
+    {spaEnabled ? (
+      <button class="brand brand-button" type="button" data-spa-nav="panel" aria-label="Ir al panel principal">
+        <span class="brand-mark">AC</span>
+        <span>
+          <strong>Aula Clara</strong>
+          <small>Gestión docente</small>
+        </span>
+      </button>
+    ) : (
+      <a class="brand" href="/" aria-label="Ir al panel principal">
+        <span class="brand-mark">AC</span>
+        <span>
+          <strong>Aula Clara</strong>
+          <small>Gestión docente</small>
+        </span>
+      </a>
+    )}
 
     <button
       class="menu-toggle"
@@ -49,14 +64,34 @@ const isActive = (href: string) =>
     <div class="nav-links" id="main-navigation-menu" data-nav-menu role="menu">
       <p class="nav-section-label">Menú</p>
       {links.map((link) => (
-        <a
-          href={link.href}
-          class:list={[{ active: isActive(link.href) }]}
-          aria-current={isActive(link.href) ? 'page' : undefined}
-          role="menuitem"
-        >
-          {link.label}
-        </a>
+        'href' in link ? (
+          <a
+            href={link.href}
+            class:list={[{ active: currentPath.startsWith(link.href) }]}
+            aria-current={currentPath.startsWith(link.href) ? 'page' : undefined}
+            role="menuitem"
+          >
+            {link.label}
+          </a>
+        ) : spaEnabled ? (
+          <button
+            type="button"
+            class="nav-tab"
+            data-spa-nav={link.view}
+            role="menuitem"
+          >
+            {link.label}
+          </button>
+        ) : (
+          <a
+            href={link.view === 'panel' ? '/' : `/${link.view === 'registro' ? 'registro' : link.view}`}
+            class:list={[{ active: isActive(link.view) }]}
+            aria-current={isActive(link.view) ? 'page' : undefined}
+            role="menuitem"
+          >
+            {link.label}
+          </a>
+        )
       ))}
       {user ? (
         <form method="post" action="/api/auth/logout" class="nav-form">
@@ -70,4 +105,33 @@ const isActive = (href: string) =>
   </nav>
 </header>
 
-<!-- Mobile nav behavior handled in src/scripts/ui-nav.js -->
+<style>
+  .brand-button {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+  }
+
+  .nav-tab {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .nav-tab.active,
+  .nav-tab[aria-current='page'] {
+    background: color-mix(in srgb, var(--brand) 14%, var(--surface));
+    color: var(--brand);
+    font-weight: 700;
+  }
+</style>

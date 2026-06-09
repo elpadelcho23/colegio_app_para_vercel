@@ -1,0 +1,333 @@
+---
+interface Props {
+  initialView?: string;
+}
+
+const { initialView = 'panel' } = Astro.props;
+---
+
+<div id="spa-root" data-spa-root data-initial-view={initialView}>
+  <section class="spa-view page page-stack" data-spa-view="panel" data-spa-title="Panel docente">
+    <section class="hero-card">
+      <p class="eyebrow">Hoy</p>
+      <h1>Panel del día</h1>
+      <div class="context-banner" data-context-banner>
+        <strong>Contexto sugerido</strong>
+        <p data-context-summary>Configurá tu horario para sugerencias.</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-block" type="button" data-spa-nav="asistencia">Tomar asistencia</button>
+        <button class="btn btn-secondary btn-block" type="button" data-spa-nav="notas">Cargar calificaciones</button>
+        <button class="btn btn-secondary btn-block" type="button" data-spa-nav="actividades">Ver actividades</button>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="section-title">
+        <h2>Resumen del día</h2>
+        <p>Filtros rápidos para ver asistencia, cursos y alertas del contexto actual.</p>
+      </div>
+      <div class="filters-grid" data-dashboard-filters>
+        <select name="escuela" aria-label="Escuela"></select>
+        <select name="curso" aria-label="Curso"></select>
+        <select name="materia" aria-label="Materia"></select>
+      </div>
+      <div class="metric-grid" data-dashboard></div>
+      <div data-alerts></div>
+    </section>
+    <section class="panel" data-teacher-context>
+      <div class="section-title">
+        <h2>Mi horario</h2>
+        <p>Bloques habituales para sugerir curso y materia al iniciar cada tarea.</p>
+      </div>
+      <form class="form-grid" data-context-form>
+        <fieldset class="day-picker">
+          <legend>Días</legend>
+          <div class="days-checkboxes">
+            <label><input type="checkbox" name="dias" value="1" /> Lun</label>
+            <label><input type="checkbox" name="dias" value="2" /> Mar</label>
+            <label><input type="checkbox" name="dias" value="3" /> Mié</label>
+            <label><input type="checkbox" name="dias" value="4" /> Jue</label>
+            <label><input type="checkbox" name="dias" value="5" /> Vie</label>
+          </div>
+        </fieldset>
+        <div class="input-group full-width">
+          <label><span>Desde</span><input type="time" name="desde" required /></label>
+          <label><span>Hasta</span><input type="time" name="hasta" required /></label>
+        </div>
+        <label><span>Escuela</span><select name="escuela" required></select></label>
+        <label><span>Curso</span><select name="cursoId" required></select></label>
+        <label><span>Materia</span><select name="materiaId" required></select></label>
+        <button class="btn btn-primary" type="submit">Guardar bloque</button>
+      </form>
+      <div class="list" data-context-list></div>
+    </section>
+  </section>
+
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="registro" data-spa-title="Registro de alumnos">
+    <header class="page-header">
+      <div class="header-content">
+        <p class="eyebrow">Alumnos</p>
+        <h1>Registro simple</h1>
+        <p>Datos, materias y contacto de cada estudiante en una vista clara.</p>
+      </div>
+      <button class="btn btn-secondary btn-block" type="button" data-spa-nav="cursos">Organizar cursos</button>
+    </header>
+    <section class="responsive-grid">
+      <form class="panel form-grid" data-student-form>
+        <div class="section-title"><h2>Nuevo alumno</h2></div>
+        <div class="input-group full-width">
+          <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /></label>
+          <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
+        </div>
+        <label class="full-width"><span>Curso</span><select name="cursoId" required></select></label>
+        <fieldset class="subject-picker">
+          <legend>Materias del alumno</legend>
+          <div class="subject-search" data-student-subjects></div>
+          <input name="nuevaMateria" data-student-new-subject placeholder="Agregar materia nueva..." />
+        </fieldset>
+        <label class="full-width"><span>Tutor o contacto</span><input name="tutor" /></label>
+        <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
+      </form>
+      <section class="panel">
+        <div class="section-title">
+          <h2>Alumnos cargados</h2>
+          <p>Listado con curso, materias y promedio actualizado.</p>
+        </div>
+        <div class="list" data-student-list></div>
+      </section>
+    </section>
+  </section>
+
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="cursos" data-spa-title="Cursos" data-courses>
+    <header class="page-header">
+      <div class="header-content">
+        <p class="eyebrow">Organización</p>
+        <h1>Cursos y divisiones</h1>
+        <p>Base de trabajo para inscripciones, asistencia y reportes.</p>
+      </div>
+      <button class="btn btn-secondary btn-block" type="button" data-spa-nav="registro">Cargar alumnos</button>
+    </header>
+    <section class="responsive-grid">
+      <form class="panel form-grid" data-course-form>
+        <div class="section-title"><h2>Nuevo curso</h2></div>
+        <label><span>Escuela</span><input name="escuela" required /></label>
+        <label><span>Curso</span><input name="nombre" placeholder="Ej: 6to 1ra" required /></label>
+        <label>
+          <span>Turno</span>
+          <select name="turno" required>
+            <option value="">Seleccionar turno</option>
+            <option>Mañana</option>
+            <option>Tarde</option>
+            <option>Noche</option>
+          </select>
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">Crear curso</button>
+      </form>
+      <section class="panel">
+        <div class="section-title">
+          <h2>Cursos activos</h2>
+          <p>Resumen de alumnos y materias por división.</p>
+        </div>
+        <div class="list" data-course-list></div>
+      </section>
+    </section>
+  </section>
+
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="asistencia" data-spa-title="Asistencia" data-attendance>
+    <header class="page-header">
+      <div class="header-content">
+        <p class="eyebrow">Control diario</p>
+        <h1>Toma de asistencia</h1>
+        <p>Filtrá por fecha, curso y materia para marcar presentes o ausentes.</p>
+      </div>
+      <button class="btn btn-secondary btn-block" type="button" data-spa-nav="notas">Ver notas</button>
+    </header>
+    <section class="panel">
+      <div class="filters-grid">
+        <input type="date" data-attendance-date aria-label="Fecha" />
+        <select data-filter-course aria-label="Curso"></select>
+        <select data-filter-subject aria-label="Materia"></select>
+        <div class="actions-group">
+          <button class="btn btn-ghost" type="button" data-sync-button data-pull-remote>Sincronizar</button>
+          <button class="btn btn-secondary" type="button" data-export-excel>Exportar</button>
+        </div>
+      </div>
+      <div class="sync-line">
+        <span class="tag" data-connection-status>Detectando...</span>
+        <small class="sync-status" data-sync-status>0 pendientes · 0 sincronizadas · 0 con error</small>
+      </div>
+    </section>
+    <section class="summary-strip" data-attendance-summary></section>
+    <section class="panel">
+      <div class="section-title">
+        <h2>Alumnos</h2>
+        <p>Listado filtrado del día.</p>
+      </div>
+      <div class="list" data-attendance-list></div>
+    </section>
+  </section>
+
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="notas" data-spa-title="Calificaciones" data-grades>
+    <header class="page-header">
+      <div class="header-content">
+        <p class="eyebrow">Calificaciones</p>
+        <h1>Carga de notas</h1>
+        <p>Promedios, entregas y estado académico por curso y materia.</p>
+      </div>
+      <a class="btn btn-secondary btn-block" href="/api/export">Exportar Excel</a>
+    </header>
+    <section class="panel context-workbar">
+      <div>
+        <strong>Contexto</strong>
+        <p data-grade-context-text>Seleccioná curso y materia.</p>
+      </div>
+      <div class="filters-grid">
+        <select data-grade-course-filter aria-label="Curso"></select>
+        <select data-grade-subject-filter aria-label="Materia"></select>
+      </div>
+    </section>
+    <section class="responsive-grid">
+      <form class="panel form-grid" data-grade-form>
+        <div class="section-title"><h2>Cargar evaluación</h2></div>
+        <label class="full-width"><span>Alumno</span><select name="studentId" required></select></label>
+        <input type="hidden" name="subjectId" />
+        <div class="input-row full-width">
+          <label>
+            <span>Tipo</span>
+            <select name="tipoEvaluacion" data-evaluation-type>
+              <option>TP</option>
+              <option>Oral</option>
+              <option>Integrador</option>
+              <option value="Evaluacion">Evaluación</option>
+            </select>
+          </label>
+          <label>
+            <span>Importancia</span>
+            <select name="peso" data-grade-importance>
+              <option value="40">Baja</option>
+              <option value="60">Media</option>
+              <option value="100">Alta</option>
+            </select>
+          </label>
+        </div>
+        <label class="full-width"><span>Título</span><input name="titulo" placeholder="Ej: TP 1" required /></label>
+        <label class="full-width">
+          <span>Modo de calificación</span>
+          <select name="modoCalificacion" data-grade-mode>
+            <option value="numerica">Numérica (1-10)</option>
+            <option value="conceptual">Conceptual</option>
+            <option value="trayectoria">Trayectoria</option>
+          </select>
+        </label>
+        <label data-numeric-grade-field><span>Nota</span><input name="valor" type="number" min="1" max="10" step="0.1" /></label>
+        <label class="is-hidden" data-text-grade-field><span>Calificación</span><select name="calificacionTexto"></select></label>
+        <div class="input-row full-width">
+          <label><span>Fecha</span><input name="fecha" type="date" /></label>
+          <label><span>Entrega</span><input name="fechaEntrega" type="date" /></label>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Guardar calificación</button>
+      </form>
+      <div class="stack">
+        <section class="panel">
+          <div class="section-title"><h2>Materias</h2></div>
+          <form class="inline-form" data-inline-subject-form>
+            <input name="nombre" placeholder="Nueva materia" aria-label="Nueva materia" />
+            <button class="btn btn-secondary" type="submit">+</button>
+          </form>
+          <div class="notes-list" data-inline-subject-list></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><h2>Entregas próximas</h2></div>
+          <div class="list" data-grade-deliveries></div>
+        </section>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="section-title">
+        <h2>Estado académico</h2>
+        <p>Vista consolidada por alumno para lectura rápida.</p>
+      </div>
+      <div class="table-container" data-grade-table></div>
+    </section>
+  </section>
+
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="actividades" data-spa-title="Actividades" data-activities data-calendar>
+    <header class="page-header">
+      <div class="header-content">
+        <p class="eyebrow">Agenda docente</p>
+        <h1>Actividades y calendario</h1>
+        <p>Avisos de evaluación, TP, entregas y fechas importantes en una sola pantalla.</p>
+      </div>
+      <button class="btn btn-secondary btn-block" type="button" data-spa-nav="notas">Ir a calificaciones</button>
+    </header>
+    <section class="responsive-grid is-balanced">
+      <form class="panel form-grid" data-activity-form>
+        <div class="section-title"><h2>Crear actividad</h2></div>
+        <div class="input-group full-width">
+          <label><span>Colegio</span><select name="colegio" required></select></label>
+          <label><span>Turno</span><select name="turno" required></select></label>
+          <label><span>Curso</span><select name="cursoId" required></select></label>
+          <label><span>Materia</span><select name="materiaId" required></select></label>
+        </div>
+        <label class="full-width"><span>Título</span><input name="titulo" placeholder="Ej: Evaluación integradora" required /></label>
+        <div class="input-group full-width">
+          <label><span>Publicación</span><input type="date" name="fechaPublicacion" /></label>
+          <label><span>Entrega</span><input type="date" name="fechaVencimiento" /></label>
+        </div>
+        <div class="activity-template-picker full-width" role="radiogroup">
+          <label class="template-card"><input type="radio" name="tipo" value="evaluacion" checked /> <strong>Evaluación</strong></label>
+          <label class="template-card"><input type="radio" name="tipo" value="tp" /> <strong>TP</strong></label>
+        </div>
+        <section class="activity-editor full-width" data-activity-editor></section>
+        <div class="button-row full-width">
+          <button class="btn btn-secondary" type="button" id="btn-descargar-word">Word</button>
+          <button class="btn btn-secondary" type="button" id="btn-descargar-pdf">PDF</button>
+          <button class="btn btn-primary" type="submit">Guardar</button>
+        </div>
+      </form>
+      <section class="panel">
+        <div class="section-title">
+          <h2>Actividades preparadas</h2>
+          <button class="btn btn-ghost" type="button" data-pull-remote data-pull-scope="actividades">Sincronizar</button>
+        </div>
+        <div class="list" data-activity-list></div>
+      </section>
+    </section>
+    <section class="calendar-wrapper">
+      <div class="panel calendar-panel">
+        <div class="section-title">
+          <h2>Calendario</h2>
+          <button class="btn btn-ghost" type="button" data-pull-remote data-pull-scope="calendario">Sincronizar</button>
+        </div>
+        <div class="filters">
+          <input type="month" data-calendar-month aria-label="Mes" />
+          <select data-calendar-course aria-label="Curso"></select>
+          <select data-calendar-subject aria-label="Materia"></select>
+        </div>
+      </div>
+      <div class="calendar-layout">
+        <div class="calendar-scroll">
+          <div class="calendar-grid" data-calendar-grid></div>
+        </div>
+        <aside class="panel calendar-day-panel">
+          <h2 data-calendar-selected-title>Seleccioná un día</h2>
+          <p class="calendar-summary" data-calendar-selected-summary></p>
+          <div class="list" data-calendar-day-events></div>
+        </aside>
+      </div>
+    </section>
+    <dialog class="modal" data-calendar-opt-in>
+      <form method="dialog" class="panel">
+        <h2>Recordatorios</h2>
+        <label>
+          <span>Días de anticipación</span>
+          <input type="number" min="1" max="30" value="3" data-calendar-lead-days />
+        </label>
+        <div class="button-row">
+          <button class="btn btn-primary" value="accept" data-calendar-alerts-accept>Activar</button>
+          <button class="btn btn-secondary" value="dismiss" data-calendar-alerts-dismiss>Ahora no</button>
+        </div>
+      </form>
+    </dialog>
+  </section>
+</div>

@@ -1,19 +1,28 @@
 ---
 import Navigation from '../components/Navigation.astro';
+import AppShell from '../components/spa/AppShell.astro';
 import '../styles/global.css';
+import { resolveInitialView, type SpaViewId } from '../scripts/spa-config.ts';
 
 interface Props {
   title: string;
   description?: string;
+  useSpa?: boolean;
 }
 
 const {
   title,
   description = 'Gestion escolar para docentes: asistencia, notas y seguimiento academico.',
+  useSpa,
 } = Astro.props;
 
 const currentPath = Astro.url.pathname;
 const user = Astro.locals.user;
+const isAdminPage = currentPath.startsWith('/admin');
+const spaEnabled = useSpa ?? Boolean(user && !isAdminPage);
+const initialView = spaEnabled
+  ? resolveInitialView(currentPath, Astro.url.search)
+  : 'panel';
 ---
 
 <!doctype html>
@@ -31,14 +40,19 @@ const user = Astro.locals.user;
     />
     <title>{title} | Aula Clara</title>
   </head>
-  <body class="app-body">
+  <body class="app-body" data-spa-enabled={spaEnabled ? 'true' : 'false'}>
     <a class="skip-link" href="#main-content">Ir al contenido principal</a>
-    <Navigation currentPath={currentPath} />
+    <Navigation currentPath={currentPath} spaEnabled={spaEnabled} />
     <div class="app-main" id="main-content">
-      <slot />
+      {spaEnabled ? (
+        <AppShell initialView={initialView as SpaViewId} />
+      ) : (
+        <slot />
+      )}
     </div>
-    <script define:vars={{ user }}>
+    <script define:vars={{ user, initialView, spaEnabled }}>
       window.__AULA_CLARA_USER__ = user;
+      window.__AULA_CLARA_SPA__ = { enabled: spaEnabled, initialView };
     </script>
     <script>
       import '../scripts/school-app.js';

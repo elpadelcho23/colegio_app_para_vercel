@@ -23,7 +23,9 @@ import '../styles/global.css';
     </dialog>
 </section>
 
-<script is:inline>
+<script>
+import { fetchCourseView, invalidateCourseViewCache, readPersistedCourseView } from '../scripts/curso-view-cache.ts';
+
 (() => {
     const STORAGE = {
         alumnos: 'alumnos',
@@ -42,6 +44,7 @@ import '../styles/global.css';
 
     let cursoActivoKey = null;
     let materiaActivaId = null;
+    let cargandoDetalle = false;
 
     const vistaCursos = document.getElementById('vista-cursos');
     const vistaDetalle = document.getElementById('vista-detalle-curso');
@@ -51,13 +54,20 @@ import '../styles/global.css';
     document.addEventListener('DOMContentLoaded', iniciarCursos);
 
     function iniciarCursos() {
-        document.getElementById('btn-refrescar-cursos')?.addEventListener('click', renderizarCursos);
+        document.getElementById('btn-refrescar-cursos')?.addEventListener('click', async () => {
+            if (cursoActivoKey && materiaActivaId) {
+                await asegurarDatosMateria(cursoActivoKey, materiaActivaId, { force: true });
+                renderizarDetalleCurso();
+                return;
+            }
+            renderizarCursos();
+        });
         document.getElementById('btn-cerrar-ficha')?.addEventListener('click', () => modalFicha.close());
 
         vistaCursos?.addEventListener('click', (e) => {
             const boton = e.target.closest('[data-abrir-curso]');
             if (!boton) return;
-            abrirCurso(boton.dataset.abrirCurso);
+            void abrirCurso(boton.dataset.abrirCurso);
         });
 
         vistaDetalle?.addEventListener('click', manejarClickDetalle);
@@ -77,6 +87,137 @@ import '../styles/global.css';
 
     function guardar(key, valor) {
         localStorage.setItem(key, JSON.stringify(valor));
+    }
+
+    function tieneDatosLocales(cursoKey, materiaId) {
+        if (!cursoKey || !materiaId) return false;
+
+        const notas = leer(STORAGE.notas).some((item) =>
+            item.cursoKey === cursoKey && item.materiaId === materiaId
+        );
+        const asistencias = leer(STORAGE.asistencias).some((item) =>
+            item.cursoKey === cursoKey && item.materiaId === materiaId
+        );
+        const trabajos = leer(STORAGE.trabajos).some((item) =>
+            item.cursoKey === cursoKey && item.materiaId === materiaId
+        );
+        const diario = leer(STORAGE.diario).some((item) =>
+            item.cursoKey === cursoKey && item.materiaId === materiaId
+        );
+
+        return notas || asistencias || trabajos || diario;
+    }
+
+    async function hidratarDesdeCacheLocal(cursoKey, materiaId) {
+        const snapshot = await readPersistedCourseView(cursoKey, materiaId);
+        if (snapshot) aplicarSnapshotEnLocal(snapshot, cursoKey, materiaId);
+        return snapshot;
+    }
+
+    async function asegurarDatosMateria(cursoKey, materiaId, { force = false } = {}) {
+        if (!cursoKey || !materiaId) return null;
+
+        const localData = tieneDatosLocales(cursoKey, materiaId);
+
+        if (!force) {
+            const snapshot = await hidratarDesdeCacheLocal(cursoKey, materiaId);
+            if (snapshot || localData) return snapshot;
+        }
+
+        try {
+            const snapshot = await fetchCourseView(cursoKey, materiaId, { force, hasLocalData: localData });
+            if (snapshot) aplicarSnapshotEnLocal(snapshot, cursoKey, materiaId);
+            return snapshot;
+        } catch {
+            return null;
+        }
+    }
+
+    function aplicarSnapshotEnLocal(snapshot, cursoKey, materiaId) {
+        const notas = leer(STORAGE.notas);
+        const asistencias = leer(STORAGE.asistencias);
+        const idsNotasSnapshot = new Set();
+        const idsAsistenciasSnapshot = new Set();
+
+        for (const alumno of snapshot.alumnos || []) {
+            for (const nota of alumno.notas || []) {
+                idsNotasSnapshot.add(nota.id);
+                const registro = {
+                    id: nota.id,
+                    alumnoId: alumno.id,
+                    materiaId,
+                    cursoKey,
+                    titulo: nota.titulo,
+                    tipo: nota.tipoEvaluacion || 'Nota',
+                    valor: nota.valor,
+                    peso: Number(nota.peso || 100),
+                    trimestre: trimestreActual(),
+                    fecha: nota.fecha,
+                    descripcion: nota.titulo,
+                };
+                const idx = notas.findIndex((item) => item.id === nota.id);
+                if (idx >= 0) notas[idx] = { ...notas[idx], ...registro };
+                else notas.push(registro);
+            }
+
+            for (const asistencia of alumno.asistencias || []) {
+                idsAsistenciasSnapshot.add(asistencia.id);
+                const registro = {
+                    id: asistencia.id,
+                    alumnoId: alumno.id,
+                    materiaId,
+                    cursoKey,
+                    fecha: asistencia.fecha,
+                    estado: asistencia.estado,
+                };
+                const idx = asistencias.findIndex((item) => item.id === asistencia.id);
+                if (idx >= 0) asistencias[idx] = { ...asistencias[idx], ...registro };
+                else asistencias.push(registro);
+            }
+        }
+
+        guardar(STORAGE.notas, notas);
+        guardar(STORAGE.asistencias, asistencias);
+    }
+
+    function actualizarEstadoTabs(materiaId) {
+        vistaDetalle?.querySelectorAll('[data-seleccionar-materia]').forEach((boton) => {
+            boton.classList.toggle('activo', boton.dataset.seleccionarMateria === materiaId);
+        });
+    }
+
+    async function cambiarPestanaMateria(materiaId) {
+        if (!materiaId) return;
+
+        materiaActivaId = materiaId;
+        renderizarDetalleCurso();
+        actualizarEstadoTabs(materiaId);
+
+        if (tieneDatosLocales(cursoActivoKey, materiaId)) {
+            void hidratarDesdeCacheLocal(cursoActivoKey, materiaId);
+            return;
+        }
+
+        const snapshot = await readPersistedCourseView(cursoActivoKey, materiaId);
+        if (snapshot) {
+            aplicarSnapshotEnLocal(snapshot, cursoActivoKey, materiaId);
+            renderizarDetalleCurso();
+            return;
+        }
+
+        cargandoDetalle = true;
+        await asegurarDatosMateria(cursoActivoKey, materiaActivaId);
+        cargandoDetalle = false;
+        renderizarDetalleCurso();
+    }
+
+    function renderizarPanelMateriaActiva() {
+        renderizarDetalleCurso();
+    }
+
+    async function invalidarVistaCursoActual() {
+        if (!cursoActivoKey || !materiaActivaId) return;
+        await invalidateCourseViewCache(cursoActivoKey, materiaActivaId);
     }
 
     function escapeHtml(valor) {
@@ -192,7 +333,7 @@ import '../styles/global.css';
         `;
     }
 
-    function abrirCurso(key) {
+    async function abrirCurso(key) {
         cursoActivoKey = key;
         const curso = obtenerCursoActivo();
         if (!curso) return;
@@ -202,6 +343,25 @@ import '../styles/global.css';
 
         vistaCursos.classList.add('oculto');
         vistaDetalle.classList.remove('oculto');
+        renderizarDetalleCurso();
+
+        if (!materiaActivaId) return;
+
+        if (tieneDatosLocales(cursoActivoKey, materiaActivaId)) {
+            void hidratarDesdeCacheLocal(cursoActivoKey, materiaActivaId);
+            return;
+        }
+
+        const snapshot = await readPersistedCourseView(cursoActivoKey, materiaActivaId);
+        if (snapshot) {
+            aplicarSnapshotEnLocal(snapshot, cursoActivoKey, materiaActivaId);
+            renderizarDetalleCurso();
+            return;
+        }
+
+        cargandoDetalle = true;
+        await asegurarDatosMateria(cursoActivoKey, materiaActivaId);
+        cargandoDetalle = false;
         renderizarDetalleCurso();
     }
 
@@ -397,8 +557,7 @@ import '../styles/global.css';
 
         const tab = e.target.closest('[data-seleccionar-materia]');
         if (tab) {
-            materiaActivaId = tab.dataset.seleccionarMateria;
-            renderizarDetalleCurso();
+            void cambiarPestanaMateria(tab.dataset.seleccionarMateria);
             return;
         }
 
@@ -451,7 +610,7 @@ import '../styles/global.css';
         }
     }
 
-    function crearTrabajo() {
+    async function crearTrabajo() {
         const titulo = document.getElementById('tp-titulo').value.trim();
         const tipo = document.getElementById('tp-tipo').value;
         const peso = Number(document.getElementById('tp-peso').value || 40);
@@ -472,18 +631,20 @@ import '../styles/global.css';
             notas: {}
         });
         guardar(STORAGE.trabajos, trabajos);
+        await invalidarVistaCursoActual();
         renderizarDetalleCurso();
     }
 
-    function eliminarTrabajo(tpId) {
+    async function eliminarTrabajo(tpId) {
         const trabajos = leer(STORAGE.trabajos).filter(tp => tp.id !== tpId);
         const notas = leer(STORAGE.notas).filter(nota => nota.origenTrabajoId !== tpId);
         guardar(STORAGE.trabajos, trabajos);
         guardar(STORAGE.notas, notas);
+        await invalidarVistaCursoActual();
         renderizarDetalleCurso();
     }
 
-    function guardarTrabajoAlumno(tpId, alumnoId) {
+    async function guardarTrabajoAlumno(tpId, alumnoId) {
         const selectorEstado = vistaDetalle.querySelector(`[data-tp-estado][data-tp-id="${cssEscape(tpId)}"][data-alumno-id="${alumnoId}"]`);
         const inputNota = vistaDetalle.querySelector(`[data-tp-nota][data-tp-id="${cssEscape(tpId)}"][data-alumno-id="${alumnoId}"]`);
         const estado = selectorEstado?.value || 'Asignado';
@@ -505,6 +666,7 @@ import '../styles/global.css';
         }
 
         guardar(STORAGE.trabajos, trabajos);
+        await invalidarVistaCursoActual();
         renderizarDetalleCurso();
     }
 
@@ -558,7 +720,7 @@ import '../styles/global.css';
         guardar(STORAGE.alumnos, alumnos);
     }
 
-    function guardarDiario() {
+    async function guardarDiario() {
         const fecha = document.getElementById('diario-fecha').value || fechaHoy();
         const tema = document.getElementById('diario-tema').value.trim();
         const observaciones = document.getElementById('diario-observaciones').value.trim();
@@ -574,10 +736,11 @@ import '../styles/global.css';
             observaciones
         });
         guardar(STORAGE.diario, diario);
+        await invalidarVistaCursoActual();
         renderizarDetalleCurso();
     }
 
-    function aprobarMateria(alumnoId) {
+    async function aprobarMateria(alumnoId) {
         const situacion = obtenerSituacionAlumno(obtenerCursoActivo().alumnos.find(al => al.id === alumnoId), materiaActivaId);
         const aprobadas = leer(STORAGE.aprobadas);
         aprobadas.push({
@@ -590,6 +753,7 @@ import '../styles/global.css';
             fecha: fechaHoy()
         });
         guardar(STORAGE.aprobadas, aprobadas);
+        await invalidarVistaCursoActual();
         renderizarDetalleCurso();
     }
 

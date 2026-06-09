@@ -26,9 +26,10 @@ export interface PendingOperation<TPayload = unknown> {
 }
 
 const DB_NAME = 'aula_clara_offline';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const ATTENDANCE_STORE = 'attendance_records';
 const OPERATIONS_STORE = 'pending_operations';
+const VIEW_CACHE_STORE = 'view_snapshots';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -56,6 +57,11 @@ export function openOfflineDb() {
         const store = db.createObjectStore(OPERATIONS_STORE, { keyPath: 'id' });
         store.createIndex('byStatus', 'status', { unique: false });
         store.createIndex('byClientMutationId', 'clientMutationId', { unique: true });
+      }
+
+      if (!db.objectStoreNames.contains(VIEW_CACHE_STORE)) {
+        const store = db.createObjectStore(VIEW_CACHE_STORE, { keyPath: 'key' });
+        store.createIndex('byFetchedAt', 'fetchedAt', { unique: false });
       }
     };
 
@@ -201,5 +207,46 @@ async function patchOperation(
   const store = tx.objectStore(OPERATIONS_STORE);
   const operation = await requestToPromise(store.get(id)) as PendingOperation | undefined;
   if (operation) store.put(patcher(operation));
+  await transactionDone(tx);
+}
+
+export interface ViewCacheEntry<T = unknown> {
+  key: string;
+  data: T;
+  fetchedAt: number;
+}
+
+export function buildViewCacheKey(scope: string, parts: Record<string, string>) {
+  return `${scope}:${Object.entries(parts)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('|')}`;
+}
+
+export async function getViewCache<T = unknown>(key: string) {
+  const db = await openOfflineDb();
+  const tx = db.transaction(VIEW_CACHE_STORE, 'readonly');
+  const entry = await requestToPromise(tx.objectStore(VIEW_CACHE_STORE).get(key)) as ViewCacheEntry<T> | undefined;
+  await transactionDone(tx);
+  return entry ?? null;
+}
+
+export async function setViewCache<T = unknown>(key: string, data: T, fetchedAt = Date.now()) {
+  const db = await openOfflineDb();
+  const tx = db.transaction(VIEW_CACHE_STORE, 'readwrite');
+  tx.objectStore(VIEW_CACHE_STORE).put({ key, data, fetchedAt } satisfies ViewCacheEntry<T>);
+  await transactionDone(tx);
+}
+
+export async function invalidateViewCache(prefix = '') {
+  const db = await openOfflineDb();
+  const tx = db.transaction(VIEW_CACHE_STORE, 'readwrite');
+  const store = tx.objectStore(VIEW_CACHE_STORE);
+  const keys = await requestToPromise(store.getAllKeys()) as string[];
+
+  for (const key of keys) {
+    if (!prefix || key.startsWith(prefix)) store.delete(key);
+  }
+
   await transactionDone(tx);
 }

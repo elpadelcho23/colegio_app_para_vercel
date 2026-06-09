@@ -426,6 +426,237 @@ function insertUser(user: User & { password: string }) {
   });
 }
 
+export interface CourseViewFilters {
+  courseId?: string;
+  courseKey?: string;
+  subjectId: string;
+}
+
+export interface CourseViewSnapshot {
+  curso: {
+    id: string;
+    escuela: string;
+    nombre: string;
+    turno: string;
+  };
+  materia: {
+    id: string;
+    nombre: string;
+  };
+  alumnos: Array<{
+    id: string;
+    nombre: string;
+    dni: string | null;
+    tutor: string | null;
+    notas: Array<{
+      id: string;
+      titulo: string;
+      tipoEvaluacion: string | null;
+      valor: number | null;
+      peso: number;
+      fecha: string;
+    }>;
+    asistencias: Array<{
+      id: string;
+      fecha: string;
+      estado: 'presente' | 'ausente';
+    }>;
+    promedio: number | null;
+    asistenciaPct: number | null;
+  }>;
+  fetchedAt: string;
+}
+
+type CourseViewRow = {
+  curso_id: string;
+  escuela: string;
+  curso_nombre: string;
+  turno: string;
+  materia_id: string;
+  materia_nombre: string;
+  alumno_id: string;
+  alumno_nombre: string;
+  alumno_dni: string | null;
+  alumno_tutor: string | null;
+  nota_id: string | null;
+  nota_titulo: string | null;
+  nota_tipo: string | null;
+  nota_valor: number | null;
+  nota_peso: number | null;
+  nota_fecha: string | null;
+  asistencia_id: string | null;
+  asistencia_fecha: string | null;
+  asistencia_estado: 'presente' | 'ausente' | null;
+};
+
+function parseCourseKey(courseKey: string) {
+  const [escuela, turno, curso] = courseKey.split('||');
+  return { escuela, turno, curso_nombre: curso };
+}
+
+function docenteScopeClause(alias = 'c') {
+  return `
+    AND EXISTS (
+      SELECT 1
+      FROM docente_cursos dc
+      WHERE dc.tenant_id = @tenant_id
+        AND dc.docente_id = @docente_id
+        AND dc.curso_id = ${alias}.id
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM docente_materias dm
+      WHERE dm.tenant_id = @tenant_id
+        AND dm.docente_id = @docente_id
+        AND dm.materia_id = m.id
+    )
+  `;
+}
+
+export function getCourseViewSnapshot(user: User, filters: CourseViewFilters): CourseViewSnapshot | null {
+  if (!filters.subjectId) return null;
+
+  const courseFilter = filters.courseId
+    ? 'AND c.id = @course_id'
+    : filters.courseKey
+      ? 'AND c.escuela = @escuela AND c.nombre = @curso_nombre AND c.turno = @turno'
+      : '';
+
+  if (!filters.courseId && !filters.courseKey) return null;
+
+  const parsedKey = filters.courseKey ? parseCourseKey(filters.courseKey) : null;
+  const permissionClause = user.rol === 'admin' ? '' : docenteScopeClause();
+
+  const rows = db.prepare(`
+    SELECT
+      c.id AS curso_id,
+      c.escuela,
+      c.nombre AS curso_nombre,
+      c.turno,
+      m.id AS materia_id,
+      m.nombre AS materia_nombre,
+      a.id AS alumno_id,
+      a.nombre AS alumno_nombre,
+      a.dni AS alumno_dni,
+      a.tutor AS alumno_tutor,
+      n.id AS nota_id,
+      n.titulo AS nota_titulo,
+      n.tipo_evaluacion AS nota_tipo,
+      n.valor AS nota_valor,
+      n.peso AS nota_peso,
+      n.fecha AS nota_fecha,
+      ast.id AS asistencia_id,
+      ast.fecha AS asistencia_fecha,
+      ast.estado AS asistencia_estado
+    FROM cursos c
+    INNER JOIN alumnos a
+      ON a.curso_id = c.id
+     AND a.tenant_id = c.tenant_id
+     AND a.activo = 1
+    INNER JOIN alumno_materias am
+      ON am.alumno_id = a.id
+     AND am.tenant_id = a.tenant_id
+    INNER JOIN materias m
+      ON m.id = am.materia_id
+     AND m.tenant_id = c.tenant_id
+     AND m.activo = 1
+    LEFT JOIN notas n
+      ON n.alumno_id = a.id
+     AND n.materia_id = m.id
+     AND n.tenant_id = c.tenant_id
+     ${user.rol === 'admin' ? '' : 'AND n.docente_id = @docente_id'}
+    LEFT JOIN asistencias ast
+      ON ast.alumno_id = a.id
+     AND ast.materia_id = m.id
+     AND ast.tenant_id = c.tenant_id
+     ${user.rol === 'admin' ? '' : 'AND ast.docente_id = @docente_id'}
+    WHERE c.tenant_id = @tenant_id
+      AND m.id = @subject_id
+      ${courseFilter}
+      ${permissionClause}
+    ORDER BY a.nombre, n.fecha DESC, ast.fecha DESC
+  `).all({
+    tenant_id: user.tenant_id,
+    docente_id: user.id,
+    course_id: filters.courseId || null,
+    escuela: parsedKey?.escuela || null,
+    curso_nombre: parsedKey?.curso_nombre || null,
+    turno: parsedKey?.turno || null,
+    subject_id: filters.subjectId,
+  }) as CourseViewRow[];
+
+  if (!rows.length) return null;
+
+  const first = rows[0];
+  const alumnosMap = new Map<string, CourseViewSnapshot['alumnos'][number]>();
+
+  for (const row of rows) {
+    let alumno = alumnosMap.get(row.alumno_id);
+    if (!alumno) {
+      alumno = {
+        id: row.alumno_id,
+        nombre: row.alumno_nombre,
+        dni: row.alumno_dni,
+        tutor: row.alumno_tutor,
+        notas: [],
+        asistencias: [],
+        promedio: null,
+        asistenciaPct: null,
+      };
+      alumnosMap.set(row.alumno_id, alumno);
+    }
+
+    if (row.nota_id && !alumno.notas.some((nota) => nota.id === row.nota_id)) {
+      alumno.notas.push({
+        id: row.nota_id,
+        titulo: row.nota_titulo || 'Nota',
+        tipoEvaluacion: row.nota_tipo,
+        valor: row.nota_valor,
+        peso: Number(row.nota_peso || 100),
+        fecha: row.nota_fecha || '',
+      });
+    }
+
+    if (row.asistencia_id && !alumno.asistencias.some((item) => item.id === row.asistencia_id)) {
+      alumno.asistencias.push({
+        id: row.asistencia_id,
+        fecha: row.asistencia_fecha || '',
+        estado: row.asistencia_estado || 'ausente',
+      });
+    }
+  }
+
+  for (const alumno of alumnosMap.values()) {
+    const validGrades = alumno.notas.filter((nota) => nota.valor !== null && Number.isFinite(Number(nota.valor)));
+    const totalPeso = validGrades.reduce((acc, nota) => acc + Number(nota.peso || 100), 0);
+    alumno.promedio = totalPeso > 0
+      ? validGrades.reduce((acc, nota) => acc + Number(nota.valor) * Number(nota.peso || 100), 0) / totalPeso
+      : validGrades.length
+        ? validGrades.reduce((acc, nota) => acc + Number(nota.valor), 0) / validGrades.length
+        : null;
+
+    const presentes = alumno.asistencias.filter((item) => item.estado === 'presente').length;
+    alumno.asistenciaPct = alumno.asistencias.length
+      ? (presentes / alumno.asistencias.length) * 100
+      : null;
+  }
+
+  return {
+    curso: {
+      id: first.curso_id,
+      escuela: first.escuela,
+      nombre: first.curso_nombre,
+      turno: first.turno,
+    },
+    materia: {
+      id: first.materia_id,
+      nombre: first.materia_nombre,
+    },
+    alumnos: [...alumnosMap.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 function seed() {
   insertUser({
     id: 'docente-demo',

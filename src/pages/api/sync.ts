@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { canAccessCourse, canAccessStudent, canAccessSubject } from '../../server/auth';
-import { db, type User } from '../../server/db';
+import { db, getCourseViewSnapshot, type User } from '../../server/db';
 
 type SyncEntity = 'attendance' | 'student' | 'grade' | 'subject' | 'course';
 type SyncAction = 'upsert' | 'delete';
@@ -395,6 +395,52 @@ function applySubject(operation: PendingOperation<SubjectPayload>, user: User) {
 
   return { status: 'synced' as const };
 }
+
+export const GET: APIRoute = ({ locals, url }) => {
+  const user = locals.user;
+  if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+
+  const view = url.searchParams.get('view');
+  if (view !== 'curso-detalle') {
+    return Response.json({ error: 'Vista no soportada.' }, { status: 400 });
+  }
+
+  const subjectId = url.searchParams.get('materiaId') || '';
+  const courseId = url.searchParams.get('cursoId') || '';
+  const courseKey = url.searchParams.get('cursoKey') || '';
+
+  if (!subjectId) {
+    return Response.json({ error: 'materiaId requerido.' }, { status: 400 });
+  }
+
+  if (!courseId && !courseKey) {
+    return Response.json({ error: 'cursoId o cursoKey requerido.' }, { status: 400 });
+  }
+
+  if (!canAccessSubject(user, subjectId)) {
+    return Response.json({ error: 'Sin permiso sobre la materia.' }, { status: 403 });
+  }
+
+  if (courseId && !canAccessCourse(user, courseId)) {
+    return Response.json({ error: 'Sin permiso sobre el curso.' }, { status: 403 });
+  }
+
+  const snapshot = getCourseViewSnapshot(user, {
+    courseId: courseId || undefined,
+    courseKey: courseKey || undefined,
+    subjectId,
+  });
+
+  if (!snapshot) {
+    return Response.json({ error: 'No se encontraron datos para la vista.' }, { status: 404 });
+  }
+
+  return Response.json(snapshot, {
+    headers: {
+      'Cache-Control': 'private, no-store',
+    },
+  });
+};
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;

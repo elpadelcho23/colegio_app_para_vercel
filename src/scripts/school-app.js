@@ -1,6 +1,14 @@
-import { countPendingOperations, getOperationStatusCounts, queueOfflineOperation, saveAttendanceOffline } from './offline-db.ts';
+import {
+  countPendingOperations,
+  getOperationStatusCounts,
+  openOfflineDb,
+  queueOfflineOperation,
+  saveAttendanceOffline,
+} from './offline-db.ts';
 import { startAutoSync, syncPendingOperations } from './sync-client.ts';
 import { initMobileNav, openMenu, closeMenu } from './ui-nav.js';
+import { initSpaRouter, registerSpaViewRefresh } from './spa-router.ts';
+import { isIndexedDbEmpty, readLocalOrIndexed, writeIndexedCache } from './local-data-cache.ts';
 
 const currentUser = window.__AULA_CLARA_USER__ || null;
 
@@ -12,6 +20,7 @@ const KEYS = {
   grades: 'aula_clara_grades',
   dashboardFilters: 'aula_clara_dashboard_filters',
   teacherContext: 'aula_clara_teacher_context',
+  activities: 'aula_clara_activities',
   theme: 'aula_clara_theme',
 };
 
@@ -36,6 +45,7 @@ const DEFAULTS = {
     { id: 'nota-2', studentId: 'al-2', subjectId: 'programacion', titulo: 'Integrador', tipoEvaluacion: 'Integrador', valor: 5, peso: 100, fecha: today(), fechaEntrega: '', updatedAt: new Date().toISOString() },
   ],
   [KEYS.teacherContext]: [],
+  [KEYS.activities]: [],
 };
 
 function read(key) {
@@ -290,6 +300,14 @@ function initDashboard() {
   const root = document.querySelector('[data-dashboard]');
   const filters = document.querySelector('[data-dashboard-filters]');
   if (!root) return;
+  if (root.dataset.bound === 'true') {
+    renderDashboard(root);
+    document.querySelectorAll('[data-context-summary]').forEach((item) => {
+      item.textContent = describeContext(currentSuggestedContext());
+    });
+    return;
+  }
+  root.dataset.bound = 'true';
 
   const saved = read(KEYS.dashboardFilters) || {};
   if (filters) {
@@ -366,6 +384,11 @@ function renderDashboard(root) {
 function initTeacherContext() {
   const root = document.querySelector('[data-teacher-context]');
   if (!root) return;
+  if (root.dataset.bound === 'true') {
+    renderTeacherContextList(root.querySelector('[data-context-list]'));
+    return;
+  }
+  root.dataset.bound = 'true';
 
   const form = root.querySelector('[data-context-form]');
   const list = root.querySelector('[data-context-list]');
@@ -445,6 +468,11 @@ function initStudents() {
   const courseSelect = document.querySelector('[name="cursoId"]');
   const subjectContainer = document.querySelector('[data-student-subjects]');
   if (!form || !list) return;
+  if (form.dataset.bound === 'true') {
+    renderStudents(list, form);
+    return;
+  }
+  form.dataset.bound = 'true';
 
   fillSelect(courseSelect, read(KEYS.courses), 'Seleccionar curso', 'id', (course) => `${course.escuela} - ${course.nombre} - ${course.turno}`);
   renderStudentSubjectPicker(subjectContainer);
@@ -607,6 +635,12 @@ function renderStudents(list) {
 function initAttendance() {
   const root = document.querySelector('[data-attendance]');
   if (!root) return;
+
+  if (root.__attendanceAbort) root.__attendanceAbort.abort();
+  const abort = new AbortController();
+  root.__attendanceAbort = abort;
+  const { signal } = abort;
+
   const courseSelect = root.querySelector('[data-filter-course]');
   const subjectSelect = root.querySelector('[data-filter-subject]');
   const dateInput = root.querySelector('[data-attendance-date]');
@@ -623,24 +657,24 @@ function initAttendance() {
   applySuggestedContextTo({ course: courseSelect, subject: subjectSelect });
   if (!subjectSelect.value && activeSubjects()[0]) subjectSelect.value = activeSubjects()[0].id;
 
-  [courseSelect, subjectSelect, dateInput].forEach((control) => control.addEventListener('change', renderAttendance));
+  [courseSelect, subjectSelect, dateInput].forEach((control) => control.addEventListener('change', renderAttendance, { signal }));
   list.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-attendance-state]');
     if (!button) return;
     await saveAttendance(button.dataset.studentId, button.dataset.attendanceState, dateInput.value, subjectSelect.value);
     renderAttendance();
-  });
+  }, { signal });
 
   window.addEventListener('aula-clara:sync-finished', (event) => {
     if (syncStatus) syncStatus.textContent = formatSyncStatus(event.detail?.counts);
-  });
+  }, { signal });
   const updateConnectionStatus = () => {
     if (!connectionStatus) return;
     connectionStatus.textContent = navigator.onLine ? 'Online' : 'Offline';
     connectionStatus.className = `tag ${navigator.onLine ? 'ok' : 'warning'}`;
   };
-  window.addEventListener('online', updateConnectionStatus);
-  window.addEventListener('offline', updateConnectionStatus);
+  window.addEventListener('online', updateConnectionStatus, { signal });
+  window.addEventListener('offline', updateConnectionStatus, { signal });
   updateConnectionStatus();
   syncButton?.addEventListener('click', async () => {
     syncButton.disabled = true;
@@ -649,7 +683,7 @@ function initAttendance() {
     syncButton.disabled = false;
     syncButton.textContent = 'Sincronizar';
     if (syncStatus) syncStatus.textContent = formatSyncStatus(result.counts);
-  });
+  }, { signal });
   exportButton?.addEventListener('click', async () => {
     exportButton.disabled = true;
     exportButton.textContent = 'Preparando...';
@@ -666,7 +700,7 @@ function initAttendance() {
       exportButton.disabled = false;
       exportButton.textContent = 'Exportar Excel';
     }, 800);
-  });
+  }, { signal });
   Promise.all([countPendingOperations(), getOperationStatusCounts()]).then(([, counts]) => {
     if (syncStatus) syncStatus.textContent = formatSyncStatus(counts);
   });
@@ -723,6 +757,12 @@ async function saveAttendance(studentId, state, date, subjectId) {
 function initGrades() {
   const root = document.querySelector('[data-grades]');
   if (!root) return;
+
+  if (root.__gradesAbort) root.__gradesAbort.abort();
+  const abort = new AbortController();
+  root.__gradesAbort = abort;
+  const { signal } = abort;
+
   const form = root.querySelector('[data-grade-form]');
   const studentSelect = root.querySelector('[name="studentId"]');
   const subjectSelect = root.querySelector('[name="subjectId"]');
@@ -793,15 +833,15 @@ function initGrades() {
   subjectFilter?.addEventListener('change', () => {
     if (subjectFilter.value) subjectSelect.value = subjectFilter.value;
     renderAll();
-  });
+  }, { signal });
   courseFilter?.addEventListener('change', () => {
     renderAll();
-  });
+  }, { signal });
   typeSelect?.addEventListener('change', () => {
     importanceSelect.value = String(importanceByType(typeSelect.value));
     if (!form.titulo.value.trim()) form.titulo.value = typeSelect.value;
-  });
-  modeSelect?.addEventListener('change', updateMode);
+  }, { signal });
+  modeSelect?.addEventListener('change', updateMode, { signal });
 
   inlineSubjectForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -814,7 +854,7 @@ function initGrades() {
     inlineSubjectForm.reset();
     refreshSubjectOptions();
     renderAll();
-  });
+  }, { signal });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -853,7 +893,7 @@ function initGrades() {
     updateMode();
     form.querySelector('button[type="submit"]').textContent = 'Guardar calificación';
     renderAll();
-  });
+  }, { signal });
 
   table.addEventListener('click', async (event) => {
     const edit = event.target.closest('[data-edit-grade]');
@@ -883,7 +923,7 @@ function initGrades() {
       await queue('grade', 'delete', { id, updatedAt: nowIso() });
       renderAll();
     }
-  });
+  }, { signal });
 
   renderAll();
 }
@@ -1029,6 +1069,11 @@ function initCourses() {
   if (!root) return;
   const list = root.querySelector('[data-course-list]');
   const form = root.querySelector('[data-course-form]');
+  if (form?.dataset.bound === 'true') {
+    renderCourses(list);
+    return;
+  }
+  if (form) form.dataset.bound = 'true';
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form));
@@ -1161,6 +1206,14 @@ function buildTeacherScheduleEvents(monthStart, monthEnd, courseId = '', subject
 function initCalendar() {
   const root = document.querySelector('[data-calendar]');
   if (!root) return;
+  if (root.dataset.bound === 'true') {
+    const monthInput = root.querySelector('[data-calendar-month]');
+    const courseSelect = root.querySelector('[data-calendar-course]');
+    const subjectSelect = root.querySelector('[data-calendar-subject]');
+    loadCalendar(root, monthInput?.value || today().slice(0, 7), courseSelect?.value || '', subjectSelect?.value || '', false);
+    return;
+  }
+  root.dataset.bound = 'true';
 
   const monthInput = root.querySelector('[data-calendar-month]');
   const courseSelect = root.querySelector('[data-calendar-course]');
@@ -1229,7 +1282,7 @@ function initCalendar() {
     if (eventTypeSelect) eventTypeSelect.value = 'ausencia';
     if (courseSelect.value && eventCourseSelect) eventCourseSelect.value = courseSelect.value;
     if (subjectSelect.value && eventSubjectSelect) eventSubjectSelect.value = subjectSelect.value;
-    await loadCalendar(root, monthInput.value, courseSelect.value, subjectSelect.value);
+    await loadCalendar(root, monthInput.value, courseSelect.value, subjectSelect.value, true);
   });
 
   acceptAlerts?.addEventListener('click', async (event) => {
@@ -1248,16 +1301,53 @@ function initCalendar() {
     modal?.close();
   });
 
-  load();
+  load(false);
 }
 
-async function loadCalendar(root, monthValue, courseId = '', subjectId = '') {
+async function loadCalendar(root, monthValue, courseId = '', subjectId = '', force = false) {
   const [year, month] = monthValue.split('-').map(Number);
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0);
+  const scheduleEvents = buildTeacherScheduleEvents(start, end, courseId, subjectId);
+  const cacheParts = {
+    month: monthValue,
+    courseId: courseId || 'all',
+    subjectId: subjectId || 'all',
+  };
+
+  if (!force) {
+    const cachedEvents = await readLocalOrIndexed({
+      localItems: [],
+      cacheScope: 'calendar',
+      cacheParts,
+    });
+
+    if (Array.isArray(cachedEvents) && cachedEvents.length) {
+      renderCalendar(root, start, [...cachedEvents, ...scheduleEvents]);
+      return;
+    }
+
+    renderCalendar(root, start, scheduleEvents);
+
+    if (!navigator.onLine) return;
+
+    const idbEmpty = await isIndexedDbEmpty();
+    if (!idbEmpty) return;
+
+    await fetchCalendarFromServer(root, monthValue, courseId, subjectId, start, scheduleEvents);
+    return;
+  }
+
+  await fetchCalendarFromServer(root, monthValue, courseId, subjectId, start, scheduleEvents);
+}
+
+async function fetchCalendarFromServer(root, monthValue, courseId, subjectId, start, scheduleEvents) {
+  const [year, month] = monthValue.split('-').map(Number);
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0);
   const params = new URLSearchParams({
-    desde: start.toISOString().slice(0, 10),
-    hasta: end.toISOString().slice(0, 10),
+    desde: monthStart.toISOString().slice(0, 10),
+    hasta: monthEnd.toISOString().slice(0, 10),
   });
   if (courseId) params.set('curso', courseId);
   if (subjectId) params.set('materia', subjectId);
@@ -1266,7 +1356,12 @@ async function loadCalendar(root, monthValue, courseId = '', subjectId = '') {
   if (!response.ok) return;
   const data = await response.json();
   const events = Array.isArray(data.events) ? data.events : [];
-  const scheduleEvents = buildTeacherScheduleEvents(start, end, courseId, subjectId);
+
+  await writeIndexedCache('calendar', {
+    month: monthValue,
+    courseId: courseId || 'all',
+    subjectId: subjectId || 'all',
+  }, events);
 
   if (!data.preferences?.calendar_alerts && !localStorage.getItem(storageKey('aula_clara_calendar_alerts_dismissed'))) {
     root.querySelector('[data-calendar-opt-in]')?.showModal?.();
@@ -1354,6 +1449,12 @@ function initActivities() {
   const form = root.querySelector('[data-activity-form]');
   const editor = root.querySelector('[data-activity-editor]');
   const list = root.querySelector('[data-activity-list]');
+  if (form?.dataset.bound === 'true') {
+    renderActivitiesList(list);
+    return;
+  }
+  if (form) form.dataset.bound = 'true';
+
   const btnDescargarWord = root.querySelector('#btn-descargar-word');
   const btnDescargarPdf = root.querySelector('#btn-descargar-pdf');
   const schoolSelect = form.colegio;
@@ -1579,7 +1680,7 @@ function initActivities() {
     form.reset();
     root.querySelector('[name="fechaPublicacion"]').value = today();
     renderEditor();
-    await renderActivitiesList(list);
+    await renderActivitiesList(list, { force: true });
   });
 
   renderActivitiesList(list);
@@ -1587,14 +1688,54 @@ function initActivities() {
 
 
 
-async function renderActivitiesList(list) {
+async function renderActivitiesList(list, { force = false } = {}) {
+  if (!list) return;
+
+  if (!force) {
+    const local = read(KEYS.activities);
+    if (local.length) {
+      paintActivitiesList(list, local);
+      return;
+    }
+
+    const cached = await readLocalOrIndexed({
+      localItems: [],
+      cacheScope: 'activities',
+      cacheParts: { scope: 'list' },
+    });
+    if (Array.isArray(cached) && cached.length) {
+      write(KEYS.activities, cached);
+      paintActivitiesList(list, cached);
+      return;
+    }
+
+    paintActivitiesList(list, []);
+    if (!navigator.onLine) return;
+
+    const idbEmpty = await isIndexedDbEmpty();
+    if (!idbEmpty) return;
+
+    await fetchActivitiesFromServer(list);
+    return;
+  }
+
+  await fetchActivitiesFromServer(list);
+}
+
+async function fetchActivitiesFromServer(list) {
   const response = await fetch('/api/actividades');
   if (!response.ok) {
-    list.innerHTML = '<div class="empty"><h3>Sin actividades</h3><p>Todavia no se pudieron cargar actividades.</p></div>';
+    paintActivitiesList(list, read(KEYS.activities));
     return;
   }
   const data = await response.json();
   const actividades = Array.isArray(data.actividades) ? data.actividades : [];
+  write(KEYS.activities, actividades);
+  await writeIndexedCache('activities', { scope: 'list' }, actividades);
+  paintActivitiesList(list, actividades);
+}
+
+function paintActivitiesList(list, actividades) {
   list.innerHTML = actividades.length ? actividades.map((item) => `
     <article class="event-card">
       <span class="tag">${esc(item.tipo === 'tp' ? 'TP' : 'Evaluación')}</span>
@@ -1613,6 +1754,58 @@ function formatSyncStatus(counts = {}) {
   return `${pending} pendientes · ${synced} sincronizadas · ${error} con error`;
 }
 
+function bootCurrentPage(path = window.location.pathname) {
+  if (path === '/' || path.startsWith('/?')) {
+    initDashboard();
+    initTeacherContext();
+    return;
+  }
+  if (path === '/registro') return initStudents();
+  if (path === '/asistencia') return initAttendance();
+  if (path === '/notas') return initGrades();
+  if (path === '/cursos') return initCourses();
+  if (path === '/actividades') {
+    initActivities();
+    initCalendar();
+  }
+}
+
+async function pullRemoteData(scope = 'all') {
+  await syncPendingOperations();
+
+  if (scope === 'all' || scope === 'calendario') {
+    const root = document.querySelector('[data-calendar]');
+    if (root) {
+      const monthInput = root.querySelector('[data-calendar-month]');
+      const courseSelect = root.querySelector('[data-calendar-course]');
+      const subjectSelect = root.querySelector('[data-calendar-subject]');
+      await loadCalendar(root, monthInput?.value || today().slice(0, 7), courseSelect?.value || '', subjectSelect?.value || '', true);
+    }
+  }
+
+  if (scope === 'all' || scope === 'actividades') {
+    const list = document.querySelector('[data-activity-list]');
+    if (list) await renderActivitiesList(list, { force: true });
+  }
+}
+
+function registerSpaRefreshHandlers() {
+  registerSpaViewRefresh('panel', () => {
+    initDashboard();
+    initTeacherContext();
+  });
+  registerSpaViewRefresh('registro', initStudents);
+  registerSpaViewRefresh('cursos', initCourses);
+  registerSpaViewRefresh('asistencia', initAttendance);
+  registerSpaViewRefresh('notas', initGrades);
+  registerSpaViewRefresh('actividades', () => {
+    initActivities();
+    initCalendar();
+  });
+}
+
+const spaRuntime = window.__AULA_CLARA_SPA__ || { enabled: false, initialView: 'panel' };
+
 seed();
 initTheme();
 initMobileNav();
@@ -1627,3 +1820,15 @@ initCourses();
 initSubjects();
 initCalendar();
 initActivities();
+
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-pull-remote]');
+  if (!button) return;
+  event.preventDefault();
+  void pullRemoteData(button.dataset.pullScope || 'all');
+});
+
+if (spaRuntime.enabled) {
+  registerSpaRefreshHandlers();
+  initSpaRouter(spaRuntime.initialView);
+}
