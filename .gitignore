@@ -23,3 +23,9 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# Bases de datos locales de SQLite
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+aula-clara*
