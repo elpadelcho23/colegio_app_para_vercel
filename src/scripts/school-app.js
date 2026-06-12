@@ -1468,23 +1468,25 @@ function initActivities() {
     const cursoNombre = cursoOpcion ? cursoOpcion.text : data.cursoId;
     const materiaOpcion = subjectSelect.options[subjectSelect.selectedIndex];
     const materiaNombre = materiaOpcion ? materiaOpcion.text : data.materiaId;
-    const tituloDoc = data.titulo ? data.titulo.toUpperCase() : 'ACTIVIDAD SIN TÍTULO';
+    const tituloDoc = esc(data.titulo ? data.titulo.toUpperCase() : 'ACTIVIDAD SIN TÍTULO');
+    const avisoLabel = data.tipo === 'tp' ? 'Publicación del TP' : 'Aviso';
+    const entregaLabel = data.tipo === 'tp' ? 'Entrega del TP' : 'Entrega';
 
     let html = `
       <div style="font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: auto;">
         <h1 style="color: #2c3e50; text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px;">${tituloDoc}</h1>
         <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
           <tr>
-            <td style="padding: 8px; border: 1px solid #ddd;"><strong>Colegio:</strong> ${data.colegio || ''}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;"><strong>Turno:</strong> ${data.turno || ''}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;"><strong>Colegio:</strong> ${esc(data.colegio || '')}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;"><strong>Turno:</strong> ${esc(data.turno || '')}</td>
           </tr>
           <tr>
-            <td style="padding: 8px; border: 1px solid #ddd;"><strong>Curso:</strong> ${cursoNombre || ''}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;"><strong>Materia:</strong> ${materiaNombre || ''}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;"><strong>Curso:</strong> ${esc(cursoNombre || '')}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;"><strong>Materia:</strong> ${esc(materiaNombre || '')}</td>
           </tr>
           <tr>
-            <td style="padding: 8px; border: 1px solid #ddd;"><strong>${data.tipo === 'tp' ? 'Publicación del TP' : 'Aviso'}:</strong> ${data.fechaPublicacion || '-'}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;"><strong>${data.tipo === 'tp' ? 'Entrega del TP' : 'Entrega'}:</strong> ${data.fechaVencimiento || '-'}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;"><strong>${avisoLabel}:</strong> ${esc(data.fechaPublicacion || '-')}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;"><strong>${entregaLabel}:</strong> ${esc(data.fechaVencimiento || '-')}</td>
           </tr>
         </table>
     `;
@@ -1496,7 +1498,7 @@ function initActivities() {
       html += `<h3 style="color: #2c3e50; margin-top: 30px;">Detalle del aviso:</h3><ol style="margin-left: 20px;">`;
       if (preguntas.length > 0) {
         preguntas.forEach(p => {
-          html += `<li style="margin-bottom: 15px; padding-bottom: 60px; border-bottom: 1px dashed #ccc; font-size: 15px;">${p}</li>`;
+          html += `<li style="margin-bottom: 15px; padding-bottom: 60px; border-bottom: 1px dashed #ccc; font-size: 15px;">${esc(p)}</li>`;
         });
       } else {
         html += `<p><em>No se cargaron detalles.</em></p>`;
@@ -1508,20 +1510,20 @@ function initActivities() {
 
       html += `
         <h3 style="color: #2c3e50; margin-top: 30px;">Consigna del Trabajo Práctico:</h3>
-        <p style="white-space: pre-wrap; background: #f9f9f9; padding: 15px; border-left: 4px solid #3498db; font-size: 15px; line-height: 1.6;">${consigna || 'Sin consigna detallada.'}</p>
+        <p style="white-space: pre-wrap; background: #f9f9f9; padding: 15px; border-left: 4px solid #3498db; font-size: 15px; line-height: 1.6;">${esc(consigna || 'Sin consigna detallada.')}</p>
       `;
       if (criterios) {
         html += `
           <h4 style="color: #2c3e50; margin-top: 20px;">Criterios de Evaluación:</h4>
           <ul>
-            ${criterios.split(',').map(c => `<li style="margin-bottom: 5px; font-size: 14px;">${c.trim()}</li>`).join('')}
+            ${criterios.split(',').map(c => `<li style="margin-bottom: 5px; font-size: 14px;">${esc(c.trim())}</li>`).join('')}
           </ul>
         `;
       }
     }
 
     html += `</div>`;
-    return { html, titulo: data.titulo || 'Actividad' };
+    return { html, titulo: esc(data.titulo || 'Actividad') };
   }
 
   if (btnDescargarWord) {
@@ -1538,7 +1540,7 @@ function initActivities() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${titulo.replace(/\s+/g, '_')}.doc`;
+      link.download = `${String(form.titulo.value || 'Actividad').replace(/[^\w\s.-áéíóúñÁÉÍÓÚÑ]/gi, '').replace(/\s+/g, '_') || 'Actividad'}.doc`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

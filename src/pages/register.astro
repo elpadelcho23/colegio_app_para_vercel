@@ -32,6 +32,11 @@ const error = Astro.url.searchParams.get('error');
 
         {error === '1' && <p class="tag danger auth-alert">Completá todos los campos correctamente.</p>}
         {error === '2' && <p class="tag danger auth-alert">Ya existe una cuenta con ese email.</p>}
+        {error === '3' && (
+          <p class="tag danger auth-alert">
+            La contraseña debe tener al menos 10 caracteres, una mayúscula, una minúscula y un número.
+          </p>
+        )}
 
         <form method="post" action="/api/auth/register" class="auth-form">
           <label>
@@ -44,11 +49,11 @@ const error = Astro.url.searchParams.get('error');
           </label>
           <label>
             <span>Contraseña</span>
-            <input type="password" name="password" autocomplete="new-password" minlength="8" required />
+            <input type="password" name="password" autocomplete="new-password" minlength="10" required />
           </label>
           <label>
             <span>Confirmar contraseña</span>
-            <input type="password" name="confirm" autocomplete="new-password" minlength="8" required />
+            <input type="password" name="confirm" autocomplete="new-password" minlength="10" required />
           </label>
 
           <button class="btn btn-primary btn-block" type="submit">Registrar cuenta</button>
