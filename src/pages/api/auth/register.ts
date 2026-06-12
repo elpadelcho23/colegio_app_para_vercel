@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
-import { createUser } from '../../../server/db';
+import { randomUUID } from 'node:crypto';
+import { isStrongPassword } from '../../../server/auth';
+import { createTenant, createUser } from '../../../server/db';
 
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();
@@ -12,7 +14,21 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect('/register?error=1', 303);
   }
 
-  const user = createUser({ nombre, email, password, rol: 'docente' });
+  if (!isStrongPassword(password)) {
+    return redirect('/register?error=3', 303);
+  }
+
+  const tenantId = randomUUID();
+  createTenant(`Institución de ${nombre}`, tenantId);
+
+  const user = createUser({
+    nombre,
+    email,
+    password,
+    rol: 'admin',
+    tenant_id: tenantId,
+  });
+
   if (!user) {
     return redirect('/register?error=2', 303);
   }

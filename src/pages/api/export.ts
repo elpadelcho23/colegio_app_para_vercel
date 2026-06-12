@@ -4,6 +4,23 @@ import { db, type User } from '../../server/db';
 
 type ExportRow = Record<string, string | number | null>;
 
+/** Neutraliza celdas que Excel/LibreOffice interpretarían como fórmulas o DDE. */
+function sanitizeExcelValue(value: unknown): string | number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const text = String(value);
+  if (/^[=+\-@|\t\r]/.test(text)) return `'${text}`;
+  return text;
+}
+
+function sanitizeExportRows(rows: ExportRow[]): ExportRow[] {
+  return rows.map((row) =>
+    Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [key, sanitizeExcelValue(value)]),
+    ),
+  );
+}
+
 function docenteCourseClause(user: User) {
   if (user.rol === 'admin') return '';
   return `
@@ -32,7 +49,8 @@ function buildParams(url: URL, user: User) {
 
 function addWorksheet(workbook: ExcelJS.Workbook, name: string, rows: ExportRow[]) {
   const worksheet = workbook.addWorksheet(name);
-  const headers = rows.length ? Object.keys(rows[0]) : ['Sin datos'];
+  const safeRows = sanitizeExportRows(rows);
+  const headers = safeRows.length ? Object.keys(safeRows[0]) : ['Sin datos'];
 
   worksheet.columns = headers.map((header) => ({
     header,
@@ -40,7 +58,7 @@ function addWorksheet(workbook: ExcelJS.Workbook, name: string, rows: ExportRow[
     width: Math.max(14, Math.min(34, header.length + 4)),
   }));
 
-  if (rows.length) worksheet.addRows(rows);
+  if (safeRows.length) worksheet.addRows(safeRows);
 
   worksheet.getRow(1).eachCell((cell) => {
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -51,7 +69,7 @@ function addWorksheet(workbook: ExcelJS.Workbook, name: string, rows: ExportRow[
   worksheet.views = [{ state: 'frozen', ySplit: 1 }];
   worksheet.autoFilter = {
     from: { row: 1, column: 1 },
-    to: { row: Math.max(1, rows.length + 1), column: headers.length },
+    to: { row: Math.max(1, safeRows.length + 1), column: headers.length },
   };
 
   worksheet.eachRow((row, rowNumber) => {

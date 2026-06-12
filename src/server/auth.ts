@@ -52,6 +52,12 @@ export function deleteSession(token?: string) {
   db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
 }
 
+/** Invalida la sesión previa (si existía) y emite un token nuevo — mitiga session fixation. */
+export function rotateSession(userId: string, previousToken?: string) {
+  if (previousToken) deleteSession(previousToken);
+  return createSession(userId);
+}
+
 export function cookieOptions(url: URL) {
   return {
     httpOnly: true,
@@ -59,6 +65,14 @@ export function cookieOptions(url: URL) {
     sameSite: 'lax' as const,
     path: '/',
   };
+}
+
+/** Registro público: mínimo 10 caracteres, mayúscula, minúscula y número. */
+export function isStrongPassword(password: string) {
+  return password.length >= 10 &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password);
 }
 
 export function canAccessStudent(user: User, studentId: string) {
