@@ -20,6 +20,22 @@ const registered = Astro.url.searchParams.get('registered');
     <script is:inline>
       document.documentElement.dataset.theme =
         localStorage.getItem('aula_clara_theme') || 'light';
+
+      (function () {
+        var keys = [
+          'aula_clara_students',
+          'aula_clara_courses',
+          'aula_clara_subjects',
+          'aula_clara_attendance',
+          'aula_clara_grades',
+          'aula_clara_dashboard_filters',
+          'aula_clara_teacher_context',
+          'aula_clara_calendar_alerts_dismissed',
+        ];
+        keys.forEach(function (key) {
+          localStorage.removeItem(key);
+        });
+      })();
     </script>
   </head>
   <body class="auth-body">
@@ -60,7 +76,6 @@ const registered = Astro.url.searchParams.get('registered');
 
         <footer class="auth-footer">
           <p>¿No tenés cuenta? <a href="/register">Registrate acá</a>.</p>
-          <p>Demo docente: docente@aulaclara.test / Docente123!</p>
         </footer>
       </section>
     </main>

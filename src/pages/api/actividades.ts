@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { randomUUID } from 'node:crypto';
-import { canAccessCourse, canAccessSubject } from '../../server/auth';
+import { ensureDocenteCourseAccess, ensureDocenteSubjectAccess } from '../../server/docente-access';
 import { db, type User } from '../../server/db';
 
 function paramsFromUrl(url: URL, user: User) {
@@ -18,9 +18,26 @@ function docenteFilter(user: User) {
   return user.rol === 'admin' ? '' : 'AND actividades.tenant_id = @tenant_id AND actividades.docente_id = @docente_id';
 }
 
-function validateAccess(user: User, cursoId: string, materiaId: string) {
-  if (!canAccessCourse(user, cursoId)) return 'El docente no tiene permiso sobre este curso.';
-  if (!canAccessSubject(user, materiaId)) return 'El docente no tiene permiso sobre esta materia.';
+function validateAccess(
+  user: User,
+  cursoId: string,
+  materiaId: string,
+  context: { colegio?: string; turno?: string; cursoNombre?: string; materiaNombre?: string },
+) {
+  const courseError = ensureDocenteCourseAccess(user, {
+    id: cursoId,
+    nombre: context.cursoNombre,
+    escuela: context.colegio,
+    turno: context.turno,
+  });
+  if (courseError) return courseError;
+
+  const subjectError = ensureDocenteSubjectAccess(user, {
+    id: materiaId,
+    nombre: context.materiaNombre,
+  });
+  if (subjectError) return subjectError;
+
   return null;
 }
 
@@ -84,7 +101,12 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return Response.json({ error: 'Faltan filtros obligatorios o titulo.' }, { status: 400 });
   }
 
-  const accessError = validateAccess(user, cursoId, materiaId);
+  const accessError = validateAccess(user, cursoId, materiaId, {
+    colegio,
+    turno,
+    cursoNombre: String(body?.cursoNombre || '').trim(),
+    materiaNombre: String(body?.materiaNombre || '').trim(),
+  });
   if (accessError) return Response.json({ error: accessError }, { status: 403 });
 
   const contenido = body?.contenido && typeof body.contenido === 'object'

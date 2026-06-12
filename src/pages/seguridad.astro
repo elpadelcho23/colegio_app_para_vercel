@@ -1,0 +1,78 @@
+---
+import '../styles/global.css';
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#226c5f" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <title>Seguridad | Aula Clara</title>
+  </head>
+  <body class="auth-body">
+    <main class="auth-container">
+      <section class="auth-card">
+        <header class="auth-header">
+          <p class="eyebrow">Seguridad</p>
+          <h1>Protección y control de acceso</h1>
+          <p class="muted">Este espacio explica las medidas de seguridad implementadas en la aplicación.</p>
+        </header>
+
+        <article class="panel">
+          <h2>1. Autenticación y control de accesos</h2>
+          <p>Esta app exige registro e inicio de sesión para acceder a datos de alumnos, notas y asistencias.</p>
+          <ul>
+            <li>Las contraseñas nunca se guardan en texto plano. Se usa <strong>bcrypt</strong> para almacenar solo hashes seguros.</li>
+            <li>El registro exige contraseñas robustas: mínimo 10 caracteres, mayúsculas, minúsculas, número y símbolo.</li>
+            <li>El backend valida la identidad en cada petición, no solo el frontend.</li>
+          </ul>
+
+          <h3>Roles y permisos</h3>
+          <p>La aplicación implementa control de accesos basado en roles:</p>
+          <ul>
+            <li><strong>Administrador</strong>: gestiona usuarios y backups.</li>
+            <li><strong>Docente</strong>: accede a sus cursos, asistencia, materias y notas.</li>
+          </ul>
+          <p>Las rutas protegidas y las API validan roles en el backend antes de permitir operaciones sensibles.</p>
+        </article>
+
+        <article class="panel">
+          <h2>2. Protección de la sesión</h2>
+          <ul>
+            <li>La sesión se mantiene con cookies seguras <strong>HttpOnly</strong>.</li>
+            <li>Las cookies usan <strong>SameSite=Strict</strong> para reducir el riesgo de CSRF.</li>
+            <li>La cookie se envía solo por HTTPS cuando el sitio está en modo seguro.</li>
+            <li>Las sesiones expiran automáticamente, evitando acceso indefinido en computadoras públicas.</li>
+          </ul>
+        </article>
+
+        <article class="panel">
+          <h2>3. Seguridad en la base de datos y APIs</h2>
+          <ul>
+            <li>Se usan consultas preparadas con parámetros en SQLite para evitar inyecciones SQL.</li>
+            <li>Todos los datos de formularios se validan en el backend además del frontend.</li>
+            <li>El backend no confía en URLs ni en campos ocultos; valida que el usuario tenga permiso para cada recurso.</li>
+          </ul>
+        </article>
+
+        <article class="panel">
+          <h2>4. Comunicación segura</h2>
+          <p>En producción, esta aplicación debe desplegarse con HTTPS para cifrar todo el tráfico entre el navegador y el servidor.</p>
+          <p>Un certificado SSL/TLS es obligatorio para proteger credenciales, tokens y datos personales.</p>
+        </article>
+
+        <footer class="auth-footer">
+          <p>Recomendación: desplegá esta app en un entorno con certificado TLS activo y mantén las dependencias actualizadas.</p>
+          <p><a href="/">Volver al panel</a></p>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>

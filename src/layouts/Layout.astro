@@ -38,7 +38,15 @@ const initialView = spaEnabled
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap"
       rel="stylesheet"
     />
+    {spaEnabled && (
+      <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+        crossorigin="anonymous"
+      />
+    )}
     <title>{title} | Aula Clara</title>
+    <slot name="head" />
   </head>
   <body class="app-body" data-spa-enabled={spaEnabled ? 'true' : 'false'}>
     <a class="skip-link" href="#main-content">Ir al contenido principal</a>

@@ -1,14 +1,7 @@
-import {
-  countPendingOperations,
-  getOperationStatusCounts,
-  openOfflineDb,
-  queueOfflineOperation,
-  saveAttendanceOffline,
-} from './offline-db.ts';
-import { startAutoSync, syncPendingOperations } from './sync-client.ts';
+﻿import { countPendingOperations, getOperationStatusCounts, queueOfflineOperation, saveAttendanceOffline } from './offline-db.ts';
+import { hydrateLocalStorageFromServer, startAutoSync, syncPendingOperations } from './sync-client.ts';
 import { initMobileNav, openMenu, closeMenu } from './ui-nav.js';
 import { initSpaRouter, registerSpaViewRefresh } from './spa-router.ts';
-import { isIndexedDbEmpty, readLocalOrIndexed, writeIndexedCache } from './local-data-cache.ts';
 
 const currentUser = window.__AULA_CLARA_USER__ || null;
 
@@ -20,7 +13,6 @@ const KEYS = {
   grades: 'aula_clara_grades',
   dashboardFilters: 'aula_clara_dashboard_filters',
   teacherContext: 'aula_clara_teacher_context',
-  activities: 'aula_clara_activities',
   theme: 'aula_clara_theme',
 };
 
@@ -45,13 +37,20 @@ const DEFAULTS = {
     { id: 'nota-2', studentId: 'al-2', subjectId: 'programacion', titulo: 'Integrador', tipoEvaluacion: 'Integrador', valor: 5, peso: 100, fecha: today(), fechaEntrega: '', updatedAt: new Date().toISOString() },
   ],
   [KEYS.teacherContext]: [],
-  [KEYS.activities]: [],
 };
+
+function emptyValue(key) {
+  return key === KEYS.dashboardFilters ? {} : [];
+}
 
 function read(key) {
   try {
-    return JSON.parse(localStorage.getItem(storageKey(key)) || 'null') ?? DEFAULTS[key] ?? [];
+    const stored = JSON.parse(localStorage.getItem(storageKey(key)) || 'null');
+    if (stored !== null) return stored;
+    if (currentUser?.id) return emptyValue(key);
+    return DEFAULTS[key] ?? [];
   } catch {
+    if (currentUser?.id) return emptyValue(key);
     return DEFAULTS[key] ?? [];
   }
 }
@@ -62,7 +61,8 @@ function write(key, value) {
 
 function seed() {
   Object.entries(DEFAULTS).forEach(([key, value]) => {
-    if (!localStorage.getItem(storageKey(key))) write(key, value);
+    if (localStorage.getItem(storageKey(key))) return;
+    write(key, currentUser?.id ? emptyValue(key) : value);
   });
 }
 
@@ -221,7 +221,7 @@ function applySuggestedContextTo(selects = {}, options = {}) {
 }
 
 function describeContext(context) {
-  if (!context) return 'Configurá tu horario para ver sugerencias automáticas.';
+  if (!context) return 'Configur├í tu horario para ver sugerencias autom├íticas.';
   const course = courseById(context.cursoId);
   const subject = subjectById(context.materiaId);
   return `${context.escuela || course?.escuela || 'Escuela'} - ${course?.nombre || 'Curso'} - ${subject?.nombre || 'Materia'} (${context.desde || '--:--'} a ${context.hasta || '--:--'})`;
@@ -300,14 +300,6 @@ function initDashboard() {
   const root = document.querySelector('[data-dashboard]');
   const filters = document.querySelector('[data-dashboard-filters]');
   if (!root) return;
-  if (root.dataset.bound === 'true') {
-    renderDashboard(root);
-    document.querySelectorAll('[data-context-summary]').forEach((item) => {
-      item.textContent = describeContext(currentSuggestedContext());
-    });
-    return;
-  }
-  root.dataset.bound = 'true';
 
   const saved = read(KEYS.dashboardFilters) || {};
   if (filters) {
@@ -376,19 +368,14 @@ function renderDashboard(root) {
   const alerts = document.querySelector('[data-alerts]');
   if (alerts) {
     alerts.innerHTML = risk === 0
-      ? '<div class="empty"><h3>Sin alertas en este contexto</h3><p>El filtro actual no muestra riesgo académico o de asistencia.</p></div>'
-      : `<div class="empty"><h3>${risk} alumnos requieren seguimiento</h3><p>El cálculo respeta escuela, curso y materia seleccionados.</p></div>`;
+      ? '<div class="empty"><h3>Sin alertas en este contexto</h3><p>El filtro actual no muestra riesgo acad├®mico o de asistencia.</p></div>'
+      : `<div class="empty"><h3>${risk} alumnos requieren seguimiento</h3><p>El c├ílculo respeta escuela, curso y materia seleccionados.</p></div>`;
   }
 }
 
 function initTeacherContext() {
   const root = document.querySelector('[data-teacher-context]');
   if (!root) return;
-  if (root.dataset.bound === 'true') {
-    renderTeacherContextList(root.querySelector('[data-context-list]'));
-    return;
-  }
-  root.dataset.bound = 'true';
 
   const form = root.querySelector('[data-context-form]');
   const list = root.querySelector('[data-context-list]');
@@ -406,7 +393,7 @@ function initTeacherContext() {
     const data = new FormData(form);
     const dias = data.getAll('dias').map(String);
     if (!dias.length) {
-      alert('Elegí al menos un día.');
+      alert('Eleg├¡ al menos un d├¡a.');
       return;
     }
 
@@ -441,7 +428,7 @@ function initTeacherContext() {
 function renderTeacherContextList(list) {
   const items = read(KEYS.teacherContext);
   if (!items.length) {
-    list.innerHTML = '<div class="empty"><h3>Sin horario cargado</h3><p>Agregá tus clases habituales para activar sugerencias automáticas.</p></div>';
+    list.innerHTML = '<div class="empty"><h3>Sin horario cargado</h3><p>Agreg├í tus clases habituales para activar sugerencias autom├íticas.</p></div>';
     return;
   }
 
@@ -468,11 +455,6 @@ function initStudents() {
   const courseSelect = document.querySelector('[name="cursoId"]');
   const subjectContainer = document.querySelector('[data-student-subjects]');
   if (!form || !list) return;
-  if (form.dataset.bound === 'true') {
-    renderStudents(list, form);
-    return;
-  }
-  form.dataset.bound = 'true';
 
   fillSelect(courseSelect, read(KEYS.courses), 'Seleccionar curso', 'id', (course) => `${course.escuela} - ${course.nombre} - ${course.turno}`);
   renderStudentSubjectPicker(subjectContainer);
@@ -553,13 +535,13 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
   container.innerHTML = `
     <label class="subject-search-label">
       <span>Buscar materia</span>
-      <input type="search" data-subject-filter placeholder="Ej: Matemática, Programación" autocomplete="off" />
+      <input type="search" data-subject-filter placeholder="Ej: Matem├ítica, Programaci├│n" autocomplete="off" />
     </label>
     <div class="selected-subjects" data-selected-subjects>
       ${subjects.filter((subject) => selected.has(subject.id)).map((subject) => `
         <span class="subject-chip" data-subject-id="${esc(subject.id)}">
           ${esc(subject.nombre)}
-          <button type="button" aria-label="Eliminar ${esc(subject.nombre)}" data-remove-subject>×</button>
+          <button type="button" aria-label="Eliminar ${esc(subject.nombre)}" data-remove-subject>├ù</button>
           <input type="hidden" name="subjectIds" value="${esc(subject.id)}" />
         </span>
       `).join('')}
@@ -620,7 +602,7 @@ function renderStudents(list) {
           <strong>${esc(student.nombre)}</strong>
           <small>${esc(course?.nombre || 'Sin curso')} - ${esc(course?.turno || '')} - ${esc(subjects)}</small>
           <small>${student.tutor ? `Contacto: ${esc(student.tutor)}` : 'Sin contacto cargado'}</small>
-          <small>DNI ${esc(student.dni || '-')} · ${esc(course?.nombre || 'Sin curso')} · ${esc(course?.turno || '')}</small>
+          <small>DNI ${esc(student.dni || '-')} ┬À ${esc(course?.nombre || 'Sin curso')} ┬À ${esc(course?.turno || '')}</small>
         </div>
         <div class="row-actions">
           <span class="tag ${avg !== null && avg < 6 ? 'danger' : 'ok'}">Promedio ${avg === null ? '-' : avg.toFixed(1)}</span>
@@ -635,12 +617,6 @@ function renderStudents(list) {
 function initAttendance() {
   const root = document.querySelector('[data-attendance]');
   if (!root) return;
-
-  if (root.__attendanceAbort) root.__attendanceAbort.abort();
-  const abort = new AbortController();
-  root.__attendanceAbort = abort;
-  const { signal } = abort;
-
   const courseSelect = root.querySelector('[data-filter-course]');
   const subjectSelect = root.querySelector('[data-filter-subject]');
   const dateInput = root.querySelector('[data-attendance-date]');
@@ -657,24 +633,24 @@ function initAttendance() {
   applySuggestedContextTo({ course: courseSelect, subject: subjectSelect });
   if (!subjectSelect.value && activeSubjects()[0]) subjectSelect.value = activeSubjects()[0].id;
 
-  [courseSelect, subjectSelect, dateInput].forEach((control) => control.addEventListener('change', renderAttendance, { signal }));
+  [courseSelect, subjectSelect, dateInput].forEach((control) => control.addEventListener('change', renderAttendance));
   list.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-attendance-state]');
     if (!button) return;
     await saveAttendance(button.dataset.studentId, button.dataset.attendanceState, dateInput.value, subjectSelect.value);
     renderAttendance();
-  }, { signal });
+  });
 
   window.addEventListener('aula-clara:sync-finished', (event) => {
     if (syncStatus) syncStatus.textContent = formatSyncStatus(event.detail?.counts);
-  }, { signal });
+  });
   const updateConnectionStatus = () => {
     if (!connectionStatus) return;
     connectionStatus.textContent = navigator.onLine ? 'Online' : 'Offline';
     connectionStatus.className = `tag ${navigator.onLine ? 'ok' : 'warning'}`;
   };
-  window.addEventListener('online', updateConnectionStatus, { signal });
-  window.addEventListener('offline', updateConnectionStatus, { signal });
+  window.addEventListener('online', updateConnectionStatus);
+  window.addEventListener('offline', updateConnectionStatus);
   updateConnectionStatus();
   syncButton?.addEventListener('click', async () => {
     syncButton.disabled = true;
@@ -683,7 +659,7 @@ function initAttendance() {
     syncButton.disabled = false;
     syncButton.textContent = 'Sincronizar';
     if (syncStatus) syncStatus.textContent = formatSyncStatus(result.counts);
-  }, { signal });
+  });
   exportButton?.addEventListener('click', async () => {
     exportButton.disabled = true;
     exportButton.textContent = 'Preparando...';
@@ -700,7 +676,7 @@ function initAttendance() {
       exportButton.disabled = false;
       exportButton.textContent = 'Exportar Excel';
     }, 800);
-  }, { signal });
+  });
   Promise.all([countPendingOperations(), getOperationStatusCounts()]).then(([, counts]) => {
     if (syncStatus) syncStatus.textContent = formatSyncStatus(counts);
   });
@@ -730,7 +706,7 @@ function initAttendance() {
         <article class="student-row">
           <div>
             <strong>${esc(student.nombre)}</strong>
-            <small>${esc(course?.nombre || '')} · ${esc(subjectById(subjectId)?.nombre || 'Materia')}</small>
+            <small>${esc(course?.nombre || '')} ┬À ${esc(subjectById(subjectId)?.nombre || 'Materia')}</small>
           </div>
           <div class="attendance-options">
             <button data-student-id="${esc(student.id)}" data-attendance-state="presente" class="${current === 'presente' ? 'active-present' : ''}">Presente</button>
@@ -757,12 +733,6 @@ async function saveAttendance(studentId, state, date, subjectId) {
 function initGrades() {
   const root = document.querySelector('[data-grades]');
   if (!root) return;
-
-  if (root.__gradesAbort) root.__gradesAbort.abort();
-  const abort = new AbortController();
-  root.__gradesAbort = abort;
-  const { signal } = abort;
-
   const form = root.querySelector('[data-grade-form]');
   const studentSelect = root.querySelector('[name="studentId"]');
   const subjectSelect = root.querySelector('[name="subjectId"]');
@@ -776,6 +746,11 @@ function initGrades() {
   const subjectFilter = root.querySelector('[data-grade-subject-filter]');
   const table = root.querySelector('[data-grade-table]');
   const deliveries = root.querySelector('[data-grade-deliveries]');
+  const deliveriesSummary = root.querySelector('[data-grade-deliveries-summary]');
+  const deliveryTypeFilter = root.querySelector('[data-delivery-type-filter]');
+  const deliveryStatusFilter = root.querySelector('[data-delivery-status-filter]');
+  const deliveryFromFilter = root.querySelector('[data-delivery-from-filter]');
+  const deliveryToFilter = root.querySelector('[data-delivery-to-filter]');
   const contextText = root.querySelector('[data-grade-context-text]');
   const inlineSubjectForm = root.querySelector('[data-inline-subject-form]');
   const inlineSubjectList = root.querySelector('[data-inline-subject-list]');
@@ -818,11 +793,26 @@ function initGrades() {
   importanceSelect.value = String(importanceByType(typeSelect.value));
   updateMode();
 
-  const renderAll = () => {
+  const deliveryFilters = () => ({
+    tipo: deliveryTypeFilter?.value || '',
+    estado: deliveryStatusFilter?.value || '',
+    desde: deliveryFromFilter?.value || '',
+    hasta: deliveryToFilter?.value || '',
+  });
+
+  const renderAll = async () => {
     if (subjectSelect) subjectSelect.value = subjectFilter?.value || '';
     refreshStudentOptions();
     renderGrades(table, subjectFilter?.value || '', courseFilter?.value || '');
-    renderGradeDeliveries(deliveries, subjectFilter?.value || '', courseFilter?.value || '');
+
+    await renderUpcomingActivities(
+      deliveries,
+      deliveriesSummary,
+      subjectFilter?.value || '',
+      courseFilter?.value || '',
+      deliveryFilters(),
+    );
+
     if (contextText) {
       const course = courseById(courseFilter?.value);
       const subject = subjectById(subjectFilter?.value);
@@ -833,15 +823,19 @@ function initGrades() {
   subjectFilter?.addEventListener('change', () => {
     if (subjectFilter.value) subjectSelect.value = subjectFilter.value;
     renderAll();
-  }, { signal });
+  });
   courseFilter?.addEventListener('change', () => {
     renderAll();
-  }, { signal });
+  });
   typeSelect?.addEventListener('change', () => {
     importanceSelect.value = String(importanceByType(typeSelect.value));
     if (!form.titulo.value.trim()) form.titulo.value = typeSelect.value;
-  }, { signal });
-  modeSelect?.addEventListener('change', updateMode, { signal });
+  });
+  modeSelect?.addEventListener('change', updateMode);
+
+  [deliveryTypeFilter, deliveryStatusFilter, deliveryFromFilter, deliveryToFilter].forEach((element) => {
+    element?.addEventListener('change', () => { renderAll(); });
+  });
 
   inlineSubjectForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -854,7 +848,7 @@ function initGrades() {
     inlineSubjectForm.reset();
     refreshSubjectOptions();
     renderAll();
-  }, { signal });
+  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -875,11 +869,11 @@ function initGrades() {
       updatedAt: nowIso(),
     };
     if (!payload.subjectId) {
-      alert('Elegí una materia.');
+      alert('Eleg├¡ una materia.');
       return;
     }
     if (payload.valor !== null && (Number.isNaN(payload.valor) || payload.valor < 1 || payload.valor > 10)) {
-      alert('La nota numérica debe estar entre 1 y 10.');
+      alert('La nota num├®rica debe estar entre 1 y 10.');
       return;
     }
     const grades = read(KEYS.grades);
@@ -891,9 +885,9 @@ function initGrades() {
     importanceSelect.value = String(importanceByType(typeSelect.value));
     subjectSelect.value = subjectFilter?.value || subjectSelect.value;
     updateMode();
-    form.querySelector('button[type="submit"]').textContent = 'Guardar calificación';
+    form.querySelector('button[type="submit"]').textContent = 'Guardar calificaci├│n';
     renderAll();
-  }, { signal });
+  });
 
   table.addEventListener('click', async (event) => {
     const edit = event.target.closest('[data-edit-grade]');
@@ -914,16 +908,16 @@ function initGrades() {
       form.peso.value = grade.peso;
       form.fecha.value = grade.fecha;
       form.fechaEntrega.value = grade.fechaEntrega || '';
-      form.querySelector('button[type="submit"]').textContent = 'Actualizar calificación';
+      form.querySelector('button[type="submit"]').textContent = 'Actualizar calificaci├│n';
     }
     if (remove) {
       const id = remove.dataset.deleteGrade;
-      if (!confirm('¿Eliminar esta calificación? El promedio se recalculará automáticamente.')) return;
+      if (!confirm('┬┐Eliminar esta calificaci├│n? El promedio se recalcular├í autom├íticamente.')) return;
       write(KEYS.grades, grades.filter((grade) => grade.id !== id));
       await queue('grade', 'delete', { id, updatedAt: nowIso() });
       renderAll();
     }
-  }, { signal });
+  });
 
   renderAll();
 }
@@ -974,31 +968,495 @@ function renderInlineSubjects(list) {
     : '<span class="tag">Sin materias</span>';
 }
 
-function renderGradeDeliveries(list, subjectId = '', courseId = '') {
-  if (!list) return;
-  const students = activeStudents().filter((student) => !courseId || student.cursoId === courseId);
-  const studentIds = new Set(students.map((student) => student.id));
-  const deliveries = read(KEYS.grades)
-    .filter((grade) => grade.fechaEntrega && studentIds.has(grade.studentId) && (!subjectId || grade.subjectId === subjectId))
-    .reduce((acc, grade) => {
-      const key = `${grade.subjectId}|${grade.titulo}|${grade.fechaEntrega}`;
-      if (!acc.has(key)) acc.set(key, { ...grade, count: 0 });
-      acc.get(key).count += 1;
-      return acc;
-    }, new Map());
-  const items = [...deliveries.values()].sort((a, b) => String(a.fechaEntrega).localeCompare(String(b.fechaEntrega)));
+function deliveryStatusLabel(status) {
+  if (status === 'en_progreso') return 'En progreso';
+  if (status === 'completado') return 'Completado';
+  return 'Pendiente';
+}
 
-  list.innerHTML = items.length ? items.map((item) => {
-    const subject = subjectById(item.subjectId);
-    const pending = new Date(`${item.fechaEntrega}T23:59:59`).getTime() >= Date.now();
-    return `
-      <article class="event-card">
-        <span class="tag ${pending ? 'warning' : ''}">${pending ? 'Proxima' : 'Pasada'}</span>
-        <strong>${esc(item.titulo)}</strong>
-        <small>${esc(subject?.nombre || 'Materia')} - ${esc(item.fechaEntrega)} - ${item.count} alumnos</small>
+function deliveryStatusClass(status) {
+  if (status === 'en_progreso') return 'warning';
+  if (status === 'completado') return 'ok';
+  return 'info';
+}
+
+function countStudentsInContext(courseId = '', subjectId = '') {
+  return activeStudents().filter((student) =>
+    (!courseId || student.cursoId === courseId) &&
+    studentHasSubject(student, subjectId)
+  ).length;
+}
+
+function computeActivitySeguimiento(actividad, entregas = [], alumnosCount = 0) {
+  const linked = entregas.filter((item) => item.actividad_id === actividad.id);
+  const entregasCount = linked.length;
+  const fecha = actividad.fecha_vencimiento || actividad.fecha_publicacion || '';
+  const dueMs = fecha ? new Date(`${fecha}T23:59:59`).getTime() : null;
+  const isPast = dueMs !== null && dueMs < Date.now();
+
+  if (entregasCount <= 0) return isPast ? 'completado' : 'pendiente';
+  if (alumnosCount > 0 && entregasCount >= alumnosCount) return 'completado';
+  if (isPast && entregasCount > 0) return 'completado';
+  return 'en_progreso';
+}
+
+async function fetchActividadesForContext(courseId = '', subjectId = '') {
+  const course = courseById(courseId);
+  const params = new URLSearchParams();
+  if (course?.escuela) params.set('colegio', course.escuela);
+  if (course?.turno) params.set('turno', course.turno);
+  if (courseId) params.set('curso', courseId);
+  if (subjectId) params.set('materia', subjectId);
+
+  const response = await fetch(`/api/actividades?${params.toString()}`);
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => ({}));
+  return Array.isArray(data.actividades) ? data.actividades : [];
+}
+
+async function fetchTrabajosForContext(courseId = '', subjectId = '', extra = {}) {
+  const params = new URLSearchParams();
+  if (courseId) params.set('curso', courseId);
+  if (subjectId) params.set('materia', subjectId);
+  if (extra.estado) params.set('estado', extra.estado);
+
+  const response = await fetch(`/api/trabajos?${params.toString()}`);
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => ({}));
+  return Array.isArray(data.entregas) ? data.entregas : [];
+}
+
+function filterUpcomingActivities(items, filters = {}) {
+  const { tipo = '', estado = '', desde = '', hasta = '' } = filters;
+  return items.filter((item) => {
+    if (tipo && item.tipo !== tipo) return false;
+    if (estado && item.seguimiento !== estado) return false;
+    const fecha = item.fecha_vencimiento || item.fecha_publicacion || '';
+    if (desde && fecha && fecha < desde) return false;
+    if (hasta && fecha && fecha > hasta) return false;
+    return true;
+  });
+}
+
+async function renderUpcomingActivities(list, summary, subjectId = '', courseId = '', filters = {}) {
+  if (!list) return;
+
+  list.innerHTML = '<div class="empty"><h3>Cargando actividades...</h3></div>';
+
+  const [actividades, entregas] = await Promise.all([
+    fetchActividadesForContext(courseId, subjectId),
+    fetchTrabajosForContext(courseId, subjectId),
+  ]);
+
+  const alumnosCount = countStudentsInContext(courseId, subjectId);
+  const enriched = actividades.map((actividad) => {
+    const linked = entregas.filter((item) => item.actividad_id === actividad.id);
+    const seguimiento = computeActivitySeguimiento(actividad, entregas, alumnosCount);
+    return { ...actividad, seguimiento, entregasCount: linked.length };
+  });
+
+  const items = filterUpcomingActivities(enriched, filters)
+    .sort((a, b) => String(a.fecha_vencimiento || a.fecha_publicacion || a.created_at)
+      .localeCompare(String(b.fecha_vencimiento || b.fecha_publicacion || b.created_at)));
+
+  const proximas = items.filter((item) => {
+    const fecha = item.fecha_vencimiento || item.fecha_publicacion;
+    return fecha && new Date(`${fecha}T23:59:59`).getTime() >= Date.now();
+  }).length;
+  const enProgreso = items.filter((item) => item.seguimiento === 'en_progreso').length;
+
+  if (summary) {
+    summary.innerHTML = `
+      <article class="metric panel">
+        <span>Total filtradas</span>
+        <strong>${items.length}</strong>
+      </article>
+      <article class="metric panel">
+        <span>Pr├│ximas</span>
+        <strong>${proximas}</strong>
+      </article>
+      <article class="metric panel">
+        <span>En progreso</span>
+        <strong>${enProgreso}</strong>
       </article>
     `;
-  }).join('') : '<div class="empty"><h3>Sin entregas pendientes</h3><p>Cuando cargues una fecha de entrega, aparecera aca.</p></div>';
+  }
+
+  list.innerHTML = items.length ? items.map((item) => {
+    const fecha = item.fecha_vencimiento || item.fecha_publicacion || 'Sin fecha';
+    const tipoLabel = item.tipo === 'tp' ? 'TP' : 'Evaluaci├│n';
+    const proxima = item.fecha_vencimiento && new Date(`${item.fecha_vencimiento}T23:59:59`).getTime() >= Date.now();
+    const cardClass = proxima ? 'event-card--warning' : item.seguimiento === 'completado' ? 'event-card--info' : '';
+    return `
+      <article class="event-card ${cardClass}">
+        <div>
+          <span class="tag">${esc(tipoLabel)}</span>
+          <span class="tag ${deliveryStatusClass(item.seguimiento)}">${esc(deliveryStatusLabel(item.seguimiento))}</span>
+          ${proxima ? '<span class="tag warning">Pr├│xima</span>' : ''}
+        </div>
+        <strong>${esc(item.titulo)}</strong>
+        <small>${esc([item.curso, item.materia].filter(Boolean).join(' ┬À '))}</small>
+        <p>Entrega: ${esc(fecha)} ┬À ${item.entregasCount} trabajo(s) cargado(s)</p>
+      </article>
+    `;
+  }).join('') : `
+    <div class="empty">
+      <h3>Sin actividades para este filtro</h3>
+      <p>Cre├í actividades en la secci├│n Actividades o ajust├í curso/materia.</p>
+    </div>
+  `;
+
+  return { actividades: enriched, entregas };
+}
+
+function formatFileSize(bytes = 0) {
+  const size = Number(bytes || 0);
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function trabajoTieneCalificacion(item) {
+  if (item.estado === 'calificado') return true;
+  if (!item.alumno_id) return false;
+  return read(KEYS.grades).some((grade) =>
+    grade.studentId === item.alumno_id &&
+    grade.subjectId === item.materia_id &&
+    grade.titulo === item.titulo &&
+    (grade.valor !== null && grade.valor !== '' || grade.calificacionTexto)
+  );
+}
+
+function trabajoEstadoLabel(item) {
+  return trabajoTieneCalificacion(item) ? 'Calificado' : 'Pendiente de calificar';
+}
+
+async function renderTrabajoHistory(list, courseId = '', subjectId = '', estado = '') {
+  if (!list) return [];
+  list.innerHTML = '<div class="empty"><h3>Cargando trabajos...</h3></div>';
+
+  let entregas = await fetchTrabajosForContext(courseId, subjectId, estado === 'enviado' ? { estado } : {});
+  if (estado === 'calificado') {
+    entregas = entregas.filter((item) => trabajoTieneCalificacion(item));
+  } else if (estado === 'enviado') {
+    entregas = entregas.filter((item) => !trabajoTieneCalificacion(item));
+  }
+
+  list.innerHTML = entregas.length ? entregas.map((item) => {
+    const archivos = Array.isArray(item.archivos) ? item.archivos : [];
+    const archivosHtml = archivos.map((archivo) => `
+      <span class="tag">
+        ${esc(archivo.filename)} (${formatFileSize(archivo.size_bytes)})
+        <a href="/api/trabajos/archivos/${esc(archivo.id)}" target="_blank" rel="noopener">Descargar</a>
+        <a href="/api/trabajos/archivos/${esc(archivo.id)}?preview=1" target="_blank" rel="noopener">Vista previa</a>
+      </span>
+    `).join('');
+
+    return `
+      <article class="student-row">
+        <div>
+          <strong>${esc(item.titulo)}</strong>
+          <small>${esc([item.curso, item.materia, item.alumno].filter(Boolean).join(' ┬À '))}</small>
+          <small>${esc(item.submitted_at?.slice(0, 10) || '')} ┬À ${esc(trabajoEstadoLabel(item))}</small>
+        </div>
+        <div class="notes-list">${archivosHtml || '<span class="tag">Sin archivos</span>'}</div>
+        <div class="actions-group">
+          <button class="btn btn-secondary btn-sm" type="button" data-reenviar-trabajo="${esc(item.id)}">Reenviar</button>
+        </div>
+      </article>
+    `;
+  }).join('') : `
+    <div class="empty">
+      <h3>Sin trabajos cargados</h3>
+      <p>Us├í el formulario para subir entregas de alumnos o docentes.</p>
+    </div>
+  `;
+
+  return entregas;
+}
+
+function fillActividadSelect(select, actividades = [], options = {}) {
+  if (!select) return;
+  const {
+    cursoId = '',
+    materiaId = '',
+    placeholder = 'Sin vincular',
+    required = false,
+  } = options;
+  const current = select.value;
+  const filtered = actividades.filter((item) =>
+    (!cursoId || item.curso_id === cursoId) &&
+    (!materiaId || item.materia_id === materiaId)
+  );
+  select.innerHTML = `<option value="">${esc(placeholder)}</option>` +
+    filtered.map((item) => `<option value="${esc(item.id)}">${esc(item.titulo)} (${activityTipoLabel(item)})</option>`).join('');
+  select.required = required;
+  if (current && filtered.some((item) => item.id === current)) select.value = current;
+}
+
+function initTrabajosEntregas(root, context = {}) {
+  const trabajoForm = root.querySelector('[data-trabajo-upload-form]');
+  if (!trabajoForm) return { refresh: async () => {} };
+
+  const trabajoFilesInput = root.querySelector('[data-trabajo-files]');
+  const trabajoFileFeedback = root.querySelector('[data-trabajo-file-feedback]');
+  const trabajoActividadSelect = root.querySelector('[data-trabajo-actividad-select]');
+  const trabajoAlumnoSelect = root.querySelector('[data-trabajo-alumno-select]');
+  const trabajoHistory = root.querySelector('[data-trabajo-history]');
+  const trabajoEstadoFilter = root.querySelector('[data-trabajo-estado-filter]');
+  const reenviarDialog = root.querySelector('[data-trabajo-reenviar-dialog]');
+  const reenviarForm = root.querySelector('[data-trabajo-reenviar-form]');
+  const reenviarCurso = root.querySelector('[data-reenviar-curso]');
+  const reenviarMateria = root.querySelector('[data-reenviar-materia]');
+  const reenviarAlumno = root.querySelector('[data-reenviar-alumno]');
+
+  const getCourseId = () => context.getCourseId?.() || '';
+  const getMateriaId = () => context.getMateriaId?.() || '';
+  const getCourse = () => context.getCourse?.() || courseById(getCourseId());
+  const getSubject = () => context.getSubject?.() || subjectById(getMateriaId());
+  const getActividades = () => context.getActividades?.() || [];
+
+  const refreshStudentOptions = () => {
+    const students = activeStudents().filter((student) =>
+      (!getCourseId() || student.cursoId === getCourseId()) &&
+      studentHasSubject(student, getMateriaId())
+    );
+    fillSelect(trabajoAlumnoSelect, students, 'Sin alumno espec├¡fico');
+  };
+
+  const refresh = async () => {
+    const cursoId = getCourseId();
+    const materiaId = getMateriaId();
+    if (!cursoId || !materiaId) {
+      fillActividadSelect(trabajoActividadSelect, [], {
+        placeholder: 'Eleg├¡ curso y materia arriba',
+        required: true,
+      });
+      if (trabajoHistory) {
+        trabajoHistory.innerHTML = '<div class="empty"><h3>Eleg├¡ curso y materia</h3><p>Defin├¡ el contexto arriba para cargar entregas.</p></div>';
+      }
+      return;
+    }
+
+    refreshStudentOptions();
+    let actividades = getActividades();
+    if (!actividades.length) {
+      actividades = await fetchActividadesForContext(cursoId, materiaId);
+      context.setActividades?.(actividades);
+    }
+    fillActividadSelect(trabajoActividadSelect, actividades, {
+      cursoId,
+      materiaId,
+      placeholder: 'Eleg├¡ una actividad',
+      required: true,
+    });
+    await renderTrabajoHistory(
+      trabajoHistory,
+      cursoId,
+      materiaId,
+      trabajoEstadoFilter?.value || '',
+    );
+  };
+
+  fillSelect(reenviarCurso, read(KEYS.courses), 'Elegir curso', 'id', courseLabel);
+  fillSelect(reenviarMateria, activeSubjects(), 'Elegir materia');
+
+  reenviarCurso?.addEventListener('change', () => {
+    const students = activeStudents().filter((student) =>
+      (!reenviarCurso.value || student.cursoId === reenviarCurso.value)
+    );
+    fillSelect(reenviarAlumno, students, 'Sin alumno espec├¡fico');
+  });
+
+  trabajoEstadoFilter?.addEventListener('change', () => { refresh(); });
+
+  trabajoFilesInput?.addEventListener('change', () => {
+    validateTrabajoFiles(trabajoFilesInput, trabajoFileFeedback, {
+      maxFiles: Number(trabajoForm.dataset.maxFiles || 5),
+      maxFileMb: Number(trabajoForm.dataset.maxFileMb || 15),
+    });
+  });
+
+  trabajoActividadSelect?.addEventListener('change', () => {
+    const actividad = getActividades().find((item) => item.id === trabajoActividadSelect.value);
+    const tituloInput = trabajoForm.querySelector('[name="titulo"]');
+    if (actividad && tituloInput && !tituloInput.value.trim()) {
+      tituloInput.value = actividad.titulo;
+    }
+  });
+
+  trabajoForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const course = getCourse();
+    const subject = getSubject();
+    const cursoId = getCourseId();
+    const materiaId = getMateriaId();
+    if (!course || !materiaId) {
+      alert('Complet├í colegio, turno, curso y materia antes de cargar un trabajo.');
+      return;
+    }
+
+    const fileCheck = validateTrabajoFiles(trabajoFilesInput, trabajoFileFeedback, {
+      maxFiles: Number(trabajoForm.dataset.maxFiles || 5),
+      maxFileMb: Number(trabajoForm.dataset.maxFileMb || 15),
+    });
+    if (!fileCheck.ok) return;
+
+    const data = Object.fromEntries(new FormData(trabajoForm));
+    if (!data.actividadId) {
+      alert('Eleg├¡ la actividad del curso a la que corresponde la entrega.');
+      return;
+    }
+
+    const payload = new FormData();
+    payload.set('cursoId', cursoId);
+    payload.set('materiaId', materiaId);
+    payload.set('colegio', course.escuela || context.getColegio?.() || '');
+    payload.set('turno', course.turno || context.getTurno?.() || '');
+    payload.set('cursoNombre', course.nombre || '');
+    payload.set('materiaNombre', subject?.nombre || '');
+    payload.set('titulo', String(data.titulo || '').trim());
+    payload.set('actividadId', data.actividadId);
+    if (data.alumnoId) payload.set('alumnoId', data.alumnoId);
+    if (data.observaciones) payload.set('observaciones', data.observaciones);
+    fileCheck.files.forEach((file) => payload.append('archivos', file));
+
+    const submitBtn = root.querySelector('[data-trabajo-submit]');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const response = await fetch('/api/trabajos', { method: 'POST', body: payload });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'No se pudo cargar el trabajo.');
+
+      trabajoForm.reset();
+      if (trabajoFileFeedback) {
+        trabajoFileFeedback.textContent = '';
+        trabajoFileFeedback.classList.add('is-hidden');
+      }
+      await refresh();
+      context.onUploaded?.();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Error al cargar el trabajo.');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  trabajoHistory?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-reenviar-trabajo]');
+    if (!button || !reenviarDialog || !reenviarForm) return;
+
+    reenviarForm.reenviarDesdeId.value = button.dataset.reenviarTrabajo;
+    reenviarForm.titulo.value = button.closest('.student-row')?.querySelector('strong')?.textContent || '';
+    if (reenviarCurso) reenviarCurso.value = getCourseId();
+    if (reenviarMateria) reenviarMateria.value = getMateriaId();
+    reenviarCurso?.dispatchEvent(new Event('change'));
+    reenviarDialog.showModal();
+  });
+
+  reenviarForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submitter = event.submitter;
+    if (!submitter || submitter.value === 'cancel') {
+      reenviarDialog?.close();
+      return;
+    }
+
+    const data = Object.fromEntries(new FormData(reenviarForm));
+    const course = courseById(data.cursoId);
+    const subject = subjectById(data.materiaId);
+    if (!course || !data.materiaId || !data.titulo?.trim()) {
+      alert('Complet├í curso, materia y t├¡tulo.');
+      return;
+    }
+
+    const payload = new FormData();
+    payload.set('reenviarDesdeId', data.reenviarDesdeId);
+    payload.set('cursoId', data.cursoId);
+    payload.set('materiaId', data.materiaId);
+    payload.set('colegio', course.escuela || '');
+    payload.set('turno', course.turno || '');
+    payload.set('cursoNombre', course.nombre || '');
+    payload.set('materiaNombre', subject?.nombre || '');
+    payload.set('titulo', data.titulo.trim());
+    if (data.alumnoId) payload.set('alumnoId', data.alumnoId);
+
+    try {
+      const response = await fetch('/api/trabajos', { method: 'POST', body: payload });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'No se pudo reenviar el trabajo.');
+      reenviarDialog?.close();
+      await refresh();
+      context.onUploaded?.();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Error al reenviar.');
+    }
+  });
+
+  return {
+    refresh,
+    openForActividad(actividadId) {
+      if (trabajoActividadSelect) {
+        trabajoActividadSelect.value = actividadId;
+        trabajoActividadSelect.dispatchEvent(new Event('change'));
+      }
+      const actividad = getActividades().find((item) => item.id === actividadId);
+      const tituloInput = trabajoForm.querySelector('[name="titulo"]');
+      if (actividad && tituloInput) tituloInput.value = actividad.titulo;
+    },
+  };
+}
+
+function validateTrabajoFiles(input, feedback, limits = {}) {
+  const maxFiles = Number(limits.maxFiles || 5);
+  const maxMb = Number(limits.maxFileMb || 15);
+  const maxBytes = maxMb * 1024 * 1024;
+  const allowedExt = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.txt'];
+  const files = Array.from(input?.files || []);
+
+  if (!files.length) {
+    if (feedback) {
+      feedback.textContent = '';
+      feedback.classList.add('is-hidden');
+    }
+    return { ok: true, files: [] };
+  }
+
+  if (files.length > maxFiles) {
+    const msg = `M├íximo ${maxFiles} archivos por carga.`;
+    if (feedback) {
+      feedback.textContent = msg;
+      feedback.classList.remove('is-hidden');
+    }
+    return { ok: false, error: msg };
+  }
+
+  for (const file of files) {
+    const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')).toLowerCase() : '';
+    if (file.size > maxBytes) {
+      const msg = `"${file.name}" supera ${maxMb} MB.`;
+      if (feedback) {
+        feedback.textContent = msg;
+        feedback.classList.remove('is-hidden');
+      }
+      return { ok: false, error: msg };
+    }
+    if (!allowedExt.includes(ext)) {
+      const msg = `"${file.name}" tiene un formato no permitido.`;
+      if (feedback) {
+        feedback.textContent = msg;
+        feedback.classList.remove('is-hidden');
+      }
+      return { ok: false, error: msg };
+    }
+  }
+
+  if (feedback) {
+    feedback.textContent = `${files.length} archivo(s) listo(s) para cargar.`;
+    feedback.classList.remove('is-hidden');
+  }
+  return { ok: true, files };
 }
 
 function initSubjects() {
@@ -1069,11 +1527,6 @@ function initCourses() {
   if (!root) return;
   const list = root.querySelector('[data-course-list]');
   const form = root.querySelector('[data-course-form]');
-  if (form?.dataset.bound === 'true') {
-    renderCourses(list);
-    return;
-  }
-  if (form) form.dataset.bound = 'true';
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form));
@@ -1106,7 +1559,7 @@ function renderCourses(list) {
     return `
       <details class="course-accordion">
         <summary>
-          <span><strong>${esc(course.nombre)}</strong><small>${esc(course.escuela)} · Turno ${esc(course.turno)}</small></span>
+          <span><strong>${esc(course.nombre)}</strong><small>${esc(course.escuela)} ┬À Turno ${esc(course.turno)}</small></span>
           <span class="tag">${courseStudents.length} alumnos</span>
         </summary>
         <div class="course-detail">
@@ -1131,19 +1584,19 @@ function renderCourses(list) {
 function getCalendarEventMeta(tipo = '') {
   const normalized = String(tipo);
   const meta = {
-    evaluacion: { icon: '📝', label: 'Evaluación', tone: 'neutral' },
-    tp: { icon: '📘', label: 'TP', tone: 'neutral' },
-    cierre_tp: { icon: '📤', label: 'Entrega', tone: 'neutral' },
-    asistencia: { icon: '🧾', label: 'Asistencia', tone: 'neutral' },
-    nota: { icon: '🏷️', label: 'Nota', tone: 'neutral' },
-    evento: { icon: '📅', label: 'Evento', tone: 'neutral' },
-    ausencia: { icon: '✖', label: 'Falta docente', tone: 'danger' },
-    lluvia: { icon: '🌧️', label: 'Día de lluvia', tone: 'info' },
-    salida_educativa: { icon: '🚌', label: 'Salida educativa', tone: 'warning' },
-    acto: { icon: '🏛️', label: 'Acto escolar', tone: 'warning' },
-    jornada: { icon: '⏱️', label: 'Jornada institucional', tone: 'warning' },
+    evaluacion: { icon: '­ƒôØ', label: 'Evaluaci├│n', tone: 'neutral' },
+    tp: { icon: '­ƒôÿ', label: 'TP', tone: 'neutral' },
+    cierre_tp: { icon: '­ƒôñ', label: 'Entrega', tone: 'neutral' },
+    asistencia: { icon: '­ƒº¥', label: 'Asistencia', tone: 'neutral' },
+    nota: { icon: '­ƒÅÀ´©Å', label: 'Nota', tone: 'neutral' },
+    evento: { icon: '­ƒôà', label: 'Evento', tone: 'neutral' },
+    ausencia: { icon: 'Ô£û', label: 'Falta docente', tone: 'danger' },
+    lluvia: { icon: '­ƒîº´©Å', label: 'D├¡a de lluvia', tone: 'info' },
+    salida_educativa: { icon: '­ƒÜî', label: 'Salida educativa', tone: 'warning' },
+    acto: { icon: '­ƒÅø´©Å', label: 'Acto escolar', tone: 'warning' },
+    jornada: { icon: 'ÔÅ▒´©Å', label: 'Jornada institucional', tone: 'warning' },
   };
-  return meta[normalized] || { icon: '📅', label: 'Evento', tone: 'neutral' };
+  return meta[normalized] || { icon: '­ƒôà', label: 'Evento', tone: 'neutral' };
 }
 
 function getCalendarEventIcon(tipo) {
@@ -1188,7 +1641,7 @@ function buildTeacherScheduleEvents(monthStart, monthEnd, courseId = '', subject
         id: `horario-${context.id}-${fecha}`,
         tipo: 'evento',
         titulo: `Horario: ${subject?.nombre || 'Materia'} ${context.desde || ''} - ${context.hasta || ''}`.trim(),
-        descripcion: `${context.escuela || course?.escuela || 'Escuela'} · ${course?.nombre || 'Curso'}`,
+        descripcion: `${context.escuela || course?.escuela || 'Escuela'} ┬À ${course?.nombre || 'Curso'}`,
         fecha,
         fecha_fin: null,
         curso: course?.nombre || '',
@@ -1206,14 +1659,6 @@ function buildTeacherScheduleEvents(monthStart, monthEnd, courseId = '', subject
 function initCalendar() {
   const root = document.querySelector('[data-calendar]');
   if (!root) return;
-  if (root.dataset.bound === 'true') {
-    const monthInput = root.querySelector('[data-calendar-month]');
-    const courseSelect = root.querySelector('[data-calendar-course]');
-    const subjectSelect = root.querySelector('[data-calendar-subject]');
-    loadCalendar(root, monthInput?.value || today().slice(0, 7), courseSelect?.value || '', subjectSelect?.value || '', false);
-    return;
-  }
-  root.dataset.bound = 'true';
 
   const monthInput = root.querySelector('[data-calendar-month]');
   const courseSelect = root.querySelector('[data-calendar-course]');
@@ -1282,7 +1727,7 @@ function initCalendar() {
     if (eventTypeSelect) eventTypeSelect.value = 'ausencia';
     if (courseSelect.value && eventCourseSelect) eventCourseSelect.value = courseSelect.value;
     if (subjectSelect.value && eventSubjectSelect) eventSubjectSelect.value = subjectSelect.value;
-    await loadCalendar(root, monthInput.value, courseSelect.value, subjectSelect.value, true);
+    await loadCalendar(root, monthInput.value, courseSelect.value, subjectSelect.value);
   });
 
   acceptAlerts?.addEventListener('click', async (event) => {
@@ -1301,53 +1746,16 @@ function initCalendar() {
     modal?.close();
   });
 
-  load(false);
+  load();
 }
 
-async function loadCalendar(root, monthValue, courseId = '', subjectId = '', force = false) {
+async function loadCalendar(root, monthValue, courseId = '', subjectId = '') {
   const [year, month] = monthValue.split('-').map(Number);
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0);
-  const scheduleEvents = buildTeacherScheduleEvents(start, end, courseId, subjectId);
-  const cacheParts = {
-    month: monthValue,
-    courseId: courseId || 'all',
-    subjectId: subjectId || 'all',
-  };
-
-  if (!force) {
-    const cachedEvents = await readLocalOrIndexed({
-      localItems: [],
-      cacheScope: 'calendar',
-      cacheParts,
-    });
-
-    if (Array.isArray(cachedEvents) && cachedEvents.length) {
-      renderCalendar(root, start, [...cachedEvents, ...scheduleEvents]);
-      return;
-    }
-
-    renderCalendar(root, start, scheduleEvents);
-
-    if (!navigator.onLine) return;
-
-    const idbEmpty = await isIndexedDbEmpty();
-    if (!idbEmpty) return;
-
-    await fetchCalendarFromServer(root, monthValue, courseId, subjectId, start, scheduleEvents);
-    return;
-  }
-
-  await fetchCalendarFromServer(root, monthValue, courseId, subjectId, start, scheduleEvents);
-}
-
-async function fetchCalendarFromServer(root, monthValue, courseId, subjectId, start, scheduleEvents) {
-  const [year, month] = monthValue.split('-').map(Number);
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0);
   const params = new URLSearchParams({
-    desde: monthStart.toISOString().slice(0, 10),
-    hasta: monthEnd.toISOString().slice(0, 10),
+    desde: start.toISOString().slice(0, 10),
+    hasta: end.toISOString().slice(0, 10),
   });
   if (courseId) params.set('curso', courseId);
   if (subjectId) params.set('materia', subjectId);
@@ -1356,12 +1764,7 @@ async function fetchCalendarFromServer(root, monthValue, courseId, subjectId, st
   if (!response.ok) return;
   const data = await response.json();
   const events = Array.isArray(data.events) ? data.events : [];
-
-  await writeIndexedCache('calendar', {
-    month: monthValue,
-    courseId: courseId || 'all',
-    subjectId: subjectId || 'all',
-  }, events);
+  const scheduleEvents = buildTeacherScheduleEvents(start, end, courseId, subjectId);
 
   if (!data.preferences?.calendar_alerts && !localStorage.getItem(storageKey('aula_clara_calendar_alerts_dismissed'))) {
     root.querySelector('[data-calendar-opt-in]')?.showModal?.();
@@ -1442,6 +1845,91 @@ function renderCalendar(root, monthStart, events) {
   showDay(initialKey);
 }
 
+function downloadActivityWord(html, titulo) {
+  const safeTitle = (titulo || 'Actividad').replace(/\s+/g, '_');
+  const wordContent = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head><meta charset='utf-8'><title>${esc(titulo || 'Actividad')}</title></head>
+    <body>${html}</body>
+    </html>
+  `;
+  const blob = new Blob(['\ufeff', wordContent], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${safeTitle}.doc`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function downloadActivityPdf(html, titulo) {
+  // Intento generar y descargar PDF directamente usando html2pdf (CDN).
+  // Si falla o el script no carga, cae al fallback de impresi├│n.
+  const filename = `${(titulo || 'Actividad').replace(/\s+/g, '_')}.pdf`;
+  const wrappedHtml = `<div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1f2937; max-width: 800px; margin: auto;">${html}</div>`;
+
+  function loadHtml2Pdf() {
+    return new Promise((resolve, reject) => {
+      if (window.html2pdf) return resolve(window.html2pdf);
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js';
+      script.async = true;
+      script.onload = () => resolve(window.html2pdf);
+      script.onerror = (e) => reject(new Error('No se pudo cargar html2pdf desde CDN'));
+      document.head.appendChild(script);
+    });
+  }
+
+  (async () => {
+    try {
+      const html2pdf = await loadHtml2Pdf();
+      const container = document.createElement('div');
+      container.style.display = 'block';
+      container.style.padding = '10px';
+      container.innerHTML = wrappedHtml;
+      document.body.appendChild(container);
+
+      const opt = {
+        margin: 18, // mm (approx)
+        filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      };
+
+      await html2pdf().from(container).set(opt).save();
+      document.body.removeChild(container);
+    } catch (err) {
+      // Fallback: abrir ventana de impresi├│n como antes
+      const ventanaImpresion = window.open('', '_blank');
+      if (!ventanaImpresion) {
+        alert('No se pudo abrir la ventana de impresi├│n. Permit├¡ ventanas emergentes para esta p├ígina.');
+        return;
+      }
+      ventanaImpresion.document.write(`
+        <html>
+          <head>
+            <title>${esc(titulo || 'Actividad')}</title>
+            <style>
+              body { margin: 0; font-family: 'Segoe UI', Arial, sans-serif; color: #1f2937; }
+              @media print { @page { margin: 1.8cm; } body { padding: 0; } }
+            </style>
+          </head>
+          <body>
+            ${html}
+            <script>
+              window.onload = () => { window.print(); setTimeout(() => window.close(), 600); };
+            </script>
+          </body>
+        </html>
+      `);
+      ventanaImpresion.document.close();
+    }
+  })();
+}
+
 function initActivities() {
   const root = document.querySelector('[data-activities]');
   if (!root) return;
@@ -1449,26 +1937,288 @@ function initActivities() {
   const form = root.querySelector('[data-activity-form]');
   const editor = root.querySelector('[data-activity-editor]');
   const list = root.querySelector('[data-activity-list]');
-  if (form?.dataset.bound === 'true') {
-    renderActivitiesList(list);
-    return;
-  }
-  if (form) form.dataset.bound = 'true';
-
   const btnDescargarWord = root.querySelector('#btn-descargar-word');
   const btnDescargarPdf = root.querySelector('#btn-descargar-pdf');
+  const aiForm = root.querySelector('[data-activity-ai-form]');
+  const aiFilesInput = root.querySelector('[data-activity-ai-files]');
+  const aiFileFeedback = root.querySelector('[data-activity-ai-file-feedback]');
+  const aiSourceReport = root.querySelector('[data-activity-ai-source-report]');
+  const aiLimitsDialog = root.querySelector('[data-activity-ai-limits-dialog]');
+  const aiLimitsOpen = root.querySelector('[data-activity-ai-limits-open]');
+  const aiStatus = root.querySelector('[data-activity-ai-status]');
+  const aiStatusDetail = root.querySelector('[data-activity-ai-status-detail]');
+  const aiProgress = root.querySelector('[data-activity-ai-progress]');
+  const aiPreview = root.querySelector('[data-activity-ai-preview]');
+  const aiPreviewBody = root.querySelector('[data-activity-ai-preview-body]');
+  const aiSubmit = root.querySelector('[data-activity-ai-submit]');
+  const aiWord = root.querySelector('[data-activity-ai-word]');
+  const aiPdf = root.querySelector('[data-activity-ai-pdf]');
+  const aiApply = root.querySelector('[data-activity-ai-apply]');
+  const modeInputs = root.querySelectorAll('[data-activity-mode-input]');
+  const modePanels = root.querySelectorAll('[data-activity-mode-panel]');
+  const workspace = root.querySelector('[data-activity-workspace]');
   const schoolSelect = form.colegio;
   const shiftSelect = form.turno;
   const courseSelect = form.cursoId;
   const subjectSelect = form.materiaId;
 
+  let lastGenerated = null;
+  let progressTimer = null;
+  let cachedActividadesList = [];
+
+  const getActivityMode = () => root.querySelector('[data-activity-mode-input]:checked')?.value || 'manual';
+
+  let trabajosEntregas = { refresh: async () => {}, openForActividad: () => {} };
+
+  const setActivityMode = (mode) => {
+    const value = ['ai', 'cargar'].includes(mode) ? mode : 'manual';
+    modeInputs.forEach((input) => {
+      input.checked = input.value === value;
+    });
+    modePanels.forEach((panel) => {
+      const active = panel.getAttribute('data-activity-mode-panel') === value;
+      panel.classList.toggle('is-hidden', !active);
+    });
+    if (value === 'cargar') void trabajosEntregas.refresh();
+  };
+
+  modeInputs.forEach((input) => {
+    input.addEventListener('change', () => {
+      if (input.checked) setActivityMode(input.value);
+    });
+  });
+  setActivityMode(getActivityMode());
+
+  const refreshActividadesContext = async () => {
+    const cursoId = courseSelect?.value || '';
+    const materiaId = subjectSelect?.value || '';
+    if (cursoId && materiaId) {
+      cachedActividadesList = await fetchActividadesForContext(cursoId, materiaId);
+    }
+    await trabajosEntregas.refresh();
+  };
+
+  trabajosEntregas = initTrabajosEntregas(root, {
+    getCourseId: () => courseSelect?.value || '',
+    getMateriaId: () => subjectSelect?.value || '',
+    getColegio: () => schoolSelect?.value || '',
+    getTurno: () => shiftSelect?.value || '',
+    getCourse: () => courseById(courseSelect?.value),
+    getSubject: () => subjectById(subjectSelect?.value),
+    getActividades: () => cachedActividadesList,
+    setActividades: (items) => { cachedActividadesList = items; },
+    onUploaded: () => renderActivitiesList(list, (items) => { cachedActividadesList = items; }),
+  });
+
+  const formatChars = (value) => new Intl.NumberFormat('es-AR').format(Number(value) || 0);
+
+  const renderAiFileFeedback = () => {
+    if (!aiFileFeedback || !aiFilesInput) return;
+    const maxFiles = Number(aiForm?.dataset.maxFiles || 6);
+    const maxFileBytes = Number(aiForm?.dataset.maxFileBytes || 8 * 1024 * 1024);
+    const maxInputChars = Number(aiForm?.dataset.maxInputChars || 35000);
+    const files = Array.from(aiFilesInput.files || []);
+    if (!files.length) {
+      aiFileFeedback.classList.add('is-hidden');
+      aiFileFeedback.innerHTML = '';
+      return;
+    }
+
+    const issues = [];
+    if (files.length > maxFiles) issues.push(`Seleccionaste ${files.length} archivos. El m├íximo es ${maxFiles}.`);
+    files.forEach((file) => {
+      if (file.size > maxFileBytes) {
+        issues.push(`${file.name} supera ${Math.round(maxFileBytes / (1024 * 1024))} MB.`);
+      }
+    });
+
+    const totalMb = files.reduce((sum, file) => sum + file.size, 0) / (1024 * 1024);
+    const ok = issues.length === 0;
+    aiFileFeedback.classList.remove('is-hidden');
+    aiFileFeedback.classList.toggle('is-warning', !ok);
+    aiFileFeedback.classList.toggle('is-ok', ok);
+    aiFileFeedback.innerHTML = `
+      <p><strong>${files.length} archivo${files.length === 1 ? '' : 's'} seleccionado${files.length === 1 ? '' : 's'}</strong> ┬À ${totalMb.toFixed(1)} MB en total</p>
+      <p class="muted">La IA usar├í como m├íximo ${formatChars(maxInputChars)} caracteres del material extra├¡do (~10-15 p├íginas). Si hay m├ís texto, se resume o se recorta autom├íticamente.</p>
+      ${issues.length ? `<ul>${issues.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>` : ''}
+    `;
+  };
+
+  const renderAiSourceReport = (meta) => {
+    if (!aiSourceReport) return;
+    const source = meta?.source;
+    if (!source) {
+      aiSourceReport.classList.add('is-hidden');
+      aiSourceReport.innerHTML = '';
+      return;
+    }
+
+    const tags = [];
+    if (source.summarized) tags.push('Resumido con modelo liviano');
+    if (source.extractionTruncated) tags.push('Extracci├│n recortada');
+    if (source.inputTruncated) tags.push('Texto final recortado');
+
+    aiSourceReport.classList.remove('is-hidden');
+    aiSourceReport.innerHTML = `
+      <div class="ai-source-report-head">
+        <strong>Material procesado para la IA</strong>
+        ${tags.length ? `<div class="tag-row">${tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join('')}</div>` : ''}
+      </div>
+      <p>
+        Extra├¡dos <strong>${formatChars(source.extractedChars)}</strong> caracteres de
+        <strong>${source.filesProcessed}</strong> archivo${source.filesProcessed === 1 ? '' : 's'}.
+        Se enviaron <strong>${formatChars(source.usedChars)}</strong> a la generaci├│n
+        (tope ${formatChars(source.maxInputChars)}).
+      </p>
+      ${Array.isArray(source.messages) && source.messages.length
+        ? `<ul>${source.messages.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`
+        : '<p class="muted">No fue necesario resumir ni recortar el material.</p>'}
+    `;
+  };
+
+  aiLimitsOpen?.addEventListener('click', () => {
+    if (aiLimitsDialog?.showModal) aiLimitsDialog.showModal();
+  });
+
+  aiFilesInput?.addEventListener('change', renderAiFileFeedback);
+
+  const setAiLoading = (active, detail = '') => {
+    aiStatus?.classList.toggle('is-hidden', !active);
+    aiSubmit && (aiSubmit.disabled = active);
+    if (aiStatusDetail && detail) aiStatusDetail.textContent = detail;
+    if (!active && progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
+    if (active && aiProgress) {
+      let value = 8;
+      aiProgress.parentElement?.setAttribute('aria-valuenow', String(value));
+      progressTimer = window.setInterval(() => {
+        value = Math.min(92, value + Math.random() * 9);
+        aiProgress.style.width = `${value}%`;
+        aiProgress.parentElement?.setAttribute('aria-valuenow', String(Math.round(value)));
+      }, 700);
+    }
+    if (!active && aiProgress) {
+      aiProgress.style.width = '0%';
+      aiProgress.parentElement?.setAttribute('aria-valuenow', '0');
+    }
+  };
+
+  const applyGeneratedToForm = (generated) => {
+    if (!generated) return;
+    if (generated.titulo) form.titulo.value = generated.titulo;
+    const tipoInput = form.querySelector(`[name="tipo"][value="${generated.tipo}"]`);
+    if (tipoInput) {
+      tipoInput.checked = true;
+      renderEditor();
+    }
+    const editorContent = generated.contenido?.editor || {};
+    if (generated.tipo === 'evaluacion') {
+      const field = editor.querySelector('[data-activity-questions]');
+      if (field) field.value = editorContent.questions || '';
+    } else {
+      const brief = editor.querySelector('[data-activity-brief]');
+      const criteria = editor.querySelector('[data-activity-criteria]');
+      if (brief) brief.value = editorContent.brief || '';
+      if (criteria) criteria.value = editorContent.criteria || '';
+    }
+    setActivityMode('manual');
+    workspace?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  if (aiForm) {
+    aiForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const aiData = new FormData(aiForm);
+      const mainData = new FormData(form);
+      const files = aiForm.querySelector('[data-activity-ai-files]')?.files;
+      if (!files?.length) {
+        alert('Adjunt├í al menos un documento PDF, DOCX o TXT.');
+        return;
+      }
+      const maxFiles = Number(aiForm.dataset.maxFiles || 6);
+      const maxFileBytes = Number(aiForm.dataset.maxFileBytes || 8 * 1024 * 1024);
+      const invalidCount = files.length > maxFiles;
+      const invalidSize = Array.from(files).some((file) => file.size > maxFileBytes);
+      if (invalidCount || invalidSize) {
+        renderAiFileFeedback();
+        alert('Revis├í los archivos seleccionados: superan los l├¡mites permitidos.');
+        return;
+      }
+      if (!mainData.get('colegio') || !mainData.get('turno') || !mainData.get('cursoId') || !mainData.get('materiaId')) {
+        alert('Complet├í colegio, turno, curso y materia antes de generar con IA.');
+        return;
+      }
+
+      const selectedCourse = courseById(mainData.get('cursoId'));
+      const selectedSubject = subjectById(mainData.get('materiaId'));
+      const payload = new FormData();
+      payload.set('tipoGeneracion', aiData.get('tipoGeneracion') || 'tp');
+      payload.set('colegio', mainData.get('colegio'));
+      payload.set('turno', mainData.get('turno'));
+      payload.set('cursoId', mainData.get('cursoId'));
+      payload.set('materiaId', mainData.get('materiaId'));
+      payload.set('cursoNombre', selectedCourse?.nombre || '');
+      payload.set('materiaNombre', selectedSubject?.nombre || '');
+      payload.set('titulo', mainData.get('titulo') || '');
+      payload.set('nivelAcademico', aiData.get('nivelAcademico') || '');
+      payload.set('notasDocente', aiData.get('notasDocente') || '');
+      Array.from(files).forEach((file) => payload.append('documentos', file));
+
+      setAiLoading(true, 'Sincronizando cursos y generando material con IAÔÇª');
+      await syncPendingOperations();
+      aiPreview?.classList.add('is-hidden');
+      aiSourceReport?.classList.add('is-hidden');
+
+      try {
+        const response = await fetch('/api/actividades/generar', {
+          method: 'POST',
+          body: payload,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || 'No se pudo generar la actividad.');
+        }
+
+        lastGenerated = data;
+        renderAiSourceReport(data.meta);
+        if (aiPreviewBody) aiPreviewBody.innerHTML = data.html || '';
+        aiPreview?.classList.remove('is-hidden');
+        setAiLoading(false, '');
+      } catch (error) {
+        setAiLoading(false, '');
+        alert(error instanceof Error ? error.message : 'Error al generar la actividad.');
+      }
+    });
+  }
+
+  aiWord?.addEventListener('click', () => {
+    if (!lastGenerated?.html) return alert('Gener├í una actividad antes de exportar.');
+    downloadActivityWord(lastGenerated.html, lastGenerated.titulo);
+  });
+
+  aiPdf?.addEventListener('click', () => {
+    if (!lastGenerated?.html) return alert('Gener├í una actividad antes de exportar.');
+    downloadActivityPdf(lastGenerated.html, lastGenerated.titulo);
+  });
+
+  aiApply?.addEventListener('click', () => {
+    if (!lastGenerated) return alert('No hay contenido generado para aplicar.');
+    applyGeneratedToForm(lastGenerated);
+    alert('Contenido aplicado. Revis├í en ┬½Realizar a mano┬╗ y guard├í la actividad.');
+  });
+
   function obtenerDatosDocumento() {
+    if (lastGenerated?.html) {
+      return { html: lastGenerated.html, titulo: lastGenerated.titulo || form.titulo.value || 'Actividad' };
+    }
     const data = Object.fromEntries(new FormData(form));
     const cursoOpcion = courseSelect.options[courseSelect.selectedIndex];
     const cursoNombre = cursoOpcion ? cursoOpcion.text : data.cursoId;
     const materiaOpcion = subjectSelect.options[subjectSelect.selectedIndex];
     const materiaNombre = materiaOpcion ? materiaOpcion.text : data.materiaId;
-    const tituloDoc = data.titulo ? data.titulo.toUpperCase() : 'ACTIVIDAD SIN TÍTULO';
+    const tituloDoc = data.titulo ? data.titulo.toUpperCase() : 'ACTIVIDAD SIN T├ìTULO';
 
     let html = `
       <div style="font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: auto;">
@@ -1483,7 +2233,7 @@ function initActivities() {
             <td style="padding: 8px; border: 1px solid #ddd;"><strong>Materia:</strong> ${materiaNombre || ''}</td>
           </tr>
           <tr>
-            <td style="padding: 8px; border: 1px solid #ddd;"><strong>${data.tipo === 'tp' ? 'Publicación del TP' : 'Aviso'}:</strong> ${data.fechaPublicacion || '-'}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;"><strong>${data.tipo === 'tp' ? 'Publicaci├│n del TP' : 'Aviso'}:</strong> ${data.fechaPublicacion || '-'}</td>
             <td style="padding: 8px; border: 1px solid #ddd;"><strong>${data.tipo === 'tp' ? 'Entrega del TP' : 'Entrega'}:</strong> ${data.fechaVencimiento || '-'}</td>
           </tr>
         </table>
@@ -1507,12 +2257,12 @@ function initActivities() {
       const criterios = String(editor.querySelector('[data-activity-criteria]')?.value || '').trim();
 
       html += `
-        <h3 style="color: #2c3e50; margin-top: 30px;">Consigna del Trabajo Práctico:</h3>
+        <h3 style="color: #2c3e50; margin-top: 30px;">Consigna del Trabajo Pr├íctico:</h3>
         <p style="white-space: pre-wrap; background: #f9f9f9; padding: 15px; border-left: 4px solid #3498db; font-size: 15px; line-height: 1.6;">${consigna || 'Sin consigna detallada.'}</p>
       `;
       if (criterios) {
         html += `
-          <h4 style="color: #2c3e50; margin-top: 20px;">Criterios de Evaluación:</h4>
+          <h4 style="color: #2c3e50; margin-top: 20px;">Criterios de Evaluaci├│n:</h4>
           <ul>
             ${criterios.split(',').map(c => `<li style="margin-bottom: 5px; font-size: 14px;">${c.trim()}</li>`).join('')}
           </ul>
@@ -1526,58 +2276,21 @@ function initActivities() {
 
   if (btnDescargarWord) {
     btnDescargarWord.addEventListener('click', () => {
-      if (!form.titulo.value) return alert('Por favor, ingresá un Título para la actividad antes de descargar.');
       const { html, titulo } = obtenerDatosDocumento();
-      const wordContent = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-        <head><meta charset='utf-8'><title>${titulo}</title></head>
-        <body>${html}</body>
-        </html>
-      `;
-      const blob = new Blob(['\ufeff', wordContent], { type: 'application/msword' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${titulo.replace(/\s+/g, '_')}.doc`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      if (!titulo && !form.titulo.value) {
+        return alert('Ingres├í un t├¡tulo o gener├í una actividad con IA antes de descargar.');
+      }
+      downloadActivityWord(html, titulo || form.titulo.value);
     });
   }
 
   if (btnDescargarPdf) {
     btnDescargarPdf.addEventListener('click', () => {
-      if (!form.titulo.value) return alert('Por favor, ingresá un Título para la actividad antes de exportar.');
       const { html, titulo } = obtenerDatosDocumento();
-      const ventanaImpresion = window.open('', '_blank');
-      if (!ventanaImpresion) {
-        return alert('No se pudo abrir la ventana de impresión. Permití ventanas emergentes para esta página.');
+      if (!titulo && !form.titulo.value) {
+        return alert('Ingres├í un t├¡tulo o gener├í una actividad con IA antes de exportar.');
       }
-      ventanaImpresion.document.write(`
-        <html>
-          <head>
-            <title>${titulo}</title>
-            <style>
-              body { margin: 0; }
-              @media print {
-                @page { margin: 2cm; }
-                body { padding: 0; }
-              }
-            </style>
-          </head>
-          <body>
-            ${html}
-            <script>
-              window.onload = () => {
-                window.print();
-                setTimeout(() => window.close(), 500);
-              };
-            </script>
-          </body>
-        </html>
-      `);
-      ventanaImpresion.document.close();
+      downloadActivityPdf(html, titulo || form.titulo.value);
     });
   }
 
@@ -1594,24 +2307,29 @@ function initActivities() {
     schoolSelect.value = course.escuela || schoolSelect.value;
     shiftSelect.value = course.turno || shiftSelect.value;
   };
-  courseSelect.addEventListener('change', syncCourseFields);
+  courseSelect.addEventListener('change', () => {
+    syncCourseFields();
+    refreshActividadesContext();
+  });
+  subjectSelect.addEventListener('change', () => { refreshActividadesContext(); });
   syncCourseFields();
   root.querySelector('[name="fechaPublicacion"]').value = today();
+  refreshActividadesContext();
 
   const renderEditor = () => {
     const tipo = new FormData(form).get('tipo') || 'evaluacion';
     editor.innerHTML = tipo === 'evaluacion' ? `
       <div class="section-title">
-        <h2>Aviso de evaluación</h2>
+        <h2>Aviso de evaluaci├│n</h2>
         <p>Deja claro tema, modalidad y materiales necesarios.</p>
       </div>
       <label>
-        <span>Descripción</span>
+        <span>Descripci├│n</span>
         <textarea rows="7" data-activity-questions placeholder="Tema, modalidad, material para traer o aclaraciones"></textarea>
       </label>
     ` : `
       <div class="section-title">
-        <h2>Publicación del TP</h2>
+        <h2>Publicaci├│n del TP</h2>
         <p>Define consigna, criterios de seguimiento y fecha de entrega.</p>
       </div>
       <label>
@@ -1620,7 +2338,7 @@ function initActivities() {
       </label>
       <label>
         <span>Criterios de seguimiento</span>
-        <input data-activity-criteria placeholder="Entrega, desarrollo, presentación" />
+        <input data-activity-criteria placeholder="Entrega, desarrollo, presentaci├│n" />
       </label>
     `;
   };
@@ -1630,6 +2348,7 @@ function initActivities() {
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (getActivityMode() !== 'manual') return;
     const data = Object.fromEntries(new FormData(form));
     const tipo = data.tipo;
     const files = Array.from(editor.querySelector('[data-activity-images]')?.files || []);
@@ -1655,6 +2374,10 @@ function initActivities() {
           },
         };
 
+    const selectedCourse = courseById(data.cursoId);
+    const selectedSubject = subjectById(data.materiaId);
+    await syncPendingOperations();
+
     const response = await fetch('/api/actividades', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1664,6 +2387,8 @@ function initActivities() {
         turno: data.turno,
         cursoId: data.cursoId,
         materiaId: data.materiaId,
+        cursoNombre: selectedCourse?.nombre || '',
+        materiaNombre: selectedSubject?.nombre || '',
         titulo: data.titulo,
         fechaPublicacion: data.fechaPublicacion,
         fechaVencimiento: data.fechaVencimiento,
@@ -1680,113 +2405,179 @@ function initActivities() {
     form.reset();
     root.querySelector('[name="fechaPublicacion"]').value = today();
     renderEditor();
-    await renderActivitiesList(list, { force: true });
+    await renderActivitiesList(list, (items) => { cachedActividadesList = items; });
   });
 
-  renderActivitiesList(list);
-}
+  const enviarDialog = root.querySelector('[data-activity-enviar-dialog]');
+  const enviarForm = root.querySelector('[data-activity-enviar-form]');
+  const enviarSourceLabel = root.querySelector('#activity-enviar-source-label');
+  const enviarColegio = root.querySelector('[data-enviar-colegio]');
+  const enviarTurno = root.querySelector('[data-enviar-turno]');
+  const enviarCurso = root.querySelector('[data-enviar-curso]');
+  const enviarMateria = root.querySelector('[data-enviar-materia]');
 
+  const schoolsForEnviar = [...new Set(read(KEYS.courses).map((course) => course.escuela).filter(Boolean))];
+  const shiftsForEnviar = [...new Set(read(KEYS.courses).map((course) => course.turno).filter(Boolean))];
+  fillSelect(enviarColegio, schoolsForEnviar.map((school) => ({ id: school, nombre: school })), 'Colegio');
+  fillSelect(enviarTurno, shiftsForEnviar.map((shift) => ({ id: shift, nombre: shift })), 'Turno');
+  fillSelect(enviarCurso, read(KEYS.courses), 'Curso', 'id', courseLabel);
+  fillSelect(enviarMateria, activeSubjects(), 'Materia');
 
+  const syncEnviarCourseFields = () => {
+    const course = courseById(enviarCurso?.value);
+    if (!course || !enviarColegio || !enviarTurno) return;
+    enviarColegio.value = course.escuela || enviarColegio.value;
+    enviarTurno.value = course.turno || enviarTurno.value;
+  };
 
-async function renderActivitiesList(list, { force = false } = {}) {
-  if (!list) return;
+  enviarCurso?.addEventListener('change', syncEnviarCourseFields);
 
-  if (!force) {
-    const local = read(KEYS.activities);
-    if (local.length) {
-      paintActivitiesList(list, local);
+  const openEnviarDialog = (actividadId) => {
+    const actividad = cachedActividadesList.find((item) => item.id === actividadId);
+    if (!actividad || !enviarForm || !enviarDialog) return;
+
+    enviarForm.actividadId.value = actividad.id;
+    enviarForm.titulo.value = actividad.titulo || '';
+    enviarForm.fechaPublicacion.value = actividad.fecha_publicacion || '';
+    enviarForm.fechaVencimiento.value = actividad.fecha_vencimiento || '';
+
+    if (enviarColegio) enviarColegio.value = form.colegio?.value || actividad.colegio || enviarColegio.value;
+    if (enviarTurno) enviarTurno.value = form.turno?.value || actividad.turno || enviarTurno.value;
+    if (enviarCurso) enviarCurso.value = form.cursoId?.value || actividad.curso_id || enviarCurso.value;
+    if (enviarMateria) enviarMateria.value = form.materiaId?.value || actividad.materia_id || enviarMateria.value;
+    syncEnviarCourseFields();
+
+    if (enviarSourceLabel) {
+      enviarSourceLabel.textContent = `Vas a enviar ┬½${actividad.titulo}┬╗ (${activityTipoLabel(actividad)}) desde ${[actividad.curso, actividad.materia].filter(Boolean).join(' ┬À ')}.`;
+    }
+
+    enviarDialog.showModal();
+  };
+
+  list?.addEventListener('click', (event) => {
+    const enviarBtn = event.target.closest('[data-enviar-actividad]');
+    if (enviarBtn) {
+      openEnviarDialog(enviarBtn.dataset.enviarActividad);
       return;
     }
 
-    const cached = await readLocalOrIndexed({
-      localItems: [],
-      cacheScope: 'activities',
-      cacheParts: { scope: 'list' },
-    });
-    if (Array.isArray(cached) && cached.length) {
-      write(KEYS.activities, cached);
-      paintActivitiesList(list, cached);
+    const cargarBtn = event.target.closest('[data-cargar-entrega-actividad]');
+    if (!cargarBtn) return;
+
+    const actividad = cachedActividadesList.find((item) => item.id === cargarBtn.dataset.cargarEntregaActividad);
+    if (actividad) {
+      if (schoolSelect) schoolSelect.value = actividad.colegio || schoolSelect.value;
+      if (shiftSelect) shiftSelect.value = actividad.turno || shiftSelect.value;
+      if (courseSelect) courseSelect.value = actividad.curso_id || courseSelect.value;
+      if (subjectSelect) subjectSelect.value = actividad.materia_id || subjectSelect.value;
+      syncCourseFields();
+      refreshActividadesContext().then(() => {
+        setActivityMode('cargar');
+        trabajosEntregas.openForActividad(actividad.id);
+        workspace?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
       return;
     }
 
-    paintActivitiesList(list, []);
-    if (!navigator.onLine) return;
+    setActivityMode('cargar');
+    trabajosEntregas.openForActividad(cargarBtn.dataset.cargarEntregaActividad);
+    workspace?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
-    const idbEmpty = await isIndexedDbEmpty();
-    if (!idbEmpty) return;
+  enviarForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submitter = event.submitter;
+    if (!submitter || submitter.value === 'cancel') {
+      enviarDialog?.close();
+      return;
+    }
 
-    await fetchActivitiesFromServer(list);
-    return;
-  }
+    const data = Object.fromEntries(new FormData(enviarForm));
+    const selectedCourse = courseById(data.cursoId);
+    const selectedSubject = subjectById(data.materiaId);
+    if (!data.actividadId || !data.colegio || !data.turno || !data.cursoId || !data.materiaId) {
+      alert('Complet├í colegio, turno, curso y materia destino.');
+      return;
+    }
 
-  await fetchActivitiesFromServer(list);
+    await syncPendingOperations();
+
+    try {
+      const response = await fetch('/api/actividades/enviar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actividadId: data.actividadId,
+          colegio: data.colegio,
+          turno: data.turno,
+          cursoId: data.cursoId,
+          materiaId: data.materiaId,
+          cursoNombre: selectedCourse?.nombre || '',
+          materiaNombre: selectedSubject?.nombre || '',
+          titulo: data.titulo?.trim() || undefined,
+          fechaPublicacion: data.fechaPublicacion || undefined,
+          fechaVencimiento: data.fechaVencimiento || undefined,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'No se pudo enviar la actividad.');
+
+      enviarDialog?.close();
+      await renderActivitiesList(list, (items) => { cachedActividadesList = items; });
+      alert(`Actividad enviada a ${selectedCourse?.nombre || 'el curso'} (${selectedSubject?.nombre || 'materia'}).`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Error al enviar la actividad.');
+    }
+  });
+
+  renderActivitiesList(list, (items) => { cachedActividadesList = items; });
 }
 
-async function fetchActivitiesFromServer(list) {
+function activityTipoLabel(item) {
+  const template = String(item?.contenido?.template || '');
+  const tipoGen = String(item?.contenido?.tipoGeneracion || item?.contenido?.generadoPor || '');
+  if (template.includes('integrador') || tipoGen === 'integrador') return 'Integrador';
+  if (template.includes('examen') || tipoGen === 'examen') return 'Examen';
+  return item?.tipo === 'tp' ? 'TP' : 'Evaluaci├│n';
+}
+
+async function renderActivitiesList(list, onLoaded) {
+  if (!list) return [];
   const response = await fetch('/api/actividades');
   if (!response.ok) {
-    paintActivitiesList(list, read(KEYS.activities));
-    return;
+    list.innerHTML = '<div class="empty"><h3>Sin actividades</h3><p>Todavia no se pudieron cargar actividades.</p></div>';
+    if (onLoaded) onLoaded([]);
+    return [];
   }
   const data = await response.json();
   const actividades = Array.isArray(data.actividades) ? data.actividades : [];
-  write(KEYS.activities, actividades);
-  await writeIndexedCache('activities', { scope: 'list' }, actividades);
-  paintActivitiesList(list, actividades);
-}
+  if (onLoaded) onLoaded(actividades);
 
-function paintActivitiesList(list, actividades) {
   list.innerHTML = actividades.length ? actividades.map((item) => `
     <article class="event-card">
-      <span class="tag">${esc(item.tipo === 'tp' ? 'TP' : 'Evaluación')}</span>
+      <div>
+        <span class="tag">${esc(activityTipoLabel(item))}</span>
+        ${item.estado === 'publicado' ? '<span class="tag ok">Publicado</span>' : '<span class="tag">Borrador</span>'}
+      </div>
       <strong>${esc(item.titulo)}</strong>
-      <small>${esc([item.colegio, item.curso, item.materia].filter(Boolean).join(' - '))}</small>
-      <p>${item.fecha_publicacion ? `Publicación: ${esc(item.fecha_publicacion)}` : 'Sin fecha de publicación'}</p>
+      <small>${esc([item.colegio, item.turno, item.curso, item.materia].filter(Boolean).join(' ┬À '))}</small>
+      <p>${item.fecha_publicacion ? `Publicaci├│n: ${esc(item.fecha_publicacion)}` : 'Sin fecha de publicaci├│n'}</p>
       <p>${item.fecha_vencimiento ? `Entrega: ${esc(item.fecha_vencimiento)}` : 'Sin fecha de entrega'}</p>
+      <div class="actions-group">
+        <button class="btn btn-primary btn-sm" type="button" data-cargar-entrega-actividad="${esc(item.id)}">Cargar entrega</button>
+        <button class="btn btn-secondary btn-sm" type="button" data-enviar-actividad="${esc(item.id)}">Enviar a curso</button>
+      </div>
     </article>
-  `).join('') : '<div class="empty"><h3>Sin actividades</h3><p>Prepara una evaluación o TP para empezar.</p></div>';
+  `).join('') : '<div class="empty"><h3>Sin actividades</h3><p>Prepara una evaluaci├│n o TP para empezar.</p></div>';
+
+  return actividades;
 }
 
 function formatSyncStatus(counts = {}) {
   const pending = (counts.pending || 0) + (counts.syncing || 0);
   const synced = counts.synced || 0;
   const error = counts.error || 0;
-  return `${pending} pendientes · ${synced} sincronizadas · ${error} con error`;
-}
-
-function bootCurrentPage(path = window.location.pathname) {
-  if (path === '/' || path.startsWith('/?')) {
-    initDashboard();
-    initTeacherContext();
-    return;
-  }
-  if (path === '/registro') return initStudents();
-  if (path === '/asistencia') return initAttendance();
-  if (path === '/notas') return initGrades();
-  if (path === '/cursos') return initCourses();
-  if (path === '/actividades') {
-    initActivities();
-    initCalendar();
-  }
-}
-
-async function pullRemoteData(scope = 'all') {
-  await syncPendingOperations();
-
-  if (scope === 'all' || scope === 'calendario') {
-    const root = document.querySelector('[data-calendar]');
-    if (root) {
-      const monthInput = root.querySelector('[data-calendar-month]');
-      const courseSelect = root.querySelector('[data-calendar-course]');
-      const subjectSelect = root.querySelector('[data-calendar-subject]');
-      await loadCalendar(root, monthInput?.value || today().slice(0, 7), courseSelect?.value || '', subjectSelect?.value || '', true);
-    }
-  }
-
-  if (scope === 'all' || scope === 'actividades') {
-    const list = document.querySelector('[data-activity-list]');
-    if (list) await renderActivitiesList(list, { force: true });
-  }
+  return `${pending} pendientes ┬À ${synced} sincronizadas ┬À ${error} con error`;
 }
 
 function registerSpaRefreshHandlers() {
@@ -1804,31 +2595,62 @@ function registerSpaRefreshHandlers() {
   });
 }
 
+async function pullRemoteData(scope = 'all') {
+  await syncPendingOperations();
+
+  if (scope === 'all' || scope === 'calendario') {
+    const root = document.querySelector('[data-activities][data-calendar]') || document.querySelector('[data-calendar]');
+    if (root) {
+      const monthInput = root.querySelector('[data-calendar-month]');
+      const courseSelect = root.querySelector('[data-calendar-course]');
+      const subjectSelect = root.querySelector('[data-calendar-subject]');
+      await loadCalendar(
+        root,
+        monthInput?.value || today().slice(0, 7),
+        courseSelect?.value || '',
+        subjectSelect?.value || '',
+      );
+    }
+  }
+
+  if (scope === 'all' || scope === 'actividades') {
+    const list = document.querySelector('[data-activity-list]');
+    if (list) await renderActivitiesList(list);
+  }
+}
+
 const spaRuntime = window.__AULA_CLARA_SPA__ || { enabled: false, initialView: 'panel' };
 
-seed();
-initTheme();
-initMobileNav();
-initResponsiveTables();
-startAutoSync();
-initDashboard();
-initTeacherContext();
-initStudents();
-initAttendance();
-initGrades();
-initCourses();
-initSubjects();
-initCalendar();
-initActivities();
+async function bootstrap() {
+  if (currentUser?.id) {
+    await hydrateLocalStorageFromServer(currentUser.id);
+  }
+  seed();
+  initTheme();
+  initMobileNav();
+  initResponsiveTables();
+  startAutoSync();
+  initDashboard();
+  initTeacherContext();
+  initStudents();
+  initAttendance();
+  initGrades();
+  initCourses();
+  initSubjects();
+  initCalendar();
+  initActivities();
 
-document.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-pull-remote]');
-  if (!button) return;
-  event.preventDefault();
-  void pullRemoteData(button.dataset.pullScope || 'all');
-});
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-pull-remote]');
+    if (!button) return;
+    event.preventDefault();
+    void pullRemoteData(button.dataset.pullScope || 'all');
+  });
 
-if (spaRuntime.enabled) {
-  registerSpaRefreshHandlers();
-  initSpaRouter(spaRuntime.initialView);
+  if (spaRuntime.enabled) {
+    registerSpaRefreshHandlers();
+    initSpaRouter(spaRuntime.initialView);
+  }
 }
+
+void bootstrap();

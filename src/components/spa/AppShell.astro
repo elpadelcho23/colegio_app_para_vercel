@@ -1,30 +1,37 @@
----
+﻿---
+import { ACTIVITY_AI_LIMITS, activityLimitsSummaryLines, formatActivityChars } from '../../lib/activity-ai-limits';
+import { TRABAJO_UPLOAD_LIMITS } from '../../lib/trabajo-upload-limits';
+
 interface Props {
   initialView?: string;
 }
 
 const { initialView = 'panel' } = Astro.props;
+const limitsLines = activityLimitsSummaryLines();
 ---
 
 <div id="spa-root" data-spa-root data-initial-view={initialView}>
   <section class="spa-view page page-stack" data-spa-view="panel" data-spa-title="Panel docente">
-    <section class="hero-card">
+<section class="hero-card">
       <p class="eyebrow">Hoy</p>
-      <h1>Panel del día</h1>
+      <h1>Panel del d├¡a</h1>
+
       <div class="context-banner" data-context-banner>
         <strong>Contexto sugerido</strong>
-        <p data-context-summary>Configurá tu horario para sugerencias.</p>
+        <p data-context-summary>Configur├í tu horario para sugerencias.</p>
       </div>
+
       <div class="hero-actions">
-        <button class="btn btn-primary btn-block" type="button" data-spa-nav="asistencia">Tomar asistencia</button>
-        <button class="btn btn-secondary btn-block" type="button" data-spa-nav="notas">Cargar calificaciones</button>
-        <button class="btn btn-secondary btn-block" type="button" data-spa-nav="actividades">Ver actividades</button>
+        <button type="button" data-spa-nav="asistencia" class="btn btn-primary btn-block" >Tomar asistencia</button>
+        <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block" >Cargar calificaciones</button>
+        <button type="button" data-spa-nav="actividades" class="btn btn-secondary btn-block" >Ver actividades</button>
       </div>
     </section>
+
     <section class="panel">
       <div class="section-title">
-        <h2>Resumen del día</h2>
-        <p>Filtros rápidos para ver asistencia, cursos y alertas del contexto actual.</p>
+        <h2>Resumen del d├¡a</h2>
+        <p>Filtros r├ípidos para ver asistencia, cursos y alertas del contexto actual.</p>
       </div>
       <div class="filters-grid" data-dashboard-filters>
         <select name="escuela" aria-label="Escuela"></select>
@@ -34,6 +41,7 @@ const { initialView = 'panel' } = Astro.props;
       <div class="metric-grid" data-dashboard></div>
       <div data-alerts></div>
     </section>
+
     <section class="panel" data-teacher-context>
       <div class="section-title">
         <h2>Mi horario</h2>
@@ -41,22 +49,25 @@ const { initialView = 'panel' } = Astro.props;
       </div>
       <form class="form-grid" data-context-form>
         <fieldset class="day-picker">
-          <legend>Días</legend>
+          <legend>D├¡as</legend>
           <div class="days-checkboxes">
             <label><input type="checkbox" name="dias" value="1" /> Lun</label>
             <label><input type="checkbox" name="dias" value="2" /> Mar</label>
-            <label><input type="checkbox" name="dias" value="3" /> Mié</label>
+            <label><input type="checkbox" name="dias" value="3" /> Mi├®</label>
             <label><input type="checkbox" name="dias" value="4" /> Jue</label>
             <label><input type="checkbox" name="dias" value="5" /> Vie</label>
           </div>
         </fieldset>
+
         <div class="input-group full-width">
           <label><span>Desde</span><input type="time" name="desde" required /></label>
           <label><span>Hasta</span><input type="time" name="hasta" required /></label>
         </div>
+
         <label><span>Escuela</span><select name="escuela" required></select></label>
         <label><span>Curso</span><select name="cursoId" required></select></label>
         <label><span>Materia</span><select name="materiaId" required></select></label>
+
         <button class="btn btn-primary" type="submit">Guardar bloque</button>
       </form>
       <div class="list" data-context-list></div>
@@ -64,30 +75,45 @@ const { initialView = 'panel' } = Astro.props;
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="registro" data-spa-title="Registro de alumnos">
-    <header class="page-header">
+<header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
         <h1>Registro simple</h1>
         <p>Datos, materias y contacto de cada estudiante en una vista clara.</p>
       </div>
-      <button class="btn btn-secondary btn-block" type="button" data-spa-nav="cursos">Organizar cursos</button>
+      <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block" >Organizar cursos</button>
     </header>
+
     <section class="responsive-grid">
       <form class="panel form-grid" data-student-form>
-        <div class="section-title"><h2>Nuevo alumno</h2></div>
+        <div class="section-title">
+          <h2>Nuevo alumno</h2>
+        </div>
+
         <div class="input-group full-width">
           <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /></label>
           <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
         </div>
-        <label class="full-width"><span>Curso</span><select name="cursoId" required></select></label>
+
+        <label class="full-width">
+          <span>Curso</span>
+          <select name="cursoId" required></select>
+        </label>
+
         <fieldset class="subject-picker">
           <legend>Materias del alumno</legend>
           <div class="subject-search" data-student-subjects></div>
           <input name="nuevaMateria" data-student-new-subject placeholder="Agregar materia nueva..." />
         </fieldset>
-        <label class="full-width"><span>Tutor o contacto</span><input name="tutor" /></label>
+
+        <label class="full-width">
+          <span>Tutor o contacto</span>
+          <input name="tutor" />
+        </label>
+
         <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
       </form>
+
       <section class="panel">
         <div class="section-title">
           <h2>Alumnos cargados</h2>
@@ -99,34 +125,44 @@ const { initialView = 'panel' } = Astro.props;
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="cursos" data-spa-title="Cursos" data-courses>
-    <header class="page-header">
+<header class="page-header">
       <div class="header-content">
-        <p class="eyebrow">Organización</p>
+        <p class="eyebrow">Organizaci├│n</p>
         <h1>Cursos y divisiones</h1>
         <p>Base de trabajo para inscripciones, asistencia y reportes.</p>
       </div>
-      <button class="btn btn-secondary btn-block" type="button" data-spa-nav="registro">Cargar alumnos</button>
+      <button type="button" data-spa-nav="registro" class="btn btn-secondary btn-block" >Cargar alumnos</button>
     </header>
+
     <section class="responsive-grid">
       <form class="panel form-grid" data-course-form>
-        <div class="section-title"><h2>Nuevo curso</h2></div>
-        <label><span>Escuela</span><input name="escuela" required /></label>
-        <label><span>Curso</span><input name="nombre" placeholder="Ej: 6to 1ra" required /></label>
+        <div class="section-title">
+          <h2>Nuevo curso</h2>
+        </div>
+        <label>
+          <span>Escuela</span>
+          <input name="escuela" required />
+        </label>
+        <label>
+          <span>Curso</span>
+          <input name="nombre" placeholder="Ej: 6to 1ra" required />
+        </label>
         <label>
           <span>Turno</span>
           <select name="turno" required>
             <option value="">Seleccionar turno</option>
-            <option>Mañana</option>
+            <option>Ma├▒ana</option>
             <option>Tarde</option>
             <option>Noche</option>
           </select>
         </label>
         <button class="btn btn-primary btn-block" type="submit">Crear curso</button>
       </form>
+
       <section class="panel">
         <div class="section-title">
           <h2>Cursos activos</h2>
-          <p>Resumen de alumnos y materias por división.</p>
+          <p>Resumen de alumnos y materias por divisi├│n.</p>
         </div>
         <div class="list" data-course-list></div>
       </section>
@@ -134,63 +170,99 @@ const { initialView = 'panel' } = Astro.props;
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="asistencia" data-spa-title="Asistencia" data-attendance>
-    <header class="page-header">
+<header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Control diario</p>
         <h1>Toma de asistencia</h1>
-        <p>Filtrá por fecha, curso y materia para marcar presentes o ausentes.</p>
+        <p>Filtr├í por fecha, curso y materia para marcar presentes o ausentes.</p>
       </div>
-      <button class="btn btn-secondary btn-block" type="button" data-spa-nav="notas">Ver notas</button>
+      <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block" >Ver notas</button>
     </header>
+
     <section class="panel">
       <div class="filters-grid">
         <input type="date" data-attendance-date aria-label="Fecha" />
         <select data-filter-course aria-label="Curso"></select>
         <select data-filter-subject aria-label="Materia"></select>
         <div class="actions-group">
-          <button class="btn btn-ghost" type="button" data-sync-button data-pull-remote>Sincronizar</button>
+          <button class="btn btn-ghost" type="button" data-sync-button>Sincronizar</button>
           <button class="btn btn-secondary" type="button" data-export-excel>Exportar</button>
         </div>
       </div>
+
       <div class="sync-line">
         <span class="tag" data-connection-status>Detectando...</span>
-        <small class="sync-status" data-sync-status>0 pendientes · 0 sincronizadas · 0 con error</small>
+        <small class="sync-status" data-sync-status>0 pendientes - 0 sincronizadas - 0 con error</small>
       </div>
     </section>
+
     <section class="summary-strip" data-attendance-summary></section>
+
     <section class="panel">
       <div class="section-title">
         <h2>Alumnos</h2>
-        <p>Listado filtrado del día.</p>
+        <p>Listado filtrado del d├¡a.</p>
       </div>
       <div class="list" data-attendance-list></div>
     </section>
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="notas" data-spa-title="Calificaciones" data-grades>
-    <header class="page-header">
+<header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Calificaciones</p>
         <h1>Carga de notas</h1>
-        <p>Promedios, entregas y estado académico por curso y materia.</p>
+        <p>Promedios, entregas y estado acad├®mico por curso y materia.</p>
       </div>
       <a class="btn btn-secondary btn-block" href="/api/export">Exportar Excel</a>
     </header>
+
     <section class="panel context-workbar">
       <div>
         <strong>Contexto</strong>
-        <p data-grade-context-text>Seleccioná curso y materia.</p>
+        <p data-grade-context-text>Seleccion├í curso y materia.</p>
       </div>
       <div class="filters-grid">
         <select data-grade-course-filter aria-label="Curso"></select>
         <select data-grade-subject-filter aria-label="Materia"></select>
       </div>
     </section>
-    <section class="responsive-grid">
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>Actividades pr├│ximas</h2>
+        <p>TPs y evaluaciones del curso con seguimiento de entregas. Para subir trabajos, us├í <button type="button" data-spa-nav="actividades" >Actividades ÔåÆ Cargar ya hecha</button>.</p>
+      </div>
+
+      <div class="filters-grid">
+        <select data-delivery-type-filter aria-label="Tipo de actividad">
+          <option value="">Todos los tipos</option>
+          <option value="tp">Trabajo pr├íctico</option>
+          <option value="evaluacion">Evaluaci├│n</option>
+        </select>
+        <select data-delivery-status-filter aria-label="Estado de seguimiento">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="en_progreso">En progreso</option>
+          <option value="completado">Completado</option>
+        </select>
+        <input type="date" data-delivery-from-filter aria-label="Entrega desde" />
+        <input type="date" data-delivery-to-filter aria-label="Entrega hasta" />
+      </div>
+
+      <section class="summary-strip" data-grade-deliveries-summary></section>
+      <div class="list" data-grade-deliveries></div>
+    </section>
+
+    <section class="responsive-grid is-balanced">
       <form class="panel form-grid" data-grade-form>
-        <div class="section-title"><h2>Cargar evaluación</h2></div>
+        <div class="section-title">
+          <h2>Cargar evaluaci├│n</h2>
+        </div>
+
         <label class="full-width"><span>Alumno</span><select name="studentId" required></select></label>
         <input type="hidden" name="subjectId" />
+
         <div class="input-row full-width">
           <label>
             <span>Tipo</span>
@@ -198,7 +270,7 @@ const { initialView = 'panel' } = Astro.props;
               <option>TP</option>
               <option>Oral</option>
               <option>Integrador</option>
-              <option value="Evaluacion">Evaluación</option>
+              <option value="Evaluacion">Evaluaci├│n</option>
             </select>
           </label>
           <label>
@@ -210,94 +282,302 @@ const { initialView = 'panel' } = Astro.props;
             </select>
           </label>
         </div>
-        <label class="full-width"><span>Título</span><input name="titulo" placeholder="Ej: TP 1" required /></label>
+
+        <label class="full-width"><span>T├¡tulo</span><input name="titulo" placeholder="Ej: TP 1" required /></label>
+
         <label class="full-width">
-          <span>Modo de calificación</span>
+          <span>Modo de calificaci├│n</span>
           <select name="modoCalificacion" data-grade-mode>
-            <option value="numerica">Numérica (1-10)</option>
+            <option value="numerica">Num├®rica (1-10)</option>
             <option value="conceptual">Conceptual</option>
             <option value="trayectoria">Trayectoria</option>
           </select>
         </label>
+
         <label data-numeric-grade-field><span>Nota</span><input name="valor" type="number" min="1" max="10" step="0.1" /></label>
-        <label class="is-hidden" data-text-grade-field><span>Calificación</span><select name="calificacionTexto"></select></label>
+        <label class="is-hidden" data-text-grade-field><span>Calificaci├│n</span><select name="calificacionTexto"></select></label>
+
         <div class="input-row full-width">
           <label><span>Fecha</span><input name="fecha" type="date" /></label>
           <label><span>Entrega</span><input name="fechaEntrega" type="date" /></label>
         </div>
-        <button class="btn btn-primary btn-block" type="submit">Guardar calificación</button>
+
+        <button class="btn btn-primary btn-block" type="submit">Guardar calificaci├│n</button>
       </form>
+
       <div class="stack">
         <section class="panel">
-          <div class="section-title"><h2>Materias</h2></div>
+          <div class="section-title">
+            <h2>Materias</h2>
+          </div>
           <form class="inline-form" data-inline-subject-form>
             <input name="nombre" placeholder="Nueva materia" aria-label="Nueva materia" />
             <button class="btn btn-secondary" type="submit">+</button>
           </form>
           <div class="notes-list" data-inline-subject-list></div>
         </section>
-        <section class="panel">
-          <div class="section-title"><h2>Entregas próximas</h2></div>
-          <div class="list" data-grade-deliveries></div>
-        </section>
       </div>
     </section>
+
     <section class="panel">
       <div class="section-title">
-        <h2>Estado académico</h2>
-        <p>Vista consolidada por alumno para lectura rápida.</p>
+        <h2>Estado acad├®mico</h2>
+        <p>Vista consolidada por alumno para lectura r├ípida.</p>
       </div>
       <div class="table-container" data-grade-table></div>
     </section>
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="actividades" data-spa-title="Actividades" data-activities data-calendar>
-    <header class="page-header">
+<header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Agenda docente</p>
         <h1>Actividades y calendario</h1>
-        <p>Avisos de evaluación, TP, entregas y fechas importantes en una sola pantalla.</p>
+        <p>Avisos de evaluaci├│n, TP, entregas y fechas importantes en una sola pantalla.</p>
       </div>
-      <button class="btn btn-secondary btn-block" type="button" data-spa-nav="notas">Ir a calificaciones</button>
+      <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block" >Ir a calificaciones</button>
     </header>
+
     <section class="responsive-grid is-balanced">
-      <form class="panel form-grid" data-activity-form>
-        <div class="section-title"><h2>Crear actividad</h2></div>
-        <div class="input-group full-width">
-          <label><span>Colegio</span><select name="colegio" required></select></label>
-          <label><span>Turno</span><select name="turno" required></select></label>
-          <label><span>Curso</span><select name="cursoId" required></select></label>
-          <label><span>Materia</span><select name="materiaId" required></select></label>
+      <section class="panel activity-workspace" data-activity-workspace>
+        <div class="section-title">
+          <h2>Realizar actividades</h2>
+          <p>Arm├í evaluaciones o TP a mano, o gener├ílos con IA a partir de tus apuntes y documentos (PDF, DOCX o TXT).</p>
         </div>
-        <label class="full-width"><span>Título</span><input name="titulo" placeholder="Ej: Evaluación integradora" required /></label>
-        <div class="input-group full-width">
-          <label><span>Publicación</span><input type="date" name="fechaPublicacion" /></label>
-          <label><span>Entrega</span><input type="date" name="fechaVencimiento" /></label>
+
+        <div class="activity-mode-picker full-width" role="tablist" aria-label="Modo de realizaci├│n">
+          <label class="template-card activity-mode-card">
+            <input type="radio" name="activityMode" value="manual" checked data-activity-mode-input />
+            <span>
+              <strong>Realizar a mano</strong>
+              <small>Complet├í consigna, fechas y guard├í en el colegio.</small>
+            </span>
+          </label>
+          <label class="template-card activity-mode-card">
+            <input type="radio" name="activityMode" value="ai" data-activity-mode-input />
+            <span>
+              <strong>Realizar con IA</strong>
+              <small>Sub├¡ documentos y gener├í el material did├íctico.</small>
+            </span>
+          </label>
+          <label class="template-card activity-mode-card">
+            <input type="radio" name="activityMode" value="cargar" data-activity-mode-input />
+            <span>
+              <strong>Cargar ya hecha</strong>
+              <small>Sub├¡ entregas o material de una actividad existente por curso.</small>
+            </span>
+          </label>
         </div>
-        <div class="activity-template-picker full-width" role="radiogroup">
-          <label class="template-card"><input type="radio" name="tipo" value="evaluacion" checked /> <strong>Evaluación</strong></label>
-          <label class="template-card"><input type="radio" name="tipo" value="tp" /> <strong>TP</strong></label>
+
+        <form class="form-grid" data-activity-form>
+          <div class="input-group full-width">
+            <label><span>Colegio</span><select name="colegio" required></select></label>
+            <label><span>Turno</span><select name="turno" required></select></label>
+            <label><span>Curso</span><select name="cursoId" required></select></label>
+            <label><span>Materia</span><select name="materiaId" required></select></label>
+          </div>
+
+          <label class="full-width">
+            <span>T├¡tulo</span>
+            <input name="titulo" placeholder="Ej: Evaluaci├│n integradora" required />
+          </label>
+
+          <div class="input-group full-width">
+            <label><span>Publicaci├│n</span><input type="date" name="fechaPublicacion" /></label>
+            <label><span>Entrega</span><input type="date" name="fechaVencimiento" /></label>
+          </div>
+
+          <div class="activity-mode-panel full-width" data-activity-mode-panel="manual">
+            <div class="activity-template-picker full-width" role="radiogroup">
+              <label class="template-card"><input type="radio" name="tipo" value="evaluacion" checked /> <strong>Evaluaci├│n</strong></label>
+              <label class="template-card"><input type="radio" name="tipo" value="tp" /> <strong>TP</strong></label>
+            </div>
+
+            <section class="activity-editor full-width" data-activity-editor></section>
+
+            <div class="button-row full-width">
+              <button class="btn btn-secondary" type="button" id="btn-descargar-word">Word</button>
+              <button class="btn btn-secondary" type="button" id="btn-descargar-pdf">PDF</button>
+              <button class="btn btn-primary" type="submit">Guardar actividad</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="activity-mode-panel full-width is-hidden" data-activity-mode-panel="cargar">
+          <div class="section-title full-width">
+            <h3>Cargar actividad ya hecha</h3>
+            <p>Us├í el curso y materia de arriba. Sub├¡ trabajos entregados (PDF, Word, im├ígenes, TXT).</p>
+          </div>
+
+          <form
+            class="form-grid full-width"
+            data-trabajo-upload-form
+            data-max-files={TRABAJO_UPLOAD_LIMITS.maxFiles}
+            data-max-file-mb={TRABAJO_UPLOAD_LIMITS.maxFileMb}
+          >
+            <label class="full-width">
+              <span>Actividad del curso</span>
+              <select name="actividadId" data-trabajo-actividad-select required>
+                <option value="">Eleg├¡ una actividad</option>
+              </select>
+            </label>
+
+            <label class="full-width">
+              <span>Alumno (opcional)</span>
+              <select name="alumnoId" data-trabajo-alumno-select>
+                <option value="">Sin alumno espec├¡fico</option>
+              </select>
+            </label>
+
+            <label class="full-width">
+              <span>T├¡tulo del trabajo</span>
+              <input name="titulo" placeholder="Ej: TP HTML - Martina Ruiz" required />
+            </label>
+
+            <label class="full-width">
+              <span>Archivos</span>
+              <input
+                type="file"
+                name="archivos"
+                multiple
+                required
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.gif,.txt,application/pdf,image/*,text/plain"
+                data-trabajo-files
+              />
+              <small class="muted">
+                Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} archivos ┬À {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u
+              </small>
+            </label>
+
+            <label class="full-width">
+              <span>Observaciones (opcional)</span>
+              <input name="observaciones" placeholder="Ej: entrega en papel y digital" />
+            </label>
+
+            <div class="ai-file-feedback full-width is-hidden" data-trabajo-file-feedback aria-live="polite"></div>
+
+            <button class="btn btn-primary btn-block" type="submit" data-trabajo-submit>Cargar trabajo</button>
+          </form>
+
+          <section class="full-width">
+            <div class="section-title">
+              <h3>Trabajos cargados en este curso</h3>
+            </div>
+            <div class="filters-grid">
+              <select data-trabajo-estado-filter aria-label="Estado de calificaci├│n">
+                <option value="">Todos</option>
+                <option value="enviado">Pendiente de calificar</option>
+                <option value="calificado">Calificado</option>
+              </select>
+            </div>
+            <div class="list" data-trabajo-history></div>
+          </section>
         </div>
-        <section class="activity-editor full-width" data-activity-editor></section>
-        <div class="button-row full-width">
-          <button class="btn btn-secondary" type="button" id="btn-descargar-word">Word</button>
-          <button class="btn btn-secondary" type="button" id="btn-descargar-pdf">PDF</button>
-          <button class="btn btn-primary" type="submit">Guardar</button>
+
+        <div class="activity-mode-panel full-width is-hidden" data-activity-mode-panel="ai">
+          <div class="ai-limits-banner full-width">
+            <div>
+              <strong>L├¡mites de generaci├│n con IA</strong>
+              <p class="muted">
+                Hasta {ACTIVITY_AI_LIMITS.maxFiles} archivos ┬À {ACTIVITY_AI_LIMITS.maxFileMb} MB c/u ┬À
+                m├íx. {formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres enviados (~{ACTIVITY_AI_LIMITS.approxPagesAtInputCap} p├íginas).
+              </p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" data-activity-ai-limits-open>
+              Ver detalle
+            </button>
+          </div>
+
+          <form
+            class="form-grid"
+            data-activity-ai-form
+            data-max-files={ACTIVITY_AI_LIMITS.maxFiles}
+            data-max-file-bytes={ACTIVITY_AI_LIMITS.maxFileBytes}
+            data-max-input-chars={ACTIVITY_AI_LIMITS.maxInputChars}
+          >
+            <label class="full-width">
+              <span>Tipo de actividad a generar</span>
+              <select name="tipoGeneracion" required>
+                <option value="tp">Trabajo Pr├íctico</option>
+                <option value="examen">Examen</option>
+                <option value="integrador">Trabajo Integrador</option>
+              </select>
+            </label>
+
+            <label class="full-width">
+              <span>Documentos de referencia</span>
+              <input
+                type="file"
+                name="documentos"
+                accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                multiple
+                required
+                data-activity-ai-files
+              />
+              <small class="muted">
+                Hasta {ACTIVITY_AI_LIMITS.maxFiles} archivos ({ACTIVITY_AI_LIMITS.maxFileMb} MB c/u).
+                Si el material es extenso, se resume autom├íticamente antes de generar la actividad.
+              </small>
+            </label>
+
+            <div class="ai-file-feedback full-width is-hidden" data-activity-ai-file-feedback aria-live="polite"></div>
+
+            <label>
+              <span>Nivel acad├®mico (opcional)</span>
+              <input name="nivelAcademico" placeholder="Ej: 6to a├▒o t├®cnico" />
+            </label>
+
+            <label>
+              <span>Indicaciones para la IA (opcional)</span>
+              <input name="notasDocente" placeholder="Ej: enfoque en laboratorio, 90 minutos" />
+            </label>
+
+            <div class="button-row full-width">
+              <button class="btn btn-primary" type="submit" data-activity-ai-submit>Generar con IA</button>
+            </div>
+          </form>
+
+          <div class="ai-generation-status is-hidden" data-activity-ai-status aria-live="polite">
+            <div class="ai-spinner" aria-hidden="true"></div>
+            <div>
+              <strong data-activity-ai-status-title>Generando material did├ícticoÔÇª</strong>
+              <p class="muted" data-activity-ai-status-detail>La solicitud est├í en cola para respetar los l├¡mites de la API.</p>
+              <div class="ai-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="ai-progress-bar" data-activity-ai-progress></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ai-source-report full-width is-hidden" data-activity-ai-source-report aria-live="polite"></div>
+
+          <div class="ai-preview is-hidden" data-activity-ai-preview>
+            <div class="section-title">
+              <h3>Vista previa generada</h3>
+              <p>Revis├í el contenido, export├í o aplic├í al formulario para editar y guardar.</p>
+            </div>
+            <div class="ai-preview-body" data-activity-ai-preview-body></div>
+            <div class="button-row">
+              <button type="button" class="btn btn-secondary" data-activity-ai-word>Descargar Word</button>
+              <button type="button" class="btn btn-secondary" data-activity-ai-pdf>Descargar PDF</button>
+              <button type="button" class="btn btn-primary" data-activity-ai-apply>Usar en formulario</button>
+            </div>
+          </div>
         </div>
-      </form>
+      </section>
+
       <section class="panel">
         <div class="section-title">
           <h2>Actividades preparadas</h2>
-          <button class="btn btn-ghost" type="button" data-pull-remote data-pull-scope="actividades">Sincronizar</button>
+          <p>Envi├í un TP, examen o actividad ya cargada a otro curso o turno.</p>
         </div>
         <div class="list" data-activity-list></div>
       </section>
     </section>
+
     <section class="calendar-wrapper">
       <div class="panel calendar-panel">
         <div class="section-title">
           <h2>Calendario</h2>
-          <button class="btn btn-ghost" type="button" data-pull-remote data-pull-scope="calendario">Sincronizar</button>
         </div>
         <div class="filters">
           <input type="month" data-calendar-month aria-label="Mes" />
@@ -305,22 +585,143 @@ const { initialView = 'panel' } = Astro.props;
           <select data-calendar-subject aria-label="Materia"></select>
         </div>
       </div>
+
       <div class="calendar-layout">
         <div class="calendar-scroll">
           <div class="calendar-grid" data-calendar-grid></div>
         </div>
         <aside class="panel calendar-day-panel">
-          <h2 data-calendar-selected-title>Seleccioná un día</h2>
+          <h2 data-calendar-selected-title>Seleccion├í un d├¡a</h2>
           <p class="calendar-summary" data-calendar-selected-summary></p>
           <div class="list" data-calendar-day-events></div>
         </aside>
       </div>
     </section>
+
+    <dialog class="modal" data-trabajo-reenviar-dialog>
+      <form method="dialog" class="panel form-grid" data-trabajo-reenviar-form>
+        <div class="section-title">
+          <h2>Reenviar trabajo</h2>
+          <p>Envi├í el mismo material a otro curso, turno o materia.</p>
+        </div>
+
+        <input type="hidden" name="reenviarDesdeId" />
+
+        <label class="full-width">
+          <span>Curso destino</span>
+          <select name="cursoId" data-reenviar-curso required></select>
+        </label>
+
+        <label class="full-width">
+          <span>Materia destino</span>
+          <select name="materiaId" data-reenviar-materia required></select>
+        </label>
+
+        <label class="full-width">
+          <span>T├¡tulo</span>
+          <input name="titulo" required />
+        </label>
+
+        <label class="full-width">
+          <span>Alumno (opcional)</span>
+          <select name="alumnoId" data-reenviar-alumno>
+            <option value="">Sin alumno espec├¡fico</option>
+          </select>
+        </label>
+
+        <div class="button-row full-width">
+          <button class="btn btn-primary" type="submit" value="confirm">Reenviar</button>
+          <button class="btn btn-secondary" type="submit" value="cancel">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" data-activity-enviar-dialog>
+      <form method="dialog" class="panel form-grid" data-activity-enviar-form>
+        <div class="section-title">
+          <h2>Enviar actividad a un curso</h2>
+          <p id="activity-enviar-source-label">Duplic├í el material a otro curso, turno o materia.</p>
+        </div>
+
+        <input type="hidden" name="actividadId" />
+
+        <div class="input-group full-width">
+          <label><span>Colegio</span><select name="colegio" data-enviar-colegio required></select></label>
+          <label><span>Turno</span><select name="turno" data-enviar-turno required></select></label>
+        </div>
+
+        <label class="full-width">
+          <span>Curso destino</span>
+          <select name="cursoId" data-enviar-curso required></select>
+        </label>
+
+        <label class="full-width">
+          <span>Materia destino</span>
+          <select name="materiaId" data-enviar-materia required></select>
+        </label>
+
+        <label class="full-width">
+          <span>T├¡tulo</span>
+          <input name="titulo" placeholder="Se copia el t├¡tulo original si lo dej├ís igual" />
+        </label>
+
+        <div class="input-row full-width">
+          <label><span>Publicaci├│n</span><input type="date" name="fechaPublicacion" /></label>
+          <label><span>Entrega</span><input type="date" name="fechaVencimiento" /></label>
+        </div>
+
+        <div class="button-row full-width">
+          <button class="btn btn-primary" type="submit" value="confirm">Enviar al curso</button>
+          <button class="btn btn-secondary" type="submit" value="cancel">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal ai-limits-modal" data-activity-ai-limits-dialog>
+      <form method="dialog" class="panel ai-limits-dialog-panel">
+        <div class="section-title">
+          <h2>L├¡mites de IA (plan gratuito Groq)</h2>
+          <p>Informaci├│n visual para planificar tus archivos. No modifica el funcionamiento del formulario.</p>
+        </div>
+
+        <div class="ai-limits-grid">
+          <article class="ai-limits-card">
+            <span class="ai-limits-label">Archivos</span>
+            <strong>{ACTIVITY_AI_LIMITS.maxFiles} por solicitud</strong>
+            <p class="muted">PDF, DOCX o TXT ┬À {ACTIVITY_AI_LIMITS.maxFileMb} MB m├íximo cada uno</p>
+          </article>
+          <article class="ai-limits-card">
+            <span class="ai-limits-label">Texto enviado a la IA</span>
+            <strong>{formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres</strong>
+            <p class="muted">Aprox. {ACTIVITY_AI_LIMITS.approxPagesAtInputCap} p├íginas de texto corrido</p>
+          </article>
+          <article class="ai-limits-card">
+            <span class="ai-limits-label">Resumen autom├ítico</span>
+            <strong>Desde {formatActivityChars(ACTIVITY_AI_LIMITS.summarizeThresholdChars)} caracteres</strong>
+            <p class="muted">Modelo liviano: {ACTIVITY_AI_LIMITS.groqModelLight}</p>
+          </article>
+          <article class="ai-limits-card">
+            <span class="ai-limits-label">Generaci├│n final</span>
+            <strong>{ACTIVITY_AI_LIMITS.groqModelHeavy}</strong>
+            <p class="muted">Sujeto a l├¡mites de tokens/minuto y tokens/d├¡a de Groq</p>
+          </article>
+        </div>
+
+        <ul class="ai-limits-list">
+          {limitsLines.map((line) => <li>{line}</li>)}
+        </ul>
+
+        <div class="button-row">
+          <button class="btn btn-primary" value="close">Entendido</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="modal" data-calendar-opt-in>
       <form method="dialog" class="panel">
         <h2>Recordatorios</h2>
         <label>
-          <span>Días de anticipación</span>
+          <span>D├¡as de anticipaci├│n</span>
           <input type="number" min="1" max="30" value="3" data-calendar-lead-days />
         </label>
         <div class="button-row">

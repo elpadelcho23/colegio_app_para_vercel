@@ -235,6 +235,44 @@ db.exec(`
     FOREIGN KEY (actividad_id) REFERENCES actividades(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS trabajo_entregas (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    docente_id TEXT NOT NULL,
+    actividad_id TEXT,
+    alumno_id TEXT,
+    curso_id TEXT NOT NULL,
+    materia_id TEXT NOT NULL,
+    colegio TEXT NOT NULL,
+    turno TEXT NOT NULL,
+    titulo TEXT NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'enviado' CHECK (estado IN ('enviado', 'calificado')),
+    nota_id TEXT,
+    observaciones TEXT,
+    submitted_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (docente_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (actividad_id) REFERENCES actividades(id) ON DELETE SET NULL,
+    FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL,
+    FOREIGN KEY (curso_id) REFERENCES cursos(id) ON DELETE RESTRICT,
+    FOREIGN KEY (materia_id) REFERENCES materias(id) ON DELETE RESTRICT
+  );
+
+  CREATE TABLE IF NOT EXISTS trabajo_archivos (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    entrega_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    storage_path TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (entrega_id) REFERENCES trabajo_entregas(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS notification_preferences (
     user_id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,
@@ -410,6 +448,9 @@ function createIndexes() {
     CREATE INDEX IF NOT EXISTS idx_notas_tenant_docente_fecha ON notas(tenant_id, docente_id, fecha);
     CREATE INDEX IF NOT EXISTS idx_calendario_tenant_fecha ON calendario_eventos(tenant_id, fecha_inicio);
     CREATE INDEX IF NOT EXISTS idx_actividades_tenant_contexto ON actividades(tenant_id, colegio, turno, curso_id, materia_id);
+    CREATE INDEX IF NOT EXISTS idx_trabajo_entregas_contexto ON trabajo_entregas(tenant_id, docente_id, curso_id, materia_id);
+    CREATE INDEX IF NOT EXISTS idx_trabajo_entregas_actividad ON trabajo_entregas(actividad_id);
+    CREATE INDEX IF NOT EXISTS idx_trabajo_archivos_entrega ON trabajo_archivos(entrega_id);
   `);
 }
 
@@ -740,4 +781,44 @@ function seed() {
     fecha: '2026-05-05',
     updated_at: '2026-05-05T03:00:00.000Z',
   });
+
+  const insertActividad = db.prepare(`
+    INSERT OR IGNORE INTO actividades (
+      id, tenant_id, docente_id, colegio, turno, curso_id, materia_id,
+      tipo, titulo, estado, fecha_publicacion, fecha_vencimiento, contenido_json, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  insertActividad.run(
+    'act-demo-tp1',
+    DEFAULT_TENANT_ID,
+    'docente-demo',
+    'Escuela Tecnica 1',
+    'Manana',
+    'curso-6-1-manana',
+    'programacion',
+    'tp',
+    'TP HTML y CSS',
+    'publicado',
+    '2026-06-01',
+    '2026-06-20',
+    JSON.stringify({ template: 'tp-v1', bloques: [{ type: 'consigna', texto: 'Desarrollar landing responsive.' }] }),
+    new Date().toISOString(),
+  );
+  insertActividad.run(
+    'act-demo-eval1',
+    DEFAULT_TENANT_ID,
+    'docente-demo',
+    'Escuela Tecnica 1',
+    'Manana',
+    'curso-6-1-manana',
+    'matematica',
+    'evaluacion',
+    'Evaluación funciones',
+    'publicado',
+    '2026-06-10',
+    '2026-06-15',
+    JSON.stringify({ template: 'evaluacion-v1', bloques: [{ type: 'pregunta', texto: 'Resolver ejercicios de funciones.', puntaje: 10 }] }),
+    new Date().toISOString(),
+  );
 }

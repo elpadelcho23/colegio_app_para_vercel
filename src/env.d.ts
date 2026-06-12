@@ -1,3 +1,7 @@
+declare module '*.css';
+declare module '*.scss';
+declare module '*.sass';
+
 declare module 'virtual:pwa-register' {
     interface RegisterSWOptions {
         immediate?: boolean;

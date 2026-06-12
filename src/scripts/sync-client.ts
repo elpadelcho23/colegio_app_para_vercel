@@ -10,6 +10,45 @@ import {
 
 let syncInProgress = false;
 
+const HYDRATE_STORAGE_KEYS = [
+  ['aula_clara_students', 'students'],
+  ['aula_clara_courses', 'courses'],
+  ['aula_clara_subjects', 'subjects'],
+  ['aula_clara_attendance', 'attendance'],
+  ['aula_clara_grades', 'grades'],
+  ['aula_clara_dashboard_filters', null],
+  ['aula_clara_teacher_context', null],
+] as const;
+
+const HYDRATE_EMPTY_VALUES: Record<string, string> = {
+  aula_clara_dashboard_filters: '{}',
+  aula_clara_teacher_context: '[]',
+};
+
+export async function hydrateLocalStorageFromServer(userId: string) {
+  if (!userId) return false;
+
+  const scoped = (key: string) => `${key}:${userId}`;
+  if (localStorage.getItem(scoped('aula_clara_students'))) return false;
+
+  try {
+    const response = await fetch('/api/sync/pull', { credentials: 'same-origin' });
+    if (!response.ok) return false;
+
+    const data = await response.json();
+    for (const [storageKey, field] of HYDRATE_STORAGE_KEYS) {
+      const value = field && Object.prototype.hasOwnProperty.call(data, field)
+        ? data[field]
+        : JSON.parse(HYDRATE_EMPTY_VALUES[storageKey] || '[]');
+      localStorage.setItem(scoped(storageKey), JSON.stringify(value));
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function syncPendingOperations() {
   if (syncInProgress || !navigator.onLine) {
     return { synced: 0, failed: 0, pending: await countPendingOperations(), counts: await getOperationStatusCounts() };

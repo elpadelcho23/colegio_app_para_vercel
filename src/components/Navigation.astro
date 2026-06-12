@@ -1,4 +1,4 @@
----
+﻿---
 const { currentPath = '/', spaEnabled = false } = Astro.props;
 const user = Astro.locals.user;
 
@@ -9,6 +9,7 @@ const links = [
   { view: 'asistencia', label: 'Asistencia' },
   { view: 'notas', label: 'Calificaciones' },
   { view: 'actividades', label: 'Actividades' },
+  { href: '/seguridad', label: 'Seguridad' },
   ...(user?.rol === 'admin' ? [{ href: '/admin/usuarios', label: 'Admin' }] : []),
 ];
 
@@ -24,18 +25,18 @@ const isActive = (view: string) => {
 <header class="app-shell">
   <div class="institution-strip">
     <div>
-      <strong>Escuela Técnica 1</strong>
+      <strong>Escuela T├®cnica 1</strong>
       <span>Seguimiento escolar simple para docentes</span>
     </div>
     {user && <span>{user.nombre} - {user.rol}</span>}
   </div>
-  <nav class="topbar" aria-label="Navegación principal">
+  <nav class="topbar" aria-label="Navegaci├│n principal">
     {spaEnabled ? (
       <button class="brand brand-button" type="button" data-spa-nav="panel" aria-label="Ir al panel principal">
         <span class="brand-mark">AC</span>
         <span>
           <strong>Aula Clara</strong>
-          <small>Gestión docente</small>
+          <small>Gesti├│n docente</small>
         </span>
       </button>
     ) : (
@@ -43,7 +44,7 @@ const isActive = (view: string) => {
         <span class="brand-mark">AC</span>
         <span>
           <strong>Aula Clara</strong>
-          <small>Gestión docente</small>
+          <small>Gesti├│n docente</small>
         </span>
       </a>
     )}
@@ -51,7 +52,7 @@ const isActive = (view: string) => {
     <button
       class="menu-toggle"
       type="button"
-      aria-label="Abrir menú"
+      aria-label="Abrir men├║"
       aria-controls="main-navigation-menu"
       aria-expanded="false"
       data-menu-toggle
@@ -62,7 +63,7 @@ const isActive = (view: string) => {
     </button>
 
     <div class="nav-links" id="main-navigation-menu" data-nav-menu role="menu">
-      <p class="nav-section-label">Menú</p>
+      <p class="nav-section-label">Men├║</p>
       {links.map((link) => (
         'href' in link ? (
           <a

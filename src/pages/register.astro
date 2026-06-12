@@ -19,6 +19,22 @@ const error = Astro.url.searchParams.get('error');
     <script is:inline>
       document.documentElement.dataset.theme =
         localStorage.getItem('aula_clara_theme') || 'light';
+
+      (function () {
+        var keys = [
+          'aula_clara_students',
+          'aula_clara_courses',
+          'aula_clara_subjects',
+          'aula_clara_attendance',
+          'aula_clara_grades',
+          'aula_clara_dashboard_filters',
+          'aula_clara_teacher_context',
+          'aula_clara_calendar_alerts_dismissed',
+        ];
+        keys.forEach(function (key) {
+          localStorage.removeItem(key);
+        });
+      })();
     </script>
   </head>
   <body class="auth-body">
@@ -30,7 +46,7 @@ const error = Astro.url.searchParams.get('error');
           <p class="muted">Registrá tu cuenta docente para comenzar a organizar tus cursos.</p>
         </header>
 
-        {error === '1' && <p class="tag danger auth-alert">Completá todos los campos correctamente.</p>}
+        {error === '1' && <p class="tag danger auth-alert">Completá todos los campos correctamente y usá una contraseña segura (mínimo 10 caracteres, mayúsculas, minúsculas, número y símbolo).</p>}
         {error === '2' && <p class="tag danger auth-alert">Ya existe una cuenta con ese email.</p>}
 
         <form method="post" action="/api/auth/register" class="auth-form">
@@ -44,11 +60,12 @@ const error = Astro.url.searchParams.get('error');
           </label>
           <label>
             <span>Contraseña</span>
-            <input type="password" name="password" autocomplete="new-password" minlength="8" required />
+            <input type="password" name="password" autocomplete="new-password" minlength="10" required />
+            <small>Use al menos 10 caracteres, mayúsculas, minúsculas, número y símbolo.</small>
           </label>
           <label>
             <span>Confirmar contraseña</span>
-            <input type="password" name="confirm" autocomplete="new-password" minlength="8" required />
+            <input type="password" name="confirm" autocomplete="new-password" minlength="10" required />
           </label>
 
           <button class="btn btn-primary btn-block" type="submit">Registrar cuenta</button>
