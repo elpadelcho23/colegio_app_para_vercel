@@ -1,3 +1,5 @@
+import { CLIENT_STORAGE_ENTRIES } from '../lib/client-storage-keys';
+import { groupPendingMutations, mergeHydratedStorageValue } from '../lib/hydrate-merge';
 import {
   countPendingOperations,
   getPendingOperations,
@@ -10,39 +12,37 @@ import {
 
 let syncInProgress = false;
 
-const HYDRATE_STORAGE_KEYS = [
-  ['aula_clara_students', 'students'],
-  ['aula_clara_courses', 'courses'],
-  ['aula_clara_subjects', 'subjects'],
-  ['aula_clara_attendance', 'attendance'],
-  ['aula_clara_grades', 'grades'],
-  ['aula_clara_dashboard_filters', null],
-  ['aula_clara_teacher_context', null],
-] as const;
-
-const HYDRATE_EMPTY_VALUES: Record<string, string> = {
-  aula_clara_dashboard_filters: '{}',
-  aula_clara_teacher_context: '[]',
-};
-
-export async function hydrateLocalStorageFromServer(userId: string) {
+export async function hydrateLocalStorageFromServer(userId: string, options: { notify?: boolean } = {}) {
+  const { notify = true } = options;
   if (!userId) return false;
 
   const scoped = (key: string) => `${key}:${userId}`;
-  if (localStorage.getItem(scoped('aula_clara_students'))) return false;
 
   try {
-    const response = await fetch('/api/sync/pull', { credentials: 'same-origin' });
+    const [response, pendingOperations] = await Promise.all([
+      fetch('/api/sync/pull', { credentials: 'same-origin' }),
+      getPendingOperations(),
+    ]);
     if (!response.ok) return false;
 
     const data = await response.json();
-    for (const [storageKey, field] of HYDRATE_STORAGE_KEYS) {
-      const value = field && Object.prototype.hasOwnProperty.call(data, field)
-        ? data[field]
-        : JSON.parse(HYDRATE_EMPTY_VALUES[storageKey] || '[]');
-      localStorage.setItem(scoped(storageKey), JSON.stringify(value));
+    const pendingByEntity = groupPendingMutations(pendingOperations);
+
+    for (const { key: storageKey, pullField, empty } of CLIENT_STORAGE_ENTRIES) {
+      const merged = mergeHydratedStorageValue(
+        storageKey,
+        pullField,
+        empty,
+        data,
+        localStorage.getItem(scoped(storageKey)),
+        pendingByEntity,
+      );
+      localStorage.setItem(scoped(storageKey), JSON.stringify(merged));
     }
 
+    if (notify) {
+      window.dispatchEvent(new CustomEvent('aula-clara:data-hydrated'));
+    }
     return true;
   } catch {
     return false;

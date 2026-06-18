@@ -3,12 +3,12 @@ const { currentPath = '/', spaEnabled = false } = Astro.props;
 const user = Astro.locals.user;
 
 const links = [
-  { view: 'panel', label: 'Panel' },
-  { view: 'registro', label: 'Alumnos' },
-  { view: 'cursos', label: 'Cursos' },
-  { view: 'asistencia', label: 'Asistencia' },
-  { view: 'notas', label: 'Calificaciones' },
-  { view: 'actividades', label: 'Actividades' },
+  { href: '/', label: 'Panel' },
+  { href: '/registro', label: 'Alumnos' },
+  { href: '/cursos', label: 'Cursos' },
+  { href: '/asistencia', label: 'Asistencia' },
+  { href: '/notas', label: 'Calificaciones' },
+  { href: '/actividades', label: 'Actividades' },
   { href: '/seguridad', label: 'Seguridad' },
   ...(user?.rol === 'admin' ? [{ href: '/admin/usuarios', label: 'Admin' }] : []),
 ];

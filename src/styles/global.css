@@ -1011,6 +1011,94 @@ td small {
   background: var(--danger);
 }
 
+.attendance-list--pending {
+  border: 2px dashed var(--warning);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.student-row.attendance-row--dirty {
+  outline: 2px dashed var(--warning);
+  outline-offset: 3px;
+}
+
+.attendance-save-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 2px dashed transparent;
+  border-radius: var(--radius);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.attendance-save-bar.is-pending {
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+}
+
+.attendance-save-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  max-width: 36rem;
+}
+
+.attendance-save-hint.is-hidden {
+  display: none;
+}
+
+.attendance-save-bar .btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.grade-bulk-list--pending,
+.grade-bulk-row.grade-row--dirty {
+  outline: 2px dashed var(--warning, #c98a00);
+  outline-offset: 2px;
+}
+
+.grade-bulk-row {
+  align-items: center;
+}
+
+.grade-bulk-inputs {
+  display: grid;
+  gap: var(--space-2);
+  min-width: min(100%, 16rem);
+}
+
+.grade-bulk-value {
+  width: 100%;
+}
+
+.grade-motivo-field {
+  width: 100%;
+}
+
+.grade-motivo-field.is-hidden {
+  display: none;
+}
+
+.grade-activity-card {
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.grade-activity-card:hover,
+.grade-activity-card:focus-visible {
+  border-color: var(--brand, #226c5f);
+  transform: translateY(-1px);
+}
+
+.grade-row--scored .grade-bulk-value {
+  border-color: var(--brand, #226c5f);
+}
+
 .sync-line {
   display: flex;
   flex-wrap: wrap;
@@ -1477,10 +1565,6 @@ td small {
   display: none !important;
 }
 
-#spa-root {
-  width: 100%;
-}
-
 .activity-workspace {
   display: grid;
   gap: var(--space-4);
@@ -1790,4 +1874,191 @@ td small {
     box-shadow: none;
     border-color: #bbb;
   }
+}
+
+.import-panel {
+  margin-top: 0.5rem;
+}
+
+.student-mode-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.student-workspace .activity-mode-picker {
+  margin-bottom: 0.25rem;
+}
+
+.export-panel {
+  margin-top: 0.5rem;
+}
+
+.import-requirements {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+  color: var(--muted, #5f6b66);
+  font-size: 0.92rem;
+}
+
+.import-requirements li + li {
+  margin-top: 0.35rem;
+}
+
+.excel-reference {
+  padding: 1rem;
+  border: 1px solid var(--border, #d9e1dc);
+  border-radius: 0.85rem;
+  background: linear-gradient(180deg, #f8fbf9 0%, #ffffff 100%);
+}
+
+.excel-reference .section-title h4 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.excel-reference-table {
+  overflow-x: auto;
+  border: 1px solid #c8d8d2;
+  border-radius: 0.65rem;
+  background: #fff;
+}
+
+.excel-reference-table table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.excel-reference-table thead th {
+  background: #226c5f;
+  color: #fff;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+}
+
+.excel-reference-table tbody td {
+  padding: 0.6rem 0.75rem;
+  border-top: 1px solid #e3ebe7;
+  border-right: 1px solid #eef3f0;
+  vertical-align: top;
+}
+
+.excel-reference-table tbody tr:nth-child(even) td {
+  background: #f7faf8;
+}
+
+.excel-ref-tag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.18);
+  color: #eef7f3;
+}
+
+.excel-ref-tag-required {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.excel-reference-notes {
+  margin: 0.85rem 0 0;
+}
+
+.excel-mapping {
+  padding: 1rem;
+  border: 1px solid #c8d8d2;
+  border-radius: 0.85rem;
+  background: #f8fbf9;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.excel-mapping .section-title h4 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.excel-mapping-toolbar {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.excel-mapping-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.excel-mapping-field label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.excel-mapping-field small {
+  color: var(--muted, #5f6f68);
+  font-size: 0.82rem;
+}
+
+.excel-mapping-templates {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.excel-mapping-status {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted, #5f6f68);
+}
+
+@media (min-width: 720px) {
+  .excel-mapping-toolbar {
+    grid-template-columns: 160px 1fr;
+    align-items: end;
+  }
+
+  .excel-mapping-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .excel-mapping-templates {
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+  }
+}
+
+.import-form {
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.import-form input[type='file'] {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.import-result {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.65rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.import-result-ok {
+  background: #e8f5ef;
+  color: #1f5c45;
+  border: 1px solid #b9ddc9;
+}
+
+.import-result-error {
+  background: #fdeeee;
+  color: #8b2f2f;
+  border: 1px solid #f0c2c2;
 }

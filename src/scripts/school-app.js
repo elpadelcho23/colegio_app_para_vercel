@@ -1,25 +1,76 @@
-﻿import { countPendingOperations, getOperationStatusCounts, queueOfflineOperation, saveAttendanceOffline } from './offline-db.ts';
+import { countPendingOperations, getOperationStatusCounts, queueOfflineOperation, resetOfflineDatabaseOnce, saveAttendanceOffline } from './offline-db.ts';
 import { hydrateLocalStorageFromServer, startAutoSync, syncPendingOperations } from './sync-client.ts';
 import { initMobileNav, openMenu, closeMenu } from './ui-nav.js';
-import { initSpaRouter, registerSpaViewRefresh } from './spa-router.ts';
+import {
+  el,
+  emptyState,
+  fillSelectOptions,
+  fillStaticSelectOptions,
+  renderMetrics,
+  renderPanelMetrics,
+  renderTable,
+  renderTags,
+  replaceContent,
+  setTrustedHtml,
+  tag,
+} from './dom-utils.js';
 
 const currentUser = window.__AULA_CLARA_USER__ || null;
+const panelRefreshers = [];
+let appReady = false;
+
+function onPanelRefresh(fn) {
+  panelRefreshers.push(fn);
+}
+
+function refreshAllPanels() {
+  panelRefreshers.forEach((fn) => {
+    try {
+      fn();
+    } catch (error) {
+      console.error('[aula-clara] panel refresh failed', error);
+    }
+  });
+}
+
+function notifyDataChanged(detail = {}) {
+  refreshAllPanels();
+  window.dispatchEvent(new CustomEvent('aula-clara:local-data-changed', { detail }));
+}
+
+async function persistAndRefresh(entity, action, payload, refreshFn) {
+  refreshFn?.();
+  notifyDataChanged();
+  try {
+    await queue(entity, action, payload);
+  } catch (error) {
+    console.error('[aula-clara] sync queue failed', error);
+  } finally {
+    refreshFn?.();
+    notifyDataChanged();
+  }
+}
 
 const KEYS = {
   students: 'aula_clara_students',
   courses: 'aula_clara_courses',
+  schools: 'aula_clara_schools',
   subjects: 'aula_clara_subjects',
   attendance: 'aula_clara_attendance',
   grades: 'aula_clara_grades',
   dashboardFilters: 'aula_clara_dashboard_filters',
   teacherContext: 'aula_clara_teacher_context',
   theme: 'aula_clara_theme',
+  studentExcelMappings: 'aula_clara_student_excel_mappings',
 };
 
 const DEFAULTS = {
   [KEYS.courses]: [
     { id: 'curso-6-1-manana', nombre: '6to 1ra', escuela: 'Escuela Tecnica 1', turno: 'Manana' },
     { id: 'curso-5-2-tarde', nombre: '5to 2da', escuela: 'Escuela Tecnica 1', turno: 'Tarde' },
+  ],
+  [KEYS.schools]: [
+    { id: 'escuela-tecnica-1', nombre: 'Escuela Tecnica 1', activo: true },
   ],
   [KEYS.subjects]: [
     { id: 'matematica', nombre: 'Matematica', activo: true },
@@ -117,6 +168,63 @@ function activeSubjects() {
   return read(KEYS.subjects).filter((subject) => subject.activo !== false);
 }
 
+function activeSchools() {
+  ensureSchoolsFromCourses();
+  return read(KEYS.schools).filter((school) => school.activo !== false);
+}
+
+function ensureSchoolsFromCourses() {
+  const schools = read(KEYS.schools);
+  const existing = new Set(schools.map((school) => String(school.nombre || '').toLowerCase()));
+  const fromCourses = [...new Set(read(KEYS.courses).map((course) => course.escuela).filter(Boolean))];
+  const toAdd = fromCourses.filter((nombre) => !existing.has(nombre.toLowerCase()));
+  if (!toAdd.length) return;
+  write(KEYS.schools, [
+    ...schools,
+    ...toAdd.map((nombre) => ({ id: uid('esc'), nombre, activo: true, updatedAt: nowIso() })),
+  ]);
+}
+
+function schoolNamesForSelect() {
+  ensureSchoolsFromCourses();
+  const names = activeSchools().map((school) => school.nombre);
+  const fromCourses = read(KEYS.courses).map((course) => course.escuela).filter(Boolean);
+  return [...new Set([...names, ...fromCourses])].sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+function fillSchoolSelect(select, placeholder, selected = '') {
+  if (!select) return;
+  fillSelect(select, schoolNamesForSelect().map((nombre) => ({ id: nombre, nombre })), placeholder);
+  if (selected) select.value = selected;
+}
+
+async function upsertSchoolByName(name) {
+  const schoolName = String(name || '').trim();
+  if (!schoolName) return null;
+  ensureSchoolsFromCourses();
+  const existing = activeSchools().find((school) => school.nombre.toLowerCase() === schoolName.toLowerCase());
+  const schoolPayload = existing || { id: uid('esc'), nombre: schoolName, activo: true, updatedAt: nowIso() };
+  if (!existing) {
+    write(KEYS.schools, [...read(KEYS.schools), schoolPayload]);
+  }
+  notifySchoolsChanged({ selected: schoolPayload.nombre });
+  if (currentUser?.id) {
+    void queue('school', 'upsert', schoolPayload);
+  }
+  return schoolPayload;
+}
+
+function notifySchoolsChanged(detail = {}) {
+  window.dispatchEvent(new CustomEvent('aula-clara:schools-changed', { detail }));
+  notifyDataChanged({ scope: 'schools', ...detail });
+}
+
+function renderSchoolTags(container) {
+  if (!container) return;
+  const schools = activeSchools();
+  renderTags(container, schools, (school) => school.nombre, 'Sin escuelas cargadas');
+}
+
 function courseById(id) {
   return read(KEYS.courses).find((course) => course.id === id);
 }
@@ -126,9 +234,7 @@ function subjectById(id) {
 }
 
 function fillSelect(select, items, placeholder, valueKey = 'id', labeler = (item) => item.nombre) {
-  if (!select) return;
-  select.innerHTML = `<option value="">${esc(placeholder)}</option>` +
-    items.map((item) => `<option value="${esc(item[valueKey])}">${esc(labeler(item))}</option>`).join('');
+  fillSelectOptions(select, items, placeholder, valueKey, labeler);
 }
 
 function gradesForStudent(studentId, subjectId = '') {
@@ -184,6 +290,273 @@ function gradeLabel(grade) {
   if (grade.calificacionTexto) return grade.calificacionTexto;
   if (grade.valor === null || grade.valor === '' || grade.valor === undefined) return '-';
   return Number(grade.valor).toFixed(1);
+}
+
+const ATTENDANCE_PASS_THRESHOLD = 75;
+const GRADE_PASS_THRESHOLD = 6;
+
+function studentById(id) {
+  return read(KEYS.students).find((student) => student.id === id);
+}
+
+function inferGradePeriod(grade) {
+  if (grade.periodo) return grade.periodo;
+  const meta = `${grade.tipoEvaluacion || ''} ${grade.titulo || ''}`.toLowerCase();
+  if (/recuperatorio|recup/.test(meta)) return 'recuperatorio';
+  if (/previa/.test(meta)) return 'previa';
+  if (grade.fecha) {
+    const month = new Date(`${grade.fecha}T12:00:00`).getMonth() + 1;
+    if (month >= 3 && month <= 6) return '1c';
+    if (month >= 7 && month <= 11) return '2c';
+  }
+  return '1c';
+}
+
+function defaultGradePeriod() {
+  const month = new Date().getMonth() + 1;
+  if (month >= 3 && month <= 6) return '1c';
+  if (month >= 7 && month <= 11) return '2c';
+  return '2c';
+}
+
+function periodLabel(period) {
+  const labels = {
+    '1c': '1er cuatrimestre',
+    '2c': '2do cuatrimestre',
+    anual: 'Anual',
+    recuperatorio: 'Recuperatorio',
+    previa: 'Previa',
+  };
+  return labels[period] || period;
+}
+
+function gradesForPeriod(grades, period) {
+  return grades.filter((grade) => {
+    const gradePeriod = inferGradePeriod(grade);
+    if (period === 'anual') return gradePeriod === '1c' || gradePeriod === '2c' || gradePeriod === 'anual';
+    return gradePeriod === period;
+  });
+}
+
+function enrichAttendanceRecords(filters = {}) {
+  const students = activeStudents();
+  const studentMap = new Map(students.map((student) => [student.id, student]));
+  let records = read(KEYS.attendance).map((item) => {
+    const student = studentMap.get(item.studentId);
+    if (!student) return null;
+    const course = courseById(student.cursoId);
+    const subject = subjectById(item.subjectId);
+    return {
+      ...item,
+      student,
+      course,
+      subject,
+      escuela: course?.escuela || '',
+      cursoNombre: course?.nombre || '',
+      cursoTurno: course?.turno || '',
+      materiaNombre: subject?.nombre || '',
+    };
+  }).filter(Boolean);
+
+  if (filters.escuela) records = records.filter((record) => record.escuela === filters.escuela);
+  if (filters.curso) records = records.filter((record) => record.student.cursoId === filters.curso);
+  if (filters.materia) records = records.filter((record) => record.subjectId === filters.materia);
+  if (filters.desde) records = records.filter((record) => record.fecha >= filters.desde);
+  if (filters.hasta) records = records.filter((record) => record.fecha <= filters.hasta);
+
+  records.sort((a, b) => {
+    const bySchool = a.escuela.localeCompare(b.escuela, 'es');
+    if (bySchool) return bySchool;
+    const byCourse = a.cursoNombre.localeCompare(b.cursoNombre, 'es');
+    if (byCourse) return byCourse;
+    const byDate = a.fecha.localeCompare(b.fecha);
+    if (byDate) return byDate;
+    return a.materiaNombre.localeCompare(b.materiaNombre, 'es');
+  });
+
+  return records;
+}
+
+function attendanceAveragesByStudent(filters = {}) {
+  const records = enrichAttendanceRecords(filters);
+  const groups = new Map();
+
+  records.forEach((record) => {
+    const key = `${record.studentId}:${record.subjectId}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        student: record.student,
+        subject: record.subject,
+        course: record.course,
+        present: 0,
+        total: 0,
+      });
+    }
+    const group = groups.get(key);
+    group.total += 1;
+    if (record.estado === 'presente') group.present += 1;
+  });
+
+  return [...groups.values()]
+    .map((group) => {
+      const rate = group.total ? (group.present / group.total) * 100 : null;
+      return {
+        ...group,
+        rate,
+        acredita: rate !== null && rate >= ATTENDANCE_PASS_THRESHOLD,
+      };
+    })
+    .sort((a, b) => {
+      const byStudent = a.student.nombre.localeCompare(b.student.nombre, 'es');
+      if (byStudent) return byStudent;
+      return (a.subject?.nombre || '').localeCompare(b.subject?.nombre || '', 'es');
+    });
+}
+
+function renderAttendanceHistory(root) {
+  const summary = root.querySelector('[data-attendance-history-summary]');
+  const table = root.querySelector('[data-attendance-history-table]');
+  const averages = root.querySelector('[data-attendance-history-averages]');
+  if (!table) return;
+
+  const filters = {
+    escuela: root.querySelector('[data-history-filter-school]')?.value || '',
+    curso: root.querySelector('[data-history-filter-course]')?.value || '',
+    materia: root.querySelector('[data-history-filter-subject]')?.value || '',
+    desde: root.querySelector('[data-history-filter-from]')?.value || '',
+    hasta: root.querySelector('[data-history-filter-to]')?.value || '',
+  };
+
+  const records = enrichAttendanceRecords(filters);
+  const studentAverages = attendanceAveragesByStudent(filters);
+  const presentCount = records.filter((record) => record.estado === 'presente').length;
+  const acreditados = studentAverages.filter((item) => item.acredita).length;
+
+  if (summary) {
+    renderMetrics(summary, [
+      { value: records.length, label: 'Registros' },
+      { value: presentCount, label: 'Presentes' },
+      { value: studentAverages.length, label: 'Alumnos evaluados' },
+      { value: acreditados, label: `Acreditan (≥${ATTENDANCE_PASS_THRESHOLD}%)` },
+    ]);
+  }
+
+  renderTable(
+    table,
+    ['Colegio', 'Curso', 'Fecha', 'Materia', 'Alumno', 'Estado'],
+    records.map((record) => [
+      record.escuela || '-',
+      `${record.cursoNombre} ${record.cursoTurno}`,
+      record.fecha,
+      record.materiaNombre || '-',
+      el('strong', {}, record.student.nombre),
+      tag(record.estado === 'presente' ? 'Presente' : 'Ausente', `tag ${record.estado === 'presente' ? 'ok' : 'danger'}`),
+    ]),
+    emptyState('Sin registros de asistencia', 'No hay asistencias tomadas con los filtros actuales.'),
+  );
+
+  if (averages) {
+    renderTable(
+      averages,
+      ['Alumno', 'Curso', 'Materia', 'Presentes', 'Total', '% Asistencia', 'Acreditación'],
+      studentAverages.map((item) => [
+        el('strong', {}, item.student.nombre),
+        `${item.course?.nombre || '-'} ${item.course?.turno || ''}`,
+        item.subject?.nombre || '-',
+        item.present,
+        item.total,
+        item.rate === null ? '-' : `${item.rate.toFixed(0)}%`,
+        tag(item.acredita ? 'Acredita' : 'No acredita', `tag ${item.acredita ? 'ok' : 'danger'}`),
+      ]),
+      emptyState('Sin promedios calculables', 'Seleccioná otro filtro o tomá asistencia para ver promedios.'),
+    );
+  }
+}
+
+function renderGradesDetail(root) {
+  const summary = root.querySelector('[data-grades-detail-summary]');
+  const table = root.querySelector('[data-grades-detail-table]');
+  const averages = root.querySelector('[data-grades-detail-averages]');
+  if (!table) return;
+
+  const courseId = root.querySelector('[data-detail-course-filter]')?.value || '';
+  const subjectId = root.querySelector('[data-detail-subject-filter]')?.value || '';
+  const period = root.querySelector('[data-detail-period-filter]')?.value || 'anual';
+
+  const students = activeStudents().filter((student) =>
+    (!courseId || student.cursoId === courseId) &&
+    studentHasSubject(student, subjectId)
+  );
+
+  const rows = [];
+  students.forEach((student) => {
+    const grades = gradesForPeriod(gradesForStudent(student.id, subjectId), period);
+    grades.forEach((grade) => {
+      rows.push({ student, grade, course: courseById(student.cursoId) });
+    });
+  });
+
+  rows.sort((a, b) => {
+    const byStudent = a.student.nombre.localeCompare(b.student.nombre, 'es');
+    if (byStudent) return byStudent;
+    return String(b.grade.fecha || '').localeCompare(String(a.grade.fecha || ''));
+  });
+
+  const averageRows = students.map((student) => {
+    const grades = gradesForPeriod(gradesForStudent(student.id, subjectId), period);
+    const avg = average(grades);
+    return {
+      student,
+      course: courseById(student.cursoId),
+      subject: subjectById(subjectId),
+      grades,
+      avg,
+      aprueba: avg !== null && avg >= GRADE_PASS_THRESHOLD,
+    };
+  }).filter((item) => item.grades.length > 0);
+
+  const aprobados = averageRows.filter((item) => item.aprueba).length;
+
+  if (summary) {
+    renderMetrics(summary, [
+      { value: periodLabel(period), label: 'Período' },
+      { value: rows.length, label: 'Calificaciones' },
+      { value: averageRows.length, label: 'Alumnos evaluados' },
+      { value: aprobados, label: `Aprobados (≥${GRADE_PASS_THRESHOLD})` },
+    ]);
+  }
+
+  renderTable(
+    table,
+    ['Alumno', 'Curso', 'Actividad', 'Tipo', 'Fecha', 'Nota', 'Motivo', 'Período'],
+    rows.map(({ student, grade, course }) => [
+      el('strong', {}, student.nombre),
+      `${course?.nombre || '-'} ${course?.turno || ''}`,
+      grade.titulo,
+      grade.tipoEvaluacion || 'Eval.',
+      grade.fecha || '-',
+      gradeLabel(grade),
+      grade.motivo || '-',
+      periodLabel(inferGradePeriod(grade)),
+    ]),
+    emptyState('Sin calificaciones en este período', 'Cargá notas o cambiá el filtro de período.'),
+  );
+
+  if (averages) {
+    renderTable(
+      averages,
+      ['Alumno', 'Curso', 'Materia', 'Evaluaciones', 'Promedio', 'Estado'],
+      averageRows.map((item) => [
+        el('strong', {}, item.student.nombre),
+        `${item.course?.nombre || '-'} ${item.course?.turno || ''}`,
+        item.subject?.nombre || '-',
+        item.grades.length,
+        item.avg === null ? '-' : item.avg.toFixed(1),
+        tag(item.aprueba ? 'Aprueba' : 'No aprueba', `tag ${item.aprueba ? 'ok' : 'danger'}`),
+      ]),
+      emptyState('Sin promedios calculables', 'No hay calificaciones numéricas en el período seleccionado.'),
+    );
+  }
 }
 
 function weekdayLabel(day) {
@@ -306,7 +679,7 @@ function initDashboard() {
     const schoolSelect = filters.querySelector('[name="escuela"]');
     const courseSelect = filters.querySelector('[name="curso"]');
     const subjectSelect = filters.querySelector('[name="materia"]');
-    const schools = [...new Set(read(KEYS.courses).map((course) => course.escuela))];
+    const schools = schoolNamesForSelect();
     fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Todas las escuelas');
     fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
     fillSelect(subjectSelect, activeSubjects(), 'Todas las materias');
@@ -327,12 +700,31 @@ function initDashboard() {
       });
       renderDashboard(root);
     });
+    window.addEventListener('aula-clara:schools-changed', () => {
+      const selected = schoolSelect.value;
+      fillSchoolSelect(schoolSelect, 'Todas las escuelas', selected);
+    });
   }
 
   document.querySelectorAll('[data-context-summary]').forEach((item) => {
     item.textContent = describeContext(currentSuggestedContext());
   });
   renderDashboard(root);
+  onPanelRefresh(() => {
+    if (filters) {
+      const schoolSelect = filters.querySelector('[name="escuela"]');
+      const courseSelect = filters.querySelector('[name="curso"]');
+      const subjectSelect = filters.querySelector('[name="materia"]');
+      const schools = schoolNamesForSelect();
+      fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Todas las escuelas');
+      fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
+      fillSelect(subjectSelect, activeSubjects(), 'Todas las materias');
+    }
+    document.querySelectorAll('[data-context-summary]').forEach((item) => {
+      item.textContent = describeContext(currentSuggestedContext());
+    });
+    renderDashboard(root);
+  });
 }
 
 function renderDashboard(root) {
@@ -358,18 +750,18 @@ function renderDashboard(root) {
     return (studentAverage !== null && studentAverage < 6) || (studentAttendance !== null && studentAttendance < 75);
   }).length;
 
-  root.innerHTML = `
-    <div class="metric"><strong>${students.length}</strong><span>Alumnos</span></div>
-    <div class="metric"><strong>${courses.length}</strong><span>Cursos</span></div>
-    <div class="metric"><strong>${avg === null ? '-' : avg.toFixed(1)}</strong><span>Promedio</span></div>
-    <div class="metric"><strong>${present === null ? '-' : present.toFixed(0) + '%'}</strong><span>Asistencia</span></div>
-  `;
+  renderMetrics(root, [
+    { value: students.length, label: 'Alumnos' },
+    { value: courses.length, label: 'Cursos' },
+    { value: avg === null ? '-' : avg.toFixed(1), label: 'Promedio' },
+    { value: present === null ? '-' : `${present.toFixed(0)}%`, label: 'Asistencia' },
+  ]);
 
   const alerts = document.querySelector('[data-alerts]');
   if (alerts) {
-    alerts.innerHTML = risk === 0
-      ? '<div class="empty"><h3>Sin alertas en este contexto</h3><p>El filtro actual no muestra riesgo acad├®mico o de asistencia.</p></div>'
-      : `<div class="empty"><h3>${risk} alumnos requieren seguimiento</h3><p>El c├ílculo respeta escuela, curso y materia seleccionados.</p></div>`;
+    replaceContent(alerts, risk === 0
+      ? emptyState('Sin alertas en este contexto', 'El filtro actual no muestra riesgo académico o de asistencia.')
+      : emptyState(`${risk} alumnos requieren seguimiento`, 'El cálculo respeta escuela, curso y materia seleccionados.'));
   }
 }
 
@@ -382,11 +774,15 @@ function initTeacherContext() {
   const schoolSelect = form.escuela;
   const courseSelect = form.cursoId;
   const subjectSelect = form.materiaId;
-  const schools = [...new Set(read(KEYS.courses).map((course) => course.escuela).filter(Boolean))];
+  const schools = schoolNamesForSelect();
 
   fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Escuela');
   fillSelect(courseSelect, read(KEYS.courses), 'Curso', 'id', courseLabel);
   fillSelect(subjectSelect, activeSubjects(), 'Materia');
+
+  window.addEventListener('aula-clara:schools-changed', (event) => {
+    fillSchoolSelect(schoolSelect, 'Escuela', event.detail?.selected || schoolSelect?.value || '');
+  });
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -423,41 +819,652 @@ function initTeacherContext() {
   });
 
   renderTeacherContextList(list);
+  onPanelRefresh(() => {
+    fillSelect(schoolSelect, schoolNamesForSelect().map((school) => ({ id: school, nombre: school })), 'Escuela');
+    fillSelect(courseSelect, read(KEYS.courses), 'Curso', 'id', courseLabel);
+    fillSelect(subjectSelect, activeSubjects(), 'Materia');
+    renderTeacherContextList(list);
+    document.querySelectorAll('[data-context-summary]').forEach((node) => {
+      node.textContent = describeContext(currentSuggestedContext());
+    });
+  });
 }
 
 function renderTeacherContextList(list) {
   const items = read(KEYS.teacherContext);
   if (!items.length) {
-    list.innerHTML = '<div class="empty"><h3>Sin horario cargado</h3><p>Agreg├í tus clases habituales para activar sugerencias autom├íticas.</p></div>';
+    replaceContent(list, emptyState('Sin horario cargado', 'Agregá tus clases habituales para activar sugerencias automáticas.'));
     return;
   }
 
-  list.innerHTML = items.map((item) => {
+  replaceContent(list, ...items.map((item) => {
     const course = courseById(item.cursoId);
     const subject = subjectById(item.materiaId);
-    return `
-      <article class="course-row">
-        <div>
-          <strong>${esc(subject?.nombre || 'Materia')}</strong>
-          <small>${esc(item.dias.map(weekdayLabel).join(', '))} - ${esc(item.desde)} a ${esc(item.hasta)} - ${esc(course?.nombre || 'Curso')} - ${esc(item.escuela || course?.escuela || '')}</small>
-        </div>
-        <div class="row-actions">
-          <button class="btn btn-ghost" data-delete-context="${esc(item.id)}">Quitar</button>
-        </div>
-      </article>
-    `;
-  }).join('');
+    return el('article', { className: 'course-row' },
+      el('div', {},
+        el('strong', {}, subject?.nombre || 'Materia'),
+        el('small', {}, `${item.dias.map(weekdayLabel).join(', ')} - ${item.desde} a ${item.hasta} - ${course?.nombre || 'Curso'} - ${item.escuela || course?.escuela || ''}`),
+      ),
+      el('div', { className: 'row-actions' },
+        el('button', { className: 'btn btn-ghost', dataset: { deleteContext: item.id } }, 'Quitar'),
+      ),
+    );
+  }));
+}
+
+async function upsertSubjectByName(name) {
+  const newSubjectName = String(name || '').trim();
+  if (!newSubjectName) return null;
+  const existing = activeSubjects().find((subject) => subject.nombre.toLowerCase() === newSubjectName.toLowerCase());
+  const subjectPayload = existing || { id: uid('mat'), nombre: newSubjectName, activo: true, updatedAt: nowIso() };
+  if (!existing) {
+    write(KEYS.subjects, [...read(KEYS.subjects), subjectPayload]);
+    notifyDataChanged({ scope: 'subjects' });
+    try {
+      await queue('subject', 'upsert', subjectPayload);
+    } catch (error) {
+      console.error('[aula-clara] subject sync failed', error);
+    }
+  }
+  return subjectPayload;
+}
+
+function validateStudentExcelFile(input, feedback, form) {
+  const maxMb = Number(form?.dataset.maxFileMb || 5);
+  const maxBytes = maxMb * 1024 * 1024;
+  const allowedExt = ['.xlsx', '.xls'];
+  const file = input?.files?.[0];
+
+  if (!file) {
+    if (feedback) {
+      feedback.textContent = '';
+      feedback.classList.add('is-hidden');
+    }
+    return { ok: false, error: 'Seleccioná un archivo Excel (.xlsx).' };
+  }
+
+  const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')).toLowerCase() : '';
+  if (!allowedExt.includes(ext)) {
+    const msg = `"${file.name}" no es un Excel válido. Usá .xlsx o .xls.`;
+    if (feedback) {
+      feedback.textContent = msg;
+      feedback.classList.remove('is-hidden', 'is-ok');
+      feedback.classList.add('is-warning');
+    }
+    return { ok: false, error: msg };
+  }
+
+  if (file.size > maxBytes) {
+    const msg = `"${file.name}" supera ${maxMb} MB.`;
+    if (feedback) {
+      feedback.textContent = msg;
+      feedback.classList.remove('is-hidden', 'is-ok');
+      feedback.classList.add('is-warning');
+    }
+    return { ok: false, error: msg };
+  }
+
+  if (feedback) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    feedback.textContent = `${file.name} listo para cargar (${sizeMb} MB).`;
+    feedback.classList.remove('is-hidden', 'is-warning');
+    feedback.classList.add('is-ok');
+  }
+
+  return { ok: true, file };
+}
+
+const STUDENT_MAPPABLE_FIELDS = [
+  { field: 'escuela', label: 'Escuela', required: true },
+  { field: 'curso', label: 'Curso', required: true },
+  { field: 'turno', label: 'Turno', required: true },
+  { field: 'apellido', label: 'Apellido', required: false, hint: 'Opcional si ya tenés Nombre completo' },
+  { field: 'nombre', label: 'Nombre', required: false, hint: 'Obligatorio si no usás Apellido' },
+  { field: 'dni', label: 'DNI', required: false },
+  { field: 'tutor', label: 'Tutor / contacto', required: false },
+  { field: 'materias', label: 'Materias', required: false },
+];
+
+function readStudentExcelTemplates() {
+  return read(KEYS.studentExcelMappings);
+}
+
+function writeStudentExcelTemplates(templates) {
+  write(KEYS.studentExcelMappings, templates);
+}
+
+function normalizeExcelHeaderLabel(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function scoreExcelTemplateMatch(templateLabels, currentHeaders) {
+  if (!Array.isArray(templateLabels) || !Array.isArray(currentHeaders) || !templateLabels.length || !currentHeaders.length) {
+    return 0;
+  }
+  let hits = 0;
+  templateLabels.forEach((label) => {
+    const normalized = normalizeExcelHeaderLabel(label);
+    if (!normalized) return;
+    if (currentHeaders.some((header) => normalizeExcelHeaderLabel(header) === normalized)) hits += 1;
+  });
+  return hits / Math.max(templateLabels.length, currentHeaders.length);
+}
+
+function findBestExcelTemplate(templates, headers) {
+  let best = null;
+  let bestScore = 0;
+  templates.forEach((template) => {
+    const score = scoreExcelTemplateMatch(template.columnLabels, headers);
+    if (score > bestScore) {
+      bestScore = score;
+      best = template;
+    }
+  });
+  return bestScore >= 0.55 ? best : null;
+}
+
+function buildStudentExcelMappingFromPreview(preview) {
+  return {
+    headerRow: Number(preview?.mapping?.headerRow || preview?.headerRow || 1),
+    columns: { ...(preview?.mapping?.columns || {}) },
+  };
+}
+
+function validateStudentExcelMappingClient(mapping) {
+  const errors = [];
+  const columns = mapping?.columns || {};
+  ['escuela', 'curso', 'turno'].forEach((field) => {
+    if (columns[field] == null || columns[field] === '') errors.push(`Asigná la columna de ${field}.`);
+  });
+  if ((columns.nombre == null || columns.nombre === '') && (columns.apellido == null || columns.apellido === '')) {
+    errors.push('Asigná al menos Nombre o Apellido.');
+  }
+  return errors;
 }
 
 function initStudents() {
-  const form = document.querySelector('[data-student-form]');
-  const list = document.querySelector('[data-student-list]');
-  const courseSelect = document.querySelector('[name="cursoId"]');
+  const root = document.querySelector('[data-students]');
+  const form = root?.querySelector('[data-student-form]');
+  const list = root?.querySelector('[data-student-list]');
+  const schoolSelect = form?.querySelector('[name="escuela"]');
+  const courseSelect = form?.querySelector('[name="cursoId"]');
   const subjectContainer = document.querySelector('[data-student-subjects]');
+  const newSubjectInput = form?.querySelector('[data-student-new-subject]');
+  const addSubjectButton = form?.querySelector('[data-student-add-subject]');
   if (!form || !list) return;
 
-  fillSelect(courseSelect, read(KEYS.courses), 'Seleccionar curso', 'id', (course) => `${course.escuela} - ${course.nombre} - ${course.turno}`);
+  const modeInputs = root.querySelectorAll('[data-student-mode-input]');
+  const modePanels = root.querySelectorAll('[data-student-mode-panel]');
+  const excelForm = root.querySelector('[data-student-excel-form]');
+  const excelFileInput = root.querySelector('[data-student-excel-file]');
+  const excelFeedback = root.querySelector('[data-student-excel-feedback]');
+  const excelPreview = root.querySelector('[data-student-excel-preview]');
+  const excelResult = root.querySelector('[data-student-excel-result]');
+  const excelSubmitBtn = excelForm?.querySelector('[data-student-excel-submit]');
+  const excelMappingPanel = root.querySelector('[data-student-excel-mapping]');
+  const excelMappingFields = root.querySelector('[data-student-excel-mapping-fields]');
+  const excelHeaderRowInput = root.querySelector('[data-student-excel-header-row]');
+  const excelApplyMappingBtn = root.querySelector('[data-student-excel-apply-mapping]');
+  const excelTemplateSelect = root.querySelector('[data-student-excel-template-select]');
+  const excelTemplateNameInput = root.querySelector('[data-student-excel-template-name]');
+  const excelTemplateSaveBtn = root.querySelector('[data-student-excel-template-save]');
+  const excelTemplateDeleteBtn = root.querySelector('[data-student-excel-template-delete]');
+
+  let currentStudentExcelPreview = null;
+  let currentStudentExcelMapping = null;
+  let appliedExcelTemplateName = '';
+
+  const renderStudentExcelTemplateOptions = (selectedId = '') => {
+    if (!excelTemplateSelect) return;
+    const templates = readStudentExcelTemplates();
+    const options = ['<option value="">Sin plantilla</option>'];
+    templates.forEach((template) => {
+      const selected = template.id === selectedId ? ' selected' : '';
+      options.push(`<option value="${template.id}"${selected}>${template.name}</option>`);
+    });
+    excelTemplateSelect.innerHTML = options.join('');
+  };
+
+  const renderStudentExcelMappingFields = (preview) => {
+    if (!excelMappingFields) return;
+    const columns = preview?.availableColumns || [];
+    const mapping = preview?.mapping?.columns || {};
+    const fields = preview?.mappableFields || STUDENT_MAPPABLE_FIELDS;
+
+    excelMappingFields.innerHTML = fields.map((field) => {
+      const options = ['<option value="">(No usar)</option>'];
+      columns.forEach((column) => {
+        const selected = Number(mapping[field.field]) === column.index ? ' selected' : '';
+        const label = column.label || `Columna ${column.index + 1}`;
+        options.push(`<option value="${column.index}"${selected}>${label}</option>`);
+      });
+      const tag = field.required ? 'obligatorio' : 'opcional';
+      const hint = field.hint ? `<small>${field.hint}</small>` : '';
+      return `
+        <div class="excel-mapping-field">
+          <label>
+            <span>${field.label} <span class="excel-ref-tag">${tag}</span></span>
+            <select data-student-excel-map-field="${field.field}">
+              ${options.join('')}
+            </select>
+            ${hint}
+          </label>
+        </div>
+      `;
+    }).join('');
+  };
+
+  const collectStudentExcelMapping = () => {
+    const headerRow = Math.max(1, Number(excelHeaderRowInput?.value || currentStudentExcelPreview?.headerRow || 1));
+    const columns = {};
+    excelMappingFields?.querySelectorAll('[data-student-excel-map-field]').forEach((select) => {
+      const field = select.getAttribute('data-student-excel-map-field');
+      if (!field) return;
+      const value = select.value;
+      columns[field] = value === '' ? null : Number(value);
+    });
+    return { headerRow, columns };
+  };
+
+  const syncStudentExcelMappingFromUI = () => {
+    currentStudentExcelMapping = collectStudentExcelMapping();
+    return currentStudentExcelMapping;
+  };
+
+  const showStudentExcelMappingPanel = (preview) => {
+    if (!excelMappingPanel) return;
+    excelMappingPanel.classList.remove('is-hidden');
+    if (excelHeaderRowInput) excelHeaderRowInput.value = String(preview?.mapping?.headerRow || preview?.headerRow || 1);
+    renderStudentExcelMappingFields(preview);
+    renderStudentExcelTemplateOptions();
+  };
+
+  const hideStudentExcelMappingPanel = () => {
+    excelMappingPanel?.classList.add('is-hidden');
+    if (excelMappingFields) excelMappingFields.innerHTML = '';
+    appliedExcelTemplateName = '';
+  };
+
+  const renderStudentExcelPreview = (preview) => {
+    if (!excelPreview) return;
+    if (!preview) {
+      excelPreview.hidden = true;
+      excelPreview.textContent = '';
+      if (excelSubmitBtn) excelSubmitBtn.disabled = false;
+      return;
+    }
+
+    excelPreview.hidden = false;
+    excelPreview.className = `import-result ${preview.canImport ? 'import-result-ok' : 'import-result-error'}`;
+
+    const lines = [
+      `Hoja "${preview.sheetName || '?'}" · encabezados en fila ${preview.headerRow || 1}.`,
+      `${preview.validRows} fila(s) lista(s) para cargar · ${preview.invalidRows} con error · ${preview.totalRows} total.`,
+    ];
+
+    if (appliedExcelTemplateName) {
+      lines.push(`Plantilla aplicada: ${appliedExcelTemplateName}.`);
+    }
+
+    if (preview.requiresMapping) {
+      lines.push('Revisá el mapeo de columnas antes de cargar.');
+    }
+
+    if (preview.preview?.length) {
+      const sample = preview.preview
+        .map((row) => `${row.nombre} (${row.curso}, ${row.turno})`)
+        .join(' · ');
+      lines.push(`Ejemplos: ${sample}${preview.validRows > preview.preview.length ? ' · …' : ''}`);
+    }
+
+    if (preview.mappingErrors?.length) {
+      lines.push(`Mapeo: ${preview.mappingErrors.join(' · ')}`);
+    }
+
+    if (preview.errors?.length) {
+      const errorPreview = preview.errors.slice(0, 4).map((item) => `Fila ${item.row}: ${item.message}`);
+      lines.push(`Errores: ${errorPreview.join(' · ')}${preview.errors.length > 4 ? ' · …' : ''}`);
+    }
+
+    excelPreview.textContent = lines.join(' ');
+    if (excelSubmitBtn) excelSubmitBtn.disabled = !preview.canImport;
+  };
+
+  const previewStudentExcelFile = async (file, mapping = null) => {
+    if (!file) {
+      renderStudentExcelPreview(null);
+      hideStudentExcelMappingPanel();
+      currentStudentExcelPreview = null;
+      currentStudentExcelMapping = null;
+      return null;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (mapping) formData.append('mapping', JSON.stringify(mapping));
+
+    const response = await fetch('/api/import/preview', {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin',
+    });
+    const preview = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      renderStudentExcelPreview({ canImport: false, errors: [{ row: 0, message: preview.error || 'No se pudo leer la planilla.' }] });
+      return null;
+    }
+
+    currentStudentExcelPreview = preview;
+    currentStudentExcelMapping = buildStudentExcelMappingFromPreview(preview);
+    showStudentExcelMappingPanel(preview);
+    renderStudentExcelPreview(preview);
+    return preview;
+  };
+
+  const tryApplyMatchingExcelTemplate = async (file, preview) => {
+    const templates = readStudentExcelTemplates();
+    const matched = findBestExcelTemplate(templates, preview?.detectedHeaders || []);
+    if (!matched) return preview;
+
+    appliedExcelTemplateName = matched.name;
+    if (excelTemplateSelect) excelTemplateSelect.value = matched.id;
+    if (excelTemplateNameInput) excelTemplateNameInput.value = matched.name;
+    if (excelHeaderRowInput) excelHeaderRowInput.value = String(matched.headerRow || preview.headerRow || 1);
+
+    const remapped = await previewStudentExcelFile(file, {
+      headerRow: matched.headerRow || preview.headerRow || 1,
+      columns: { ...(matched.columns || {}) },
+    });
+    return remapped || preview;
+  };
+
+  const setStudentMode = (mode) => {
+    const value = mode === 'excel' ? 'excel' : 'manual';
+    modeInputs.forEach((input) => {
+      input.checked = input.value === value;
+    });
+    modePanels.forEach((panel) => {
+      panel.classList.toggle('is-hidden', panel.getAttribute('data-student-mode-panel') !== value);
+    });
+  };
+
+  excelFileInput?.addEventListener('change', async () => {
+    const check = validateStudentExcelFile(excelFileInput, excelFeedback, excelForm);
+    if (!check.ok) {
+      renderStudentExcelPreview(null);
+      hideStudentExcelMappingPanel();
+      return;
+    }
+    if (excelResult) {
+      excelResult.hidden = true;
+      excelResult.textContent = '';
+    }
+    try {
+      if (excelSubmitBtn) {
+        excelSubmitBtn.disabled = true;
+        excelSubmitBtn.textContent = 'Analizando...';
+      }
+      await previewStudentExcelFile(check.file);
+      if (check.file && currentStudentExcelPreview) {
+        await tryApplyMatchingExcelTemplate(check.file, currentStudentExcelPreview);
+      }
+    } catch (error) {
+      console.error('[aula-clara] student excel preview failed', error);
+      renderStudentExcelPreview({ canImport: false, errors: [{ row: 0, message: 'No se pudo analizar la planilla.' }] });
+    } finally {
+      if (excelSubmitBtn) excelSubmitBtn.textContent = 'Cargar alumnos';
+    }
+  });
+
+  excelApplyMappingBtn?.addEventListener('click', async () => {
+    const check = validateStudentExcelFile(excelFileInput, excelFeedback, excelForm);
+    if (!check.ok) return;
+
+    const mapping = syncStudentExcelMappingFromUI();
+    const mappingErrors = validateStudentExcelMappingClient(mapping);
+    if (mappingErrors.length) {
+      renderStudentExcelPreview({
+        canImport: false,
+        mappingErrors,
+        errors: mappingErrors.map((message) => ({ row: 0, message })),
+        validRows: 0,
+        invalidRows: 0,
+        totalRows: 0,
+      });
+      return;
+    }
+
+    appliedExcelTemplateName = '';
+    try {
+      if (excelApplyMappingBtn) {
+        excelApplyMappingBtn.disabled = true;
+        excelApplyMappingBtn.textContent = 'Actualizando...';
+      }
+      await previewStudentExcelFile(check.file, mapping);
+    } catch (error) {
+      console.error('[aula-clara] student excel mapping preview failed', error);
+      renderStudentExcelPreview({ canImport: false, errors: [{ row: 0, message: 'No se pudo aplicar el mapeo.' }] });
+    } finally {
+      if (excelApplyMappingBtn) {
+        excelApplyMappingBtn.disabled = false;
+        excelApplyMappingBtn.textContent = 'Actualizar vista previa';
+      }
+    }
+  });
+
+  excelTemplateSelect?.addEventListener('change', async () => {
+    const templateId = excelTemplateSelect.value;
+    if (!templateId) {
+      appliedExcelTemplateName = '';
+      return;
+    }
+    const template = readStudentExcelTemplates().find((item) => item.id === templateId);
+    const check = validateStudentExcelFile(excelFileInput, excelFeedback, excelForm);
+    if (!template || !check.ok) return;
+
+    appliedExcelTemplateName = template.name;
+    if (excelTemplateNameInput) excelTemplateNameInput.value = template.name;
+    if (excelHeaderRowInput) excelHeaderRowInput.value = String(template.headerRow || 1);
+    await previewStudentExcelFile(check.file, {
+      headerRow: template.headerRow,
+      columns: { ...(template.columns || {}) },
+    });
+  });
+
+  excelTemplateSaveBtn?.addEventListener('click', () => {
+    const mapping = syncStudentExcelMappingFromUI();
+    const mappingErrors = validateStudentExcelMappingClient(mapping);
+    if (mappingErrors.length) {
+      alert(mappingErrors.join('\n'));
+      return;
+    }
+
+    const name = String(excelTemplateNameInput?.value || '').trim();
+    if (!name) {
+      alert('Escribí un nombre para la plantilla.');
+      excelTemplateNameInput?.focus();
+      return;
+    }
+
+    const templates = readStudentExcelTemplates();
+    const existing = templates.find((item) => item.name.toLowerCase() === name.toLowerCase());
+    const template = {
+      id: existing?.id || uid('excel-map'),
+      name,
+      headerRow: mapping.headerRow,
+      columns: mapping.columns,
+      columnLabels: (currentStudentExcelPreview?.detectedHeaders || []).map((label) => String(label || '')),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const next = existing
+      ? templates.map((item) => (item.id === existing.id ? template : item))
+      : [...templates, template];
+
+    writeStudentExcelTemplates(next);
+    renderStudentExcelTemplateOptions(template.id);
+    if (excelTemplateSelect) excelTemplateSelect.value = template.id;
+    appliedExcelTemplateName = template.name;
+    alert(`Plantilla "${name}" guardada.`);
+  });
+
+  excelTemplateDeleteBtn?.addEventListener('click', () => {
+    const templateId = excelTemplateSelect?.value;
+    if (!templateId) {
+      alert('Seleccioná una plantilla para eliminar.');
+      return;
+    }
+    const templates = readStudentExcelTemplates();
+    const target = templates.find((item) => item.id === templateId);
+    if (!target) return;
+    if (!window.confirm(`¿Eliminar la plantilla "${target.name}"?`)) return;
+
+    writeStudentExcelTemplates(templates.filter((item) => item.id !== templateId));
+    renderStudentExcelTemplateOptions();
+    if (excelTemplateNameInput) excelTemplateNameInput.value = '';
+    appliedExcelTemplateName = '';
+    alert('Plantilla eliminada.');
+  });
+
+  excelForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const check = validateStudentExcelFile(excelFileInput, excelFeedback, excelForm);
+    if (!check.ok) {
+      alert(check.error || 'Seleccioná un archivo Excel válido.');
+      excelFileInput?.focus();
+      return;
+    }
+
+    const mapping = syncStudentExcelMappingFromUI();
+    const mappingErrors = validateStudentExcelMappingClient(mapping);
+    if (mappingErrors.length) {
+      alert(mappingErrors.join('\n'));
+      return;
+    }
+
+    const submitBtn = excelForm.querySelector('[data-student-excel-submit]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Cargando...';
+    }
+    if (excelResult) {
+      excelResult.hidden = true;
+      excelResult.textContent = '';
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('type', 'alumnos');
+      formData.append('file', check.file);
+      formData.append('mapping', JSON.stringify(mapping));
+
+      const response = await fetch('/api/import', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin',
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        renderImportResult(excelResult, result, true);
+        return;
+      }
+
+      if (currentUser?.id) {
+        await hydrateLocalStorageFromServer(currentUser.id);
+      }
+      window.dispatchEvent(new CustomEvent('aula-clara:schools-changed'));
+      notifyDataChanged();
+      refreshSchoolOptions();
+      renderStudents(list, form);
+      renderImportResult(excelResult, result, false);
+      excelForm.reset();
+      hideStudentExcelMappingPanel();
+      currentStudentExcelPreview = null;
+      currentStudentExcelMapping = null;
+      renderStudentExcelPreview(null);
+      if (excelFeedback) {
+        excelFeedback.textContent = '';
+        excelFeedback.classList.add('is-hidden');
+        excelFeedback.classList.remove('is-ok', 'is-warning');
+      }
+    } catch (error) {
+      console.error('[aula-clara] student excel upload failed', error);
+      renderImportResult(excelResult, { error: 'Error de red al cargar la hoja. Revisá tu conexión e intentá de nuevo.' }, true);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Cargar alumnos';
+      }
+    }
+  });
+
+  const refreshCourseOptions = (school = '', selectedCourseId = '') => {
+    const courses = read(KEYS.courses).filter((course) => !school || course.escuela === school);
+    const previousValue = selectedCourseId || courseSelect?.value || '';
+    fillSelect(courseSelect, courses, school ? 'Seleccionar curso' : 'Elegí una escuela primero', 'id', courseLabel);
+    if (previousValue && courses.some((course) => course.id === previousValue)) {
+      courseSelect.value = previousValue;
+    } else if (courses.length === 1) {
+      courseSelect.value = courses[0].id;
+    }
+    if (courseSelect) courseSelect.disabled = !school || courses.length === 0;
+  };
+
+  const refreshSchoolOptions = (selectedSchool = '', selectedCourseId = '') => {
+    fillSchoolSelect(schoolSelect, 'Seleccionar escuela', selectedSchool);
+    refreshCourseOptions(schoolSelect?.value || '', selectedCourseId);
+  };
+
+  schoolSelect?.addEventListener('change', () => {
+    refreshCourseOptions(schoolSelect.value);
+  });
+
+  window.addEventListener('aula-clara:schools-changed', (event) => {
+    refreshSchoolOptions(event.detail?.selected || schoolSelect?.value || '');
+  });
+
+  refreshSchoolOptions();
   renderStudentSubjectPicker(subjectContainer);
+
+  const activateStudentMode = (mode) => {
+    setStudentMode(mode);
+    if (mode !== 'excel') {
+      refreshSchoolOptions();
+      renderStudentSubjectPicker(subjectContainer);
+    }
+  };
+
+  modeInputs.forEach((input) => {
+    input.addEventListener('change', () => {
+      if (input.checked) activateStudentMode(input.value);
+    });
+  });
+  activateStudentMode('manual');
+
+  const addSubjectFromInput = async () => {
+    const subjectPayload = await upsertSubjectByName(newSubjectInput?.value);
+    if (!subjectPayload) {
+      newSubjectInput?.focus();
+      return;
+    }
+    const currentSelected = Array.from(form.querySelectorAll('[name="subjectIds"]')).map((input) => input.value);
+    if (!currentSelected.includes(subjectPayload.id)) currentSelected.push(subjectPayload.id);
+    renderStudentSubjectPicker(subjectContainer, currentSelected);
+    if (newSubjectInput) newSubjectInput.value = '';
+  };
+
+  addSubjectButton?.addEventListener('click', () => { addSubjectFromInput(); });
+  newSubjectInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addSubjectFromInput();
+    }
+  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -465,15 +1472,20 @@ function initStudents() {
     const editingId = form.dataset.editingId;
     const students = read(KEYS.students);
     const selectedSubjects = Array.from(form.querySelectorAll('[name="subjectIds"]')).map((input) => input.value);
-    const newSubjectName = String(data.nuevaMateria || '').trim();
-    if (newSubjectName) {
-      const existing = activeSubjects().find((subject) => subject.nombre.toLowerCase() === newSubjectName.toLowerCase());
-      const subjectPayload = existing || { id: uid('mat'), nombre: newSubjectName, activo: true, updatedAt: nowIso() };
-      if (!existing) {
-        write(KEYS.subjects, [...read(KEYS.subjects), subjectPayload]);
-        await queue('subject', 'upsert', subjectPayload);
-      }
-      selectedSubjects.push(subjectPayload.id);
+    const pendingSubject = await upsertSubjectByName(data.nuevaMateria);
+    if (pendingSubject) selectedSubjects.push(pendingSubject.id);
+    const course = courseById(data.cursoId);
+    if (!data.escuela) {
+      alert('Elegí una escuela.');
+      return;
+    }
+    if (!data.cursoId) {
+      alert('Elegí un curso.');
+      return;
+    }
+    if (course && course.escuela !== data.escuela) {
+      alert('El curso seleccionado no pertenece a la escuela elegida.');
+      return;
     }
     const payload = {
       id: editingId || uid('al'),
@@ -487,12 +1499,15 @@ function initStudents() {
     };
     const next = editingId ? students.map((student) => student.id === editingId ? payload : student) : [...students, payload];
     write(KEYS.students, next);
-    await queue('student', 'upsert', payload);
     form.reset();
     delete form.dataset.editingId;
     form.querySelector('button[type="submit"]').textContent = 'Guardar alumno';
-    renderStudentSubjectPicker(subjectContainer);
-    renderStudents(list, form);
+    const refreshStudentPanel = () => {
+      refreshSchoolOptions();
+      renderStudentSubjectPicker(subjectContainer);
+      renderStudents(list, form);
+    };
+    await persistAndRefresh('student', 'upsert', payload, refreshStudentPanel);
   });
 
   list.addEventListener('click', async (event) => {
@@ -501,11 +1516,14 @@ function initStudents() {
     const students = read(KEYS.students);
 
     if (edit) {
+      activateStudentMode('manual');
       const student = students.find((item) => item.id === edit.dataset.editStudent);
       if (!student) return;
       form.dataset.editingId = student.id;
       form.nombre.value = student.nombre;
       form.dni.value = student.dni || '';
+      const course = courseById(student.cursoId);
+      refreshSchoolOptions(course?.escuela || '', student.cursoId);
       form.cursoId.value = student.cursoId;
       form.tutor.value = student.tutor || '';
       renderStudentSubjectPicker(subjectContainer, studentSubjectIds(student));
@@ -517,12 +1535,15 @@ function initStudents() {
       if (!confirm('Eliminar este alumno? Si tiene notas/asistencias se desactivara para no romper historiales.')) return;
       const next = students.map((student) => student.id === id ? { ...student, activo: false, updatedAt: nowIso() } : student);
       write(KEYS.students, next);
-      await queue('student', 'delete', { id, updatedAt: nowIso() });
-      renderStudents(list, form);
+      await persistAndRefresh('student', 'delete', { id, updatedAt: nowIso() }, () => renderStudents(list, form));
     }
   });
 
   renderStudents(list, form);
+  onPanelRefresh(() => {
+    refreshSchoolOptions();
+    renderStudents(list, form);
+  });
 }
 
 function renderStudentSubjectPicker(container, selectedIds = []) {
@@ -532,26 +1553,28 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
   const selected = new Set(selectedIds);
   const availableSubjects = subjects.filter((subject) => !selected.has(subject.id));
 
-  container.innerHTML = `
-    <label class="subject-search-label">
-      <span>Buscar materia</span>
-      <input type="search" data-subject-filter placeholder="Ej: Matem├ítica, Programaci├│n" autocomplete="off" />
-    </label>
-    <div class="selected-subjects" data-selected-subjects>
-      ${subjects.filter((subject) => selected.has(subject.id)).map((subject) => `
-        <span class="subject-chip" data-subject-id="${esc(subject.id)}">
-          ${esc(subject.nombre)}
-          <button type="button" aria-label="Eliminar ${esc(subject.nombre)}" data-remove-subject>├ù</button>
-          <input type="hidden" name="subjectIds" value="${esc(subject.id)}" />
-        </span>
-      `).join('')}
-    </div>
-    <div class="subject-suggestions" data-subject-suggestions>
-      ${availableSubjects.length ? availableSubjects.map((subject) => `
-        <button type="button" class="subject-suggestion" data-add-subject="${esc(subject.id)}">${esc(subject.nombre)}</button>
-      `).join('') : '<p class="muted">No hay materias disponibles para seleccionar.</p>'}
-    </div>
-  `;
+  replaceContent(container,
+    el('label', { className: 'subject-search-label' },
+      el('span', {}, 'Buscar materia'),
+      el('input', { type: 'search', attrs: { 'data-subject-filter': '', placeholder: 'Ej: Matemática, Programación', autocomplete: 'off' } }),
+    ),
+    el('div', { className: 'selected-subjects', attrs: { 'data-selected-subjects': '' } },
+      ...subjects.filter((subject) => selected.has(subject.id)).map((subject) =>
+        el('span', { className: 'subject-chip', dataset: { subjectId: subject.id } },
+          subject.nombre,
+          el('button', { type: 'button', attrs: { 'aria-label': `Eliminar ${subject.nombre}`, 'data-remove-subject': '' } }, '×'),
+          el('input', { type: 'hidden', name: 'subjectIds', value: subject.id }),
+        ),
+      ),
+    ),
+    el('div', { className: 'subject-suggestions', attrs: { 'data-subject-suggestions': '' } },
+      availableSubjects.length
+        ? availableSubjects.map((subject) =>
+          el('button', { type: 'button', className: 'subject-suggestion', dataset: { addSubject: subject.id } }, subject.nombre),
+        )
+        : el('p', { className: 'muted' }, 'No hay materias disponibles para seleccionar.'),
+    ),
+  );
 
   const filterInput = container.querySelector('[data-subject-filter]');
   const suggestions = container.querySelector('[data-subject-suggestions]');
@@ -559,9 +1582,13 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
   const updateSuggestions = (query = '') => {
     const value = String(query).trim().toLowerCase();
     const filtered = availableSubjects.filter((subject) => subject.nombre.toLowerCase().includes(value));
-    suggestions.innerHTML = filtered.length ? filtered.map((subject) => `
-      <button type="button" class="subject-suggestion" data-add-subject="${esc(subject.id)}">${esc(subject.nombre)}</button>
-    `).join('') : '<p class="muted">No se encontraron materias con ese nombre.</p>';
+    replaceContent(suggestions,
+      filtered.length
+        ? filtered.map((subject) =>
+          el('button', { type: 'button', className: 'subject-suggestion', dataset: { addSubject: subject.id } }, subject.nombre),
+        )
+        : el('p', { className: 'muted' }, 'No se encontraron materias con ese nombre.'),
+    );
   };
 
   if (filterInput) {
@@ -589,42 +1616,110 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
 function renderStudents(list) {
   const students = activeStudents();
   if (!students.length) {
-    list.innerHTML = '<div class="empty"><h3>No hay alumnos registrados</h3><p>Usa el formulario para crear el primer legajo.</p></div>';
+    replaceContent(list, emptyState('No hay alumnos registrados', 'Usa el formulario para crear el primer legajo.'));
     return;
   }
-  list.innerHTML = students.map((student) => {
+  replaceContent(list, ...students.map((student) => {
     const course = courseById(student.cursoId);
     const avg = average(gradesForStudent(student.id));
     const subjects = subjectsForStudent(student).map((subject) => subject.nombre).join(', ') || 'Sin materias';
-    return `
-      <article class="student-row">
-        <div>
-          <strong>${esc(student.nombre)}</strong>
-          <small>${esc(course?.nombre || 'Sin curso')} - ${esc(course?.turno || '')} - ${esc(subjects)}</small>
-          <small>${student.tutor ? `Contacto: ${esc(student.tutor)}` : 'Sin contacto cargado'}</small>
-          <small>DNI ${esc(student.dni || '-')} ┬À ${esc(course?.nombre || 'Sin curso')} ┬À ${esc(course?.turno || '')}</small>
-        </div>
-        <div class="row-actions">
-          <span class="tag ${avg !== null && avg < 6 ? 'danger' : 'ok'}">Promedio ${avg === null ? '-' : avg.toFixed(1)}</span>
-          <button class="btn btn-ghost" data-edit-student="${esc(student.id)}">Editar</button>
-          <button class="btn btn-danger" data-delete-student="${esc(student.id)}">Eliminar</button>
-        </div>
-      </article>
-    `;
-  }).join('');
+    return el('article', { className: 'student-row' },
+      el('div', {},
+        el('strong', {}, student.nombre),
+        el('small', {}, `${course?.escuela || 'Sin escuela'} · ${course?.nombre || 'Sin curso'} - ${course?.turno || ''} · ${subjects}`),
+        el('small', {}, student.tutor ? `Contacto: ${student.tutor}` : 'Sin contacto cargado'),
+        el('small', {}, `DNI ${student.dni || '-'} · ${course?.nombre || 'Sin curso'} · ${course?.turno || ''}`),
+      ),
+      el('div', { className: 'row-actions' },
+        tag(`Promedio ${avg === null ? '-' : avg.toFixed(1)}`, `tag ${avg !== null && avg < 6 ? 'danger' : 'ok'}`),
+        el('button', { className: 'btn btn-ghost', dataset: { editStudent: student.id } }, 'Editar'),
+        el('button', { className: 'btn btn-danger', dataset: { deleteStudent: student.id } }, 'Eliminar'),
+      ),
+    );
+  }));
+}
+
+function attendanceDraftKey(studentId, subjectId, date) {
+  return `${studentId}|${subjectId}|${date}`;
 }
 
 function initAttendance() {
   const root = document.querySelector('[data-attendance]');
   if (!root) return;
+  const takeView = root.querySelector('[data-attendance-take-view]');
+  const historyView = root.querySelector('[data-attendance-history-view]');
+  const viewToggle = root.querySelector('[data-attendance-view-toggle]');
   const courseSelect = root.querySelector('[data-filter-course]');
   const subjectSelect = root.querySelector('[data-filter-subject]');
   const dateInput = root.querySelector('[data-attendance-date]');
   const list = root.querySelector('[data-attendance-list]');
+  const saveBar = root.querySelector('[data-attendance-save-bar]');
+  const saveHint = root.querySelector('[data-attendance-save-hint]');
+  const saveButton = root.querySelector('[data-attendance-save]');
   const syncStatus = root.querySelector('[data-sync-status]');
   const connectionStatus = root.querySelector('[data-connection-status]');
   const syncButton = root.querySelector('[data-sync-button]');
-  const exportButton = root.querySelector('[data-export-excel]');
+  const historySchool = root.querySelector('[data-history-filter-school]');
+  const historyCourse = root.querySelector('[data-history-filter-course]');
+  const historySubject = root.querySelector('[data-history-filter-subject]');
+  const historyFrom = root.querySelector('[data-history-filter-from]');
+  const historyTo = root.querySelector('[data-history-filter-to]');
+  let showingHistory = false;
+  const draftAttendance = new Map();
+
+  const attendanceContext = () => ({
+    date: dateInput.value,
+    subjectId: subjectSelect.value,
+    courseId: courseSelect.value,
+  });
+
+  const savedAttendanceState = (studentId, date, subjectId, records = read(KEYS.attendance)) =>
+    records.find((item) => item.studentId === studentId && item.fecha === date && item.subjectId === subjectId)?.estado || '';
+
+  const displayedAttendanceState = (studentId, date, subjectId) => {
+    const key = attendanceDraftKey(studentId, subjectId, date);
+    if (draftAttendance.has(key)) return draftAttendance.get(key);
+    return savedAttendanceState(studentId, date, subjectId);
+  };
+
+  const isAttendanceDirty = (studentId, date, subjectId) => {
+    const key = attendanceDraftKey(studentId, subjectId, date);
+    if (!draftAttendance.has(key)) return false;
+    return draftAttendance.get(key) !== savedAttendanceState(studentId, date, subjectId);
+  };
+
+  const hasUnsavedAttendance = (date = dateInput.value, subjectId = subjectSelect.value) => {
+    for (const [key, state] of draftAttendance) {
+      const [studentId, sid, recordDate] = key.split('|');
+      if (sid !== subjectId || recordDate !== date) continue;
+      if (state !== savedAttendanceState(studentId, recordDate, sid)) return true;
+    }
+    return false;
+  };
+
+  const updateAttendanceSaveUi = () => {
+    const pending = hasUnsavedAttendance();
+    list?.classList.toggle('attendance-list--pending', pending);
+    saveBar?.classList.toggle('is-pending', pending);
+    saveHint?.classList.toggle('is-hidden', !pending);
+    if (saveButton) {
+      saveButton.disabled = !pending;
+      saveButton.textContent = pending ? 'Guardar asistencias' : 'Asistencias guardadas';
+    }
+  };
+
+  const confirmDiscardAttendanceDraft = () => {
+    if (!hasUnsavedAttendance()) return true;
+    return confirm('Hay asistencias sin guardar para esta fecha y materia. ¿Descartar los cambios?');
+  };
+
+  const clearDraftForContext = (date, subjectId) => {
+    for (const key of [...draftAttendance.keys()]) {
+      const [, sid, recordDate] = key.split('|');
+      if (sid === subjectId && recordDate === date) draftAttendance.delete(key);
+    }
+  };
+
   dateInput.value = today();
   fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
   fillSelect(subjectSelect, activeSubjects(), 'Materia');
@@ -633,12 +1728,74 @@ function initAttendance() {
   applySuggestedContextTo({ course: courseSelect, subject: subjectSelect });
   if (!subjectSelect.value && activeSubjects()[0]) subjectSelect.value = activeSubjects()[0].id;
 
-  [courseSelect, subjectSelect, dateInput].forEach((control) => control.addEventListener('change', renderAttendance));
-  list.addEventListener('click', async (event) => {
+  const schools = schoolNamesForSelect();
+  fillSelect(historySchool, schools.map((school) => ({ id: school, nombre: school })), 'Todos los colegios');
+  fillSelect(historyCourse, read(KEYS.courses), 'Todos los cursos', 'id', courseLabel);
+  fillSelect(historySubject, activeSubjects(), 'Todas las materias');
+
+  const renderHistory = () => renderAttendanceHistory(root);
+  [historySchool, historyCourse, historySubject, historyFrom, historyTo].forEach((control) => {
+    control?.addEventListener('change', renderHistory);
+  });
+
+  viewToggle?.addEventListener('click', () => {
+    if (!showingHistory && !confirmDiscardAttendanceDraft()) return;
+    showingHistory = !showingHistory;
+    takeView?.classList.toggle('is-hidden', showingHistory);
+    historyView?.classList.toggle('is-hidden', !showingHistory);
+    viewToggle.textContent = showingHistory ? 'Tomar asistencia' : 'Ver asistencias';
+    if (showingHistory) renderHistory();
+  });
+
+  let lastAttendanceContext = attendanceContext();
+
+  const handleAttendanceFilterChange = (control) => {
+    control.addEventListener('change', () => {
+      if (hasUnsavedAttendance(lastAttendanceContext.date, lastAttendanceContext.subjectId) && !confirmDiscardAttendanceDraft()) {
+        dateInput.value = lastAttendanceContext.date;
+        subjectSelect.value = lastAttendanceContext.subjectId;
+        courseSelect.value = lastAttendanceContext.courseId;
+        return;
+      }
+      clearDraftForContext(lastAttendanceContext.date, lastAttendanceContext.subjectId);
+      lastAttendanceContext = attendanceContext();
+      renderAttendance();
+    });
+  };
+
+  [courseSelect, subjectSelect, dateInput].forEach(handleAttendanceFilterChange);
+
+  list.addEventListener('click', (event) => {
     const button = event.target.closest('[data-attendance-state]');
     if (!button) return;
-    await saveAttendance(button.dataset.studentId, button.dataset.attendanceState, dateInput.value, subjectSelect.value);
+    const { date, subjectId } = attendanceContext();
+    if (!subjectId) {
+      alert('Elegí una materia antes de marcar asistencia.');
+      return;
+    }
+    const key = attendanceDraftKey(button.dataset.studentId, subjectId, date);
+    const nextState = button.dataset.attendanceState;
+    if (nextState === savedAttendanceState(button.dataset.studentId, date, subjectId)) {
+      draftAttendance.delete(key);
+    } else {
+      draftAttendance.set(key, nextState);
+    }
     renderAttendance();
+  });
+
+  saveButton?.addEventListener('click', async () => {
+    if (!hasUnsavedAttendance()) return;
+    saveButton.disabled = true;
+    saveButton.textContent = 'Guardando...';
+    try {
+      await commitAttendanceDraft(draftAttendance, attendanceContext());
+      notifyDataChanged({ scope: 'attendance' });
+    } catch (error) {
+      console.error('[aula-clara] attendance save failed', error);
+      alert('No se pudieron guardar las asistencias. Intentá de nuevo.');
+    } finally {
+      renderAttendance();
+    }
   });
 
   window.addEventListener('aula-clara:sync-finished', (event) => {
@@ -660,23 +1817,6 @@ function initAttendance() {
     syncButton.textContent = 'Sincronizar';
     if (syncStatus) syncStatus.textContent = formatSyncStatus(result.counts);
   });
-  exportButton?.addEventListener('click', async () => {
-    exportButton.disabled = true;
-    exportButton.textContent = 'Preparando...';
-    await syncPendingOperations();
-    const params = new URLSearchParams();
-    if (courseSelect.value) params.set('curso', courseSelect.value);
-    if (subjectSelect.value) params.set('materia', subjectSelect.value);
-    if (dateInput.value) {
-      params.set('desde', dateInput.value);
-      params.set('hasta', dateInput.value);
-    }
-    window.location.href = `/api/export?${params.toString()}`;
-    window.setTimeout(() => {
-      exportButton.disabled = false;
-      exportButton.textContent = 'Exportar Excel';
-    }, 800);
-  });
   Promise.all([countPendingOperations(), getOperationStatusCounts()]).then(([, counts]) => {
     if (syncStatus) syncStatus.textContent = formatSyncStatus(counts);
   });
@@ -687,37 +1827,116 @@ function initAttendance() {
       studentHasSubject(student, subjectSelect.value)
     )
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
-    const subjectId = subjectSelect.value;
-    const date = dateInput.value;
+    const { date, subjectId } = attendanceContext();
     const records = read(KEYS.attendance);
-    const present = students.filter((student) => records.some((item) => item.studentId === student.id && item.fecha === date && item.subjectId === subjectId && item.estado === 'presente')).length;
-    const absent = students.filter((student) => records.some((item) => item.studentId === student.id && item.fecha === date && item.subjectId === subjectId && item.estado === 'ausente')).length;
+    const present = students.filter((student) => displayedAttendanceState(student.id, date, subjectId) === 'presente').length;
+    const absent = students.filter((student) => displayedAttendanceState(student.id, date, subjectId) === 'ausente').length;
 
-    root.querySelector('[data-attendance-summary]').innerHTML = `
-      <div class="metric"><strong>${students.length}</strong><span>Alumnos</span></div>
-      <div class="metric"><strong>${present}</strong><span>Presentes</span></div>
-      <div class="metric"><strong>${absent}</strong><span>Ausentes</span></div>
-    `;
+    const summaryNode = root.querySelector('[data-attendance-summary]');
+    renderMetrics(summaryNode, [
+      { value: students.length, label: 'Alumnos' },
+      { value: present, label: 'Presentes' },
+      { value: absent, label: 'Ausentes' },
+    ]);
 
-    list.innerHTML = students.length ? students.map((student) => {
-      const current = records.find((item) => item.studentId === student.id && item.fecha === date && item.subjectId === subjectId)?.estado || '';
+    if (!students.length) {
+      replaceContent(list, emptyState('No hay alumnos para estos filtros', 'Registra alumnos o cambia el curso seleccionado.'));
+      updateAttendanceSaveUi();
+      return;
+    }
+
+    replaceContent(list, ...students.map((student) => {
+      const current = displayedAttendanceState(student.id, date, subjectId);
+      const dirty = isAttendanceDirty(student.id, date, subjectId);
       const course = courseById(student.cursoId);
-      return `
-        <article class="student-row">
-          <div>
-            <strong>${esc(student.nombre)}</strong>
-            <small>${esc(course?.nombre || '')} ┬À ${esc(subjectById(subjectId)?.nombre || 'Materia')}</small>
-          </div>
-          <div class="attendance-options">
-            <button data-student-id="${esc(student.id)}" data-attendance-state="presente" class="${current === 'presente' ? 'active-present' : ''}">Presente</button>
-            <button data-student-id="${esc(student.id)}" data-attendance-state="ausente" class="${current === 'ausente' ? 'active-absent' : ''}">Ausente</button>
-          </div>
-        </article>
-      `;
-    }).join('') : '<div class="empty"><h3>No hay alumnos para estos filtros</h3><p>Registra alumnos o cambia el curso seleccionado.</p></div>';
+      return el('article', {
+        className: `student-row${dirty ? ' attendance-row--dirty' : ''}`,
+      },
+        el('div', {},
+          el('strong', {}, student.nombre),
+          el('small', {}, `${course?.nombre || ''} · ${subjectById(subjectId)?.nombre || 'Materia'}`),
+        ),
+        el('div', { className: 'attendance-options' },
+          el('button', {
+            type: 'button',
+            dataset: { studentId: student.id, attendanceState: 'presente' },
+            className: current === 'presente' ? 'active-present' : '',
+          }, 'Presente'),
+          el('button', {
+            type: 'button',
+            dataset: { studentId: student.id, attendanceState: 'ausente' },
+            className: current === 'ausente' ? 'active-absent' : '',
+          }, 'Ausente'),
+        ),
+      );
+    }));
+    updateAttendanceSaveUi();
   }
 
   renderAttendance();
+  onPanelRefresh(() => {
+    fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
+    fillSelect(subjectSelect, activeSubjects(), 'Materia');
+    fillSelect(historyCourse, read(KEYS.courses), 'Todos los cursos', 'id', courseLabel);
+    fillSelect(historySubject, activeSubjects(), 'Todas las materias');
+    renderAttendance();
+    if (showingHistory) renderHistory();
+  });
+}
+
+async function commitAttendanceDraft(draftAttendance, context) {
+  if (!currentUser?.id) {
+    window.location.href = '/login';
+    return;
+  }
+
+  const { date, subjectId } = context;
+  if (!date || !subjectId) {
+    throw new Error('Faltan fecha o materia para guardar asistencia.');
+  }
+
+  let records = read(KEYS.attendance);
+  const dirtyEntries = [];
+
+  for (const [key, state] of draftAttendance) {
+    const [studentId, sid, recordDate] = key.split('|');
+    if (sid !== subjectId || recordDate !== date) continue;
+    const saved = records.find((item) =>
+      item.studentId === studentId && item.fecha === recordDate && item.subjectId === sid
+    )?.estado || '';
+    if (state === saved) continue;
+    dirtyEntries.push({ studentId, subjectId: sid, date: recordDate, state, key });
+  }
+
+  if (!dirtyEntries.length) return;
+
+  for (const entry of dirtyEntries) {
+    records = records.filter((item) => !(
+      item.studentId === entry.studentId &&
+      item.fecha === entry.date &&
+      item.subjectId === entry.subjectId
+    ));
+    const id = `attendance:${currentUser.id}:${entry.studentId}:${entry.subjectId}:${entry.date}`;
+    const updatedAt = nowIso();
+    records.push({
+      id,
+      studentId: entry.studentId,
+      subjectId: entry.subjectId,
+      fecha: entry.date,
+      estado: entry.state,
+      updatedAt,
+    });
+    await saveAttendanceOffline({
+      docenteId: currentUser.id,
+      studentId: entry.studentId,
+      subjectId: entry.subjectId,
+      fecha: entry.date,
+      estado: entry.state,
+    });
+    draftAttendance.delete(entry.key);
+  }
+
+  write(KEYS.attendance, records);
 }
 
 async function saveAttendance(studentId, state, date, subjectId) {
@@ -730,20 +1949,143 @@ async function saveAttendance(studentId, state, date, subjectId) {
   await saveAttendanceOffline({ docenteId: currentUser.id, studentId, subjectId, fecha: date, estado: state });
 }
 
+function gradeTextOptions(mode = 'conceptual') {
+  return mode === 'trayectoria' ? ['TEP', 'TED', 'TEA'] : ['Bien', 'Regular', 'Mal'];
+}
+
+function gradeEvaluationMeta(metaForm, subjectId = '') {
+  if (!metaForm) return null;
+  const data = Object.fromEntries(new FormData(metaForm));
+  return {
+    subjectId: subjectId || data.subjectId || '',
+    titulo: String(data.titulo || '').trim(),
+    tipoEvaluacion: data.tipoEvaluacion || 'TP',
+    peso: Number(data.peso || 100),
+    fecha: data.fecha || today(),
+    fechaEntrega: data.fechaEntrega || '',
+    periodo: data.periodo || defaultGradePeriod(),
+    modoCalificacion: data.modoCalificacion || 'numerica',
+  };
+}
+
+function savedGradeForEvaluation(studentId, subjectId, titulo, periodo) {
+  const normalizedTitle = String(titulo || '').trim();
+  if (!studentId || !subjectId || !normalizedTitle) return null;
+  return read(KEYS.grades).find((grade) =>
+    grade.studentId === studentId &&
+    grade.subjectId === subjectId &&
+    String(grade.titulo || '').trim() === normalizedTitle &&
+    (grade.periodo || inferGradePeriod(grade)) === periodo
+  ) || null;
+}
+
+function gradeDraftKey(studentId, subjectId, titulo, periodo) {
+  return `${studentId}|${subjectId}|${String(titulo || '').trim().toLowerCase()}|${periodo}`;
+}
+
+function gradeDraftHasValue(entry, mode = 'numerica') {
+  if (!entry) return false;
+  if (mode === 'numerica') return entry.valor !== '' && entry.valor !== null && entry.valor !== undefined;
+  return Boolean(entry.calificacionTexto);
+}
+
+function gradeEntryLabel(entry, mode = 'numerica') {
+  if (!gradeDraftHasValue(entry, mode)) return '-';
+  if (mode === 'numerica') return Number(entry.valor).toFixed(1);
+  return entry.calificacionTexto;
+}
+
+function coursesForGradeFilters(schoolName = '') {
+  const courses = read(KEYS.courses);
+  if (!schoolName) return courses;
+  return courses.filter((course) => String(course.escuela || '').toLowerCase() === schoolName.toLowerCase());
+}
+
+async function commitGradesDraft(draftGrades, meta) {
+  if (!currentUser?.id) {
+    window.location.href = '/login';
+    return;
+  }
+  if (!meta?.subjectId) throw new Error('Elegí una materia para guardar las calificaciones.');
+  if (!meta.titulo) throw new Error('Completá el título de la evaluación.');
+
+  const dirtyEntries = [];
+  for (const [key, entry] of draftGrades) {
+    const [studentId, subjectId, , periodo] = key.split('|');
+    if (subjectId !== meta.subjectId || periodo !== meta.periodo) continue;
+    if (!gradeDraftHasValue(entry, meta.modoCalificacion)) continue;
+
+    const saved = savedGradeForEvaluation(studentId, subjectId, meta.titulo, periodo);
+    const savedValue = saved
+      ? (meta.modoCalificacion === 'numerica'
+        ? String(saved.valor ?? '')
+        : String(saved.calificacionTexto || ''))
+      : '';
+    const draftValue = meta.modoCalificacion === 'numerica'
+      ? String(entry.valor ?? '')
+      : String(entry.calificacionTexto || '');
+    const savedMotivo = String(saved?.motivo || '');
+    const draftMotivo = String(entry.motivo || '');
+    if (savedValue === draftValue && savedMotivo === draftMotivo) continue;
+
+    dirtyEntries.push({ studentId, key, entry, savedId: saved?.id });
+  }
+
+  if (!dirtyEntries.length) return;
+
+  let grades = read(KEYS.grades);
+  for (const item of dirtyEntries) {
+    const isNumeric = meta.modoCalificacion === 'numerica';
+    const valor = isNumeric ? Number(item.entry.valor) : null;
+    if (isNumeric && (Number.isNaN(valor) || valor < 1 || valor > 10)) {
+      throw new Error('Las notas numéricas deben estar entre 1 y 10.');
+    }
+
+    const payload = {
+      id: item.savedId || uid('nota'),
+      studentId: item.studentId,
+      subjectId: meta.subjectId,
+      titulo: meta.titulo,
+      tipoEvaluacion: meta.tipoEvaluacion,
+      valor: isNumeric ? valor : null,
+      calificacionTexto: isNumeric ? '' : String(item.entry.calificacionTexto || ''),
+      motivo: String(item.entry.motivo || '').trim(),
+      peso: meta.peso,
+      fecha: meta.fecha,
+      fechaEntrega: meta.fechaEntrega,
+      periodo: meta.periodo,
+      updatedAt: nowIso(),
+    };
+
+    grades = grades.filter((grade) => grade.id !== payload.id);
+    grades.push(payload);
+    await queue('grade', 'upsert', payload);
+    draftGrades.delete(item.key);
+  }
+
+  write(KEYS.grades, grades);
+}
+
 function initGrades() {
   const root = document.querySelector('[data-grades]');
   if (!root) return;
-  const form = root.querySelector('[data-grade-form]');
-  const studentSelect = root.querySelector('[name="studentId"]');
-  const subjectSelect = root.querySelector('[name="subjectId"]');
+  const takeView = root.querySelector('[data-grades-take-view]');
+  const detailView = root.querySelector('[data-grades-detail-view]');
+  const viewToggle = root.querySelector('[data-grades-view-toggle]');
+  const metaForm = root.querySelector('[data-grade-meta-form]');
+  const subjectHidden = metaForm?.querySelector('[name="subjectId"]');
   const typeSelect = root.querySelector('[data-evaluation-type]');
   const importanceSelect = root.querySelector('[data-grade-importance]');
   const modeSelect = root.querySelector('[data-grade-mode]');
-  const numericField = root.querySelector('[data-numeric-grade-field]');
-  const textField = root.querySelector('[data-text-grade-field]');
-  const textGradeSelect = root.querySelector('[name="calificacionTexto"]');
+  const periodSelect = root.querySelector('[data-grade-period]');
+  const schoolFilter = root.querySelector('[data-grade-school-filter]');
   const courseFilter = root.querySelector('[data-grade-course-filter]');
   const subjectFilter = root.querySelector('[data-grade-subject-filter]');
+  const bulkList = root.querySelector('[data-grade-bulk-list]');
+  const bulkSummary = root.querySelector('[data-grade-bulk-summary]');
+  const saveBar = root.querySelector('[data-grades-save-bar]');
+  const saveHint = root.querySelector('[data-grades-save-hint]');
+  const saveButton = root.querySelector('[data-grades-save]');
   const table = root.querySelector('[data-grade-table]');
   const deliveries = root.querySelector('[data-grade-deliveries]');
   const deliveriesSummary = root.querySelector('[data-grade-deliveries-summary]');
@@ -754,44 +2096,273 @@ function initGrades() {
   const contextText = root.querySelector('[data-grade-context-text]');
   const inlineSubjectForm = root.querySelector('[data-inline-subject-form]');
   const inlineSubjectList = root.querySelector('[data-inline-subject-list]');
+  const detailCourseFilter = root.querySelector('[data-detail-course-filter]');
+  const detailSubjectFilter = root.querySelector('[data-detail-subject-filter]');
+  const detailPeriodFilter = root.querySelector('[data-detail-period-filter]');
+  let showingDetail = false;
+  const draftGrades = new Map();
 
-  const refreshStudentOptions = () => {
-    const students = activeStudents().filter((student) =>
-      (!courseFilter?.value || student.cursoId === courseFilter.value) &&
-      studentHasSubject(student, subjectFilter?.value || '')
+  const currentMeta = () => gradeEvaluationMeta(metaForm, subjectFilter?.value || '');
+
+  const syncPeriodFromType = () => {
+    if (!periodSelect) return;
+    const tipo = String(typeSelect?.value || '').toLowerCase();
+    if (/recuperatorio|recup/.test(tipo)) periodSelect.value = 'recuperatorio';
+    else if (/previa/.test(tipo)) periodSelect.value = 'previa';
+  };
+
+  const refreshCourseOptions = (selected = courseFilter?.value || '') => {
+    fillSelect(
+      courseFilter,
+      coursesForGradeFilters(schoolFilter?.value || ''),
+      'Todos los cursos',
+      'id',
+      courseLabel,
     );
-    fillSelect(studentSelect, students, 'Alumno');
+    if (selected && [...courseFilter.options].some((option) => option.value === selected)) {
+      courseFilter.value = selected;
+    }
   };
 
-  const updateMode = () => {
-    const mode = modeSelect.value;
-    const conceptual = mode !== 'numerica';
-    numericField?.classList.toggle('is-hidden', conceptual);
-    textField?.classList.toggle('is-hidden', !conceptual);
-    form.valor.required = !conceptual;
-    textGradeSelect.required = conceptual;
-    textGradeSelect.innerHTML = mode === 'trayectoria'
-      ? ['TEP', 'TED', 'TEA'].map((item) => `<option value="${item}">${item}</option>`).join('')
-      : ['Bien', 'Regular', 'Mal'].map((item) => `<option value="${item}">${item}</option>`).join('');
+  const refreshSchoolOptions = () => {
+    if (!schoolFilter) return;
+    const selected = schoolFilter.value;
+    fillSelect(
+      schoolFilter,
+      schoolNamesForSelect().map((nombre) => ({ id: nombre, nombre })),
+      'Todas las escuelas',
+    );
+    if (selected) schoolFilter.value = selected;
   };
 
-  const refreshSubjectOptions = () => {
+  const refreshSubjectOptions = (selected = subjectFilter?.value || '') => {
     fillSelect(subjectFilter, activeSubjects(), 'Elegir materia');
-    if (!subjectFilter.value && activeSubjects()[0]) subjectFilter.value = activeSubjects()[0].id;
-    if (subjectSelect) subjectSelect.value = subjectFilter.value;
+    if (selected && [...subjectFilter.options].some((option) => option.value === selected)) {
+      subjectFilter.value = selected;
+    } else if (!subjectFilter.value && activeSubjects()[0]) {
+      subjectFilter.value = activeSubjects()[0].id;
+    }
+    if (subjectHidden) subjectHidden.value = subjectFilter?.value || '';
     renderInlineSubjects(inlineSubjectList);
   };
 
-  fillSelect(courseFilter, read(KEYS.courses), 'Todos los cursos', 'id', courseLabel);
-  applySelectFromUrl(courseFilter, 'curso');
+  const hasUnsavedGrades = () => {
+    const meta = currentMeta();
+    if (!meta?.subjectId || !meta.titulo) return false;
+    for (const [key, entry] of draftGrades) {
+      const [studentId, subjectId, , periodo] = key.split('|');
+      if (subjectId !== meta.subjectId || periodo !== meta.periodo) continue;
+      if (!gradeDraftHasValue(entry, meta.modoCalificacion)) continue;
+      const saved = savedGradeForEvaluation(studentId, subjectId, meta.titulo, periodo);
+      const savedValue = saved
+        ? (meta.modoCalificacion === 'numerica'
+          ? String(saved.valor ?? '')
+          : String(saved.calificacionTexto || ''))
+        : '';
+      const draftValue = meta.modoCalificacion === 'numerica'
+        ? String(entry.valor ?? '')
+        : String(entry.calificacionTexto || '');
+      if (savedValue !== draftValue || String(saved?.motivo || '') !== String(entry.motivo || '')) return true;
+    }
+    return false;
+  };
+
+  const updateGradesSaveUi = () => {
+    const pending = hasUnsavedGrades();
+    bulkList?.classList.toggle('grade-bulk-list--pending', pending);
+    saveBar?.classList.toggle('is-pending', pending);
+    saveHint?.classList.toggle('is-hidden', !pending);
+    if (saveButton) {
+      saveButton.disabled = !pending;
+      saveButton.textContent = pending ? 'Guardar calificaciones' : 'Calificaciones guardadas';
+    }
+  };
+
+  const confirmDiscardGradesDraft = () => {
+    if (!hasUnsavedGrades()) return true;
+    return confirm('Hay calificaciones sin guardar para esta evaluación. ¿Descartar los cambios?');
+  };
+
+  const clearDraftForEvaluation = (subjectId, titulo, periodo) => {
+    const normalizedTitle = String(titulo || '').trim().toLowerCase();
+    for (const key of [...draftGrades.keys()]) {
+      const [, sid, title, p] = key.split('|');
+      if (sid === subjectId && title === normalizedTitle && p === periodo) draftGrades.delete(key);
+    }
+  };
+
+  const loadGradeIntoDraft = (grade) => {
+    if (!grade || !metaForm) return;
+    metaForm.titulo.value = grade.titulo || '';
+    metaForm.tipoEvaluacion.value = grade.tipoEvaluacion || 'TP';
+    metaForm.peso.value = grade.peso ?? 100;
+    metaForm.modoCalificacion.value = ['TEP', 'TED', 'TEA'].includes(grade.calificacionTexto)
+      ? 'trayectoria'
+      : grade.calificacionTexto ? 'conceptual' : 'numerica';
+    metaForm.fecha.value = grade.fecha || today();
+    metaForm.fechaEntrega.value = grade.fechaEntrega || '';
+    if (periodSelect) periodSelect.value = grade.periodo || inferGradePeriod(grade);
+    if (subjectFilter) subjectFilter.value = grade.subjectId;
+    if (subjectHidden) subjectHidden.value = grade.subjectId;
+
+    const key = gradeDraftKey(grade.studentId, grade.subjectId, grade.titulo, grade.periodo || inferGradePeriod(grade));
+    draftGrades.set(key, {
+      valor: grade.valor ?? '',
+      calificacionTexto: grade.calificacionTexto || '',
+      motivo: grade.motivo || '',
+    });
+    renderBulkGrades();
+    metaForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const renderBulkGrades = () => {
+    const meta = currentMeta();
+    const students = activeStudents().filter((student) =>
+      (!courseFilter?.value || student.cursoId === courseFilter.value) &&
+      studentHasSubject(student, subjectFilter?.value || '')
+    ).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+    if (bulkSummary) {
+      bulkSummary.textContent = students.length
+        ? `${students.length} alumno(s) · modo ${meta?.modoCalificacion || 'numérica'}`
+        : 'Seleccioná curso y materia para ver el listado.';
+    }
+
+    if (!students.length || !meta?.subjectId) {
+      replaceContent(
+        bulkList,
+        emptyState('Sin alumnos', 'No hay alumnos para los filtros seleccionados o falta elegir materia.'),
+      );
+      updateGradesSaveUi();
+      return;
+    }
+
+    if (!meta.titulo) {
+      replaceContent(
+        bulkList,
+        emptyState('Completá el título', 'Indicá el título de la evaluación para cargar notas al listado.'),
+      );
+      updateGradesSaveUi();
+      return;
+    }
+
+    replaceContent(bulkList, ...students.map((student) => {
+      const course = courseById(student.cursoId);
+      const key = gradeDraftKey(student.id, meta.subjectId, meta.titulo, meta.periodo);
+      const saved = savedGradeForEvaluation(student.id, meta.subjectId, meta.titulo, meta.periodo);
+      const draft = draftGrades.get(key) || {
+        valor: saved?.valor ?? '',
+        calificacionTexto: saved?.calificacionTexto || '',
+        motivo: saved?.motivo || '',
+      };
+      if (!draftGrades.has(key) && (saved || gradeDraftHasValue(draft, meta.modoCalificacion))) {
+        draftGrades.set(key, draft);
+      }
+
+      const displayed = draftGrades.get(key) || draft;
+      const dirty = (() => {
+        if (!gradeDraftHasValue(displayed, meta.modoCalificacion)) return false;
+        if (!saved) return true;
+        const savedValue = meta.modoCalificacion === 'numerica'
+          ? String(saved.valor ?? '')
+          : String(saved.calificacionTexto || '');
+        const draftValue = meta.modoCalificacion === 'numerica'
+          ? String(displayed.valor ?? '')
+          : String(displayed.calificacionTexto || '');
+        return savedValue !== draftValue || String(saved.motivo || '') !== String(displayed.motivo || '');
+      })();
+
+      const gradeControl = meta.modoCalificacion === 'numerica'
+        ? el('input', {
+          type: 'number',
+          className: 'grade-bulk-value',
+          attrs: {
+            min: 1,
+            max: 10,
+            step: 0.1,
+            placeholder: '1-10',
+            'aria-label': `Nota de ${student.nombre}`,
+          },
+          dataset: { gradeBulkStudent: student.id, gradeBulkField: 'valor' },
+          value: displayed.valor ?? '',
+        })
+        : (() => {
+          const select = el('select', {
+            className: 'grade-bulk-value',
+            dataset: { gradeBulkStudent: student.id, gradeBulkField: 'calificacionTexto' },
+            attrs: { 'aria-label': `Calificación de ${student.nombre}` },
+          },
+            el('option', { value: '' }, 'Sin calificar'),
+            ...gradeTextOptions(meta.modoCalificacion).map((option) =>
+              el('option', { value: option }, option),
+            ),
+          );
+          select.value = displayed.calificacionTexto || '';
+          return select;
+        })();
+
+      const hasValue = gradeDraftHasValue(displayed, meta.modoCalificacion);
+
+      return el('article', {
+        className: `student-row grade-bulk-row${dirty ? ' grade-row--dirty' : ''}${hasValue ? ' grade-row--scored' : ''}`,
+      },
+        el('div', {},
+          el('strong', {}, student.nombre),
+          el('small', {}, [course?.escuela, `${course?.nombre || ''} ${course?.turno || ''}`.trim(), subjectById(meta.subjectId)?.nombre].filter(Boolean).join(' · ')),
+          saved ? el('small', {}, `Guardada: ${gradeLabel(saved)}`) : null,
+        ),
+        el('div', { className: 'grade-bulk-inputs' },
+          gradeControl,
+          el('input', {
+            type: 'text',
+            className: `grade-motivo-field${hasValue ? '' : ' is-hidden'}`,
+            attrs: {
+              placeholder: 'Motivo u observación (opcional)',
+              'aria-label': `Motivo de la nota de ${student.nombre}`,
+            },
+            dataset: { gradeBulkStudent: student.id, gradeBulkField: 'motivo' },
+            value: displayed.motivo || '',
+          }),
+        ),
+      );
+    }));
+
+    updateGradesSaveUi();
+  };
+
+  refreshSchoolOptions();
+  refreshCourseOptions();
+  fillSelect(detailCourseFilter, read(KEYS.courses), 'Todos los cursos', 'id', courseLabel);
   refreshSubjectOptions();
+  if (detailPeriodFilter) detailPeriodFilter.value = defaultGradePeriod();
+  applySelectFromUrl(courseFilter, 'curso');
+  applySelectFromUrl(detailCourseFilter, 'curso');
   applySelectFromUrl(subjectFilter, 'materia');
+  applySelectFromUrl(detailSubjectFilter, 'materia');
   applySuggestedContextTo({ course: courseFilter, subject: subjectFilter });
-  if (subjectSelect) subjectSelect.value = subjectFilter?.value || '';
-  refreshStudentOptions();
-  root.querySelector('[name="fecha"]').value = today();
-  importanceSelect.value = String(importanceByType(typeSelect.value));
-  updateMode();
+  if (metaForm) {
+    metaForm.fecha.value = today();
+    if (periodSelect) periodSelect.value = defaultGradePeriod();
+    importanceSelect.value = String(importanceByType(typeSelect.value));
+  }
+
+  const renderDetail = () => renderGradesDetail(root);
+  [detailCourseFilter, detailSubjectFilter, detailPeriodFilter].forEach((control) => {
+    control?.addEventListener('change', renderDetail);
+  });
+
+  viewToggle?.addEventListener('click', () => {
+    if (!showingDetail && !confirmDiscardGradesDraft()) return;
+    showingDetail = !showingDetail;
+    takeView?.classList.toggle('is-hidden', showingDetail);
+    detailView?.classList.toggle('is-hidden', !showingDetail);
+    viewToggle.textContent = showingDetail ? 'Cargar notas' : 'Ver calificaciones';
+    if (showingDetail) {
+      if (detailCourseFilter && courseFilter?.value) detailCourseFilter.value = courseFilter.value;
+      if (detailSubjectFilter && subjectFilter?.value) detailSubjectFilter.value = subjectFilter.value;
+      renderDetail();
+    }
+  });
 
   const deliveryFilters = () => ({
     tipo: deliveryTypeFilter?.value || '',
@@ -801,9 +2372,9 @@ function initGrades() {
   });
 
   const renderAll = async () => {
-    if (subjectSelect) subjectSelect.value = subjectFilter?.value || '';
-    refreshStudentOptions();
+    if (subjectHidden) subjectHidden.value = subjectFilter?.value || '';
     renderGrades(table, subjectFilter?.value || '', courseFilter?.value || '');
+    renderBulkGrades();
 
     await renderUpcomingActivities(
       deliveries,
@@ -811,17 +2382,69 @@ function initGrades() {
       subjectFilter?.value || '',
       courseFilter?.value || '',
       deliveryFilters(),
+      {
+        onActivitySelect: (activity) => {
+          if (!metaForm) return;
+          if (hasUnsavedGrades() && !confirmDiscardGradesDraft()) return;
+          clearDraftForEvaluation(
+            subjectFilter?.value || '',
+            metaForm.titulo.value,
+            periodSelect?.value || defaultGradePeriod(),
+          );
+          metaForm.titulo.value = activity.titulo || '';
+          typeSelect.value = activity.tipo === 'evaluacion' ? 'Evaluacion' : 'TP';
+          importanceSelect.value = String(importanceByType(typeSelect.value));
+          if (activity.fecha_publicacion) metaForm.fecha.value = activity.fecha_publicacion;
+          if (activity.fecha_vencimiento) metaForm.fechaEntrega.value = activity.fecha_vencimiento;
+          syncPeriodFromType();
+          renderBulkGrades();
+        },
+      },
     );
 
     if (contextText) {
       const course = courseById(courseFilter?.value);
       const subject = subjectById(subjectFilter?.value);
-      contextText.textContent = [course?.nombre, subject?.nombre].filter(Boolean).join(' - ') || 'Elegir curso y materia.';
+      contextText.textContent = [
+        schoolFilter?.value || course?.escuela,
+        course ? `${course.nombre} (${course.turno})` : '',
+        subject?.nombre,
+      ].filter(Boolean).join(' · ') || 'Seleccioná escuela, curso y materia.';
     }
   };
 
+  let lastEvaluationSignature = '';
+
+  const handleEvaluationMetaChange = () => {
+    const meta = currentMeta();
+    const signature = `${meta?.subjectId}|${meta?.periodo}|${meta?.titulo}|${meta?.modoCalificacion}`;
+    if (lastEvaluationSignature && lastEvaluationSignature !== signature && hasUnsavedGrades() && !confirmDiscardGradesDraft()) {
+      const [subjectId, periodo, titulo, modoCalificacion] = lastEvaluationSignature.split('|');
+      if (subjectFilter) subjectFilter.value = subjectId;
+      if (subjectHidden) subjectHidden.value = subjectId;
+      if (metaForm) {
+        metaForm.titulo.value = titulo;
+        metaForm.modoCalificacion.value = modoCalificacion;
+      }
+      if (periodSelect) periodSelect.value = periodo;
+      renderBulkGrades();
+      return;
+    }
+    if (lastEvaluationSignature && lastEvaluationSignature !== signature) {
+      const [subjectId, periodo, titulo] = lastEvaluationSignature.split('|');
+      clearDraftForEvaluation(subjectId, titulo, periodo);
+    }
+    lastEvaluationSignature = signature;
+    renderBulkGrades();
+  };
+
+  schoolFilter?.addEventListener('change', () => {
+    refreshCourseOptions('');
+    renderAll();
+  });
   subjectFilter?.addEventListener('change', () => {
-    if (subjectFilter.value) subjectSelect.value = subjectFilter.value;
+    if (subjectHidden) subjectHidden.value = subjectFilter.value;
+    handleEvaluationMetaChange();
     renderAll();
   });
   courseFilter?.addEventListener('change', () => {
@@ -829,9 +2452,88 @@ function initGrades() {
   });
   typeSelect?.addEventListener('change', () => {
     importanceSelect.value = String(importanceByType(typeSelect.value));
-    if (!form.titulo.value.trim()) form.titulo.value = typeSelect.value;
+    if (!metaForm.titulo.value.trim()) metaForm.titulo.value = typeSelect.value;
+    syncPeriodFromType();
+    handleEvaluationMetaChange();
   });
-  modeSelect?.addEventListener('change', updateMode);
+  modeSelect?.addEventListener('change', handleEvaluationMetaChange);
+  periodSelect?.addEventListener('change', handleEvaluationMetaChange);
+  metaForm?.addEventListener('input', (event) => {
+    if (event.target?.name === 'titulo' || event.target?.name === 'fecha' || event.target?.name === 'fechaEntrega') {
+      handleEvaluationMetaChange();
+    }
+  });
+
+  [deliveryTypeFilter, deliveryStatusFilter, deliveryFromFilter, deliveryToFilter].forEach((element) => {
+    element?.addEventListener('change', () => { renderAll(); });
+  });
+
+  const updateBulkRowUi = (row, studentId) => {
+    if (!row) return;
+    const meta = currentMeta();
+    if (!meta?.subjectId || !meta.titulo) return;
+    const key = gradeDraftKey(studentId, meta.subjectId, meta.titulo, meta.periodo);
+    const saved = savedGradeForEvaluation(studentId, meta.subjectId, meta.titulo, meta.periodo);
+    const displayed = draftGrades.get(key) || {
+      valor: saved?.valor ?? '',
+      calificacionTexto: saved?.calificacionTexto || '',
+      motivo: saved?.motivo || '',
+    };
+    const hasValue = gradeDraftHasValue(displayed, meta.modoCalificacion);
+    const dirty = (() => {
+      if (!hasValue) return false;
+      if (!saved) return true;
+      const savedValue = meta.modoCalificacion === 'numerica'
+        ? String(saved.valor ?? '')
+        : String(saved.calificacionTexto || '');
+      const draftValue = meta.modoCalificacion === 'numerica'
+        ? String(displayed.valor ?? '')
+        : String(displayed.calificacionTexto || '');
+      return savedValue !== draftValue || String(saved.motivo || '') !== String(displayed.motivo || '');
+    })();
+    row.classList.toggle('grade-row--scored', hasValue);
+    row.classList.toggle('grade-row--dirty', dirty);
+    row.querySelector('.grade-motivo-field')?.classList.toggle('is-hidden', !hasValue);
+  };
+  bulkList?.addEventListener('input', (event) => {
+    const field = event.target.closest('[data-grade-bulk-field]');
+    if (!field) return;
+    const meta = currentMeta();
+    if (!meta?.subjectId || !meta.titulo) return;
+    const studentId = field.dataset.gradeBulkStudent;
+    const key = gradeDraftKey(studentId, meta.subjectId, meta.titulo, meta.periodo);
+    const current = draftGrades.get(key) || { valor: '', calificacionTexto: '', motivo: '' };
+    const next = { ...current, [field.dataset.gradeBulkField]: field.value };
+    if (!gradeDraftHasValue(next, meta.modoCalificacion) && !next.motivo) {
+      draftGrades.delete(key);
+    } else {
+      draftGrades.set(key, next);
+    }
+    updateBulkRowUi(field.closest('.grade-bulk-row'), studentId);
+    updateGradesSaveUi();
+  });
+
+  bulkList?.addEventListener('change', (event) => {
+    const field = event.target.closest('[data-grade-bulk-field]');
+    if (!field || field.dataset.gradeBulkField === 'motivo') return;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  saveButton?.addEventListener('click', async () => {
+    if (!hasUnsavedGrades()) return;
+    const meta = currentMeta();
+    saveButton.disabled = true;
+    saveButton.textContent = 'Guardando...';
+    try {
+      await commitGradesDraft(draftGrades, meta);
+      notifyDataChanged({ scope: 'grades' });
+      renderAll();
+    } catch (error) {
+      console.error('[aula-clara] grades save failed', error);
+      alert(error instanceof Error ? error.message : 'No se pudieron guardar las calificaciones. Intentá de nuevo.');
+      updateGradesSaveUi();
+    }
+  });
 
   [deliveryTypeFilter, deliveryStatusFilter, deliveryFromFilter, deliveryToFilter].forEach((element) => {
     element?.addEventListener('change', () => { renderAll(); });
@@ -844,49 +2546,11 @@ function initGrades() {
     if (!nombre) return;
     const payload = { id: uid('mat'), nombre, activo: true, updatedAt: nowIso() };
     write(KEYS.subjects, [...read(KEYS.subjects), payload]);
-    await queue('subject', 'upsert', payload);
     inlineSubjectForm.reset();
-    refreshSubjectOptions();
-    renderAll();
-  });
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const data = Object.fromEntries(new FormData(form));
-    const editingId = form.dataset.editingId;
-    const isNumeric = data.modoCalificacion === 'numerica';
-    const payload = {
-      id: editingId || uid('nota'),
-      studentId: data.studentId,
-      subjectId: data.subjectId || subjectFilter?.value || subjectSelect?.value,
-      titulo: data.titulo.trim(),
-      tipoEvaluacion: data.tipoEvaluacion || 'TP',
-      valor: isNumeric ? Number(data.valor) : null,
-      calificacionTexto: isNumeric ? '' : String(data.calificacionTexto || ''),
-      peso: Number(data.peso || 100),
-      fecha: data.fecha || today(),
-      fechaEntrega: data.fechaEntrega || '',
-      updatedAt: nowIso(),
-    };
-    if (!payload.subjectId) {
-      alert('Eleg├¡ una materia.');
-      return;
-    }
-    if (payload.valor !== null && (Number.isNaN(payload.valor) || payload.valor < 1 || payload.valor > 10)) {
-      alert('La nota num├®rica debe estar entre 1 y 10.');
-      return;
-    }
-    const grades = read(KEYS.grades);
-    write(KEYS.grades, editingId ? grades.map((grade) => grade.id === editingId ? payload : grade) : [...grades, payload]);
-    await queue('grade', 'upsert', payload);
-    form.reset();
-    delete form.dataset.editingId;
-    root.querySelector('[name="fecha"]').value = today();
-    importanceSelect.value = String(importanceByType(typeSelect.value));
-    subjectSelect.value = subjectFilter?.value || subjectSelect.value;
-    updateMode();
-    form.querySelector('button[type="submit"]').textContent = 'Guardar calificaci├│n';
-    renderAll();
+    await persistAndRefresh('subject', 'upsert', payload, () => {
+      refreshSubjectOptions(subjectFilter?.value || '');
+      renderAll();
+    });
   });
 
   table.addEventListener('click', async (event) => {
@@ -896,30 +2560,33 @@ function initGrades() {
     if (edit) {
       const grade = grades.find((item) => item.id === edit.dataset.editGrade);
       if (!grade) return;
-      form.dataset.editingId = grade.id;
-      form.studentId.value = grade.studentId;
-      form.subjectId.value = grade.subjectId;
-      form.titulo.value = grade.titulo;
-      form.tipoEvaluacion.value = grade.tipoEvaluacion || 'TP';
-      form.modoCalificacion.value = ['TEP', 'TED', 'TEA'].includes(grade.calificacionTexto) ? 'trayectoria' : grade.calificacionTexto ? 'conceptual' : 'numerica';
-      updateMode();
-      form.valor.value = grade.valor ?? '';
-      form.calificacionTexto.value = grade.calificacionTexto || textGradeSelect.value;
-      form.peso.value = grade.peso;
-      form.fecha.value = grade.fecha;
-      form.fechaEntrega.value = grade.fechaEntrega || '';
-      form.querySelector('button[type="submit"]').textContent = 'Actualizar calificaci├│n';
+      if (hasUnsavedGrades() && !confirmDiscardGradesDraft()) return;
+      draftGrades.clear();
+      if (courseFilter && grade.studentId) {
+        const student = studentById(grade.studentId);
+        if (student?.cursoId) courseFilter.value = student.cursoId;
+      }
+      if (subjectFilter) subjectFilter.value = grade.subjectId;
+      loadGradeIntoDraft(grade);
+      renderAll();
     }
     if (remove) {
       const id = remove.dataset.deleteGrade;
       if (!confirm('┬┐Eliminar esta calificaci├│n? El promedio se recalcular├í autom├íticamente.')) return;
       write(KEYS.grades, grades.filter((grade) => grade.id !== id));
-      await queue('grade', 'delete', { id, updatedAt: nowIso() });
-      renderAll();
+      await persistAndRefresh('grade', 'delete', { id, updatedAt: nowIso() }, renderAll);
     }
   });
 
   renderAll();
+  onPanelRefresh(() => {
+    refreshSchoolOptions();
+    refreshCourseOptions(courseFilter?.value || '');
+    fillSelect(detailCourseFilter, read(KEYS.courses), 'Todos los cursos', 'id', courseLabel);
+    refreshSubjectOptions(subjectFilter?.value || '');
+    void renderAll();
+    if (showingDetail) renderDetail();
+  });
 }
 
 function renderGrades(table, subjectId = '', courseId = '') {
@@ -927,45 +2594,48 @@ function renderGrades(table, subjectId = '', courseId = '') {
     (!courseId || student.cursoId === courseId) &&
     studentHasSubject(student, subjectId)
   );
-  table.innerHTML = `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Alumno</th><th>Promedio</th><th>Asistencia</th><th>Calificaciones</th><th>Estado</th></tr></thead>
-        <tbody>
-          ${students.map((student) => {
-            const avg = average(gradesForStudent(student.id, subjectId));
-            const rate = attendanceRate(student.id, subjectId);
-            const grades = gradesForStudent(student.id, subjectId);
-            const status = avg !== null && avg < 6 ? 'danger' : rate !== null && rate < 75 ? 'warning' : 'ok';
-            return `
-              <tr>
-                <td><strong>${esc(student.nombre)}</strong><small>${esc(courseById(student.cursoId)?.nombre || 'Sin curso')}</small></td>
-                <td>${avg === null ? '-' : avg.toFixed(1)}</td>
-                <td>${rate === null ? '-' : rate.toFixed(0) + '%'}</td>
-                <td><div class="notes-list">${grades.map((grade) => `
-                  <span class="tag">
-                    ${esc(grade.tipoEvaluacion || 'Eval.')} - ${esc(grade.titulo)}: ${esc(gradeLabel(grade))}
-                    <small>${esc(importanceLabel(grade.peso))}</small>
-                    <button data-edit-grade="${esc(grade.id)}" title="Editar">Editar</button>
-                    <button data-delete-grade="${esc(grade.id)}" title="Eliminar">Eliminar</button>
-                  </span>
-                `).join('') || '<span class="tag">Sin notas</span>'}</div></td>
-                <td><span class="tag ${status}">${status === 'danger' ? 'Riesgo' : status === 'warning' ? 'Atencion' : 'Correcto'}</span></td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+
+  const rows = students.map((student) => {
+    const avg = average(gradesForStudent(student.id, subjectId));
+    const rate = attendanceRate(student.id, subjectId);
+    const grades = gradesForStudent(student.id, subjectId);
+    const status = avg !== null && avg < 6 ? 'danger' : rate !== null && rate < 75 ? 'warning' : 'ok';
+    const notesList = el('div', { className: 'notes-list' },
+      grades.length
+        ? grades.map((grade) =>
+          el('span', { className: 'tag' },
+            `${grade.tipoEvaluacion || 'Eval.'} - ${grade.titulo}: ${gradeLabel(grade)} `,
+            grade.motivo ? el('small', {}, `· ${grade.motivo}`) : null,
+            el('small', {}, importanceLabel(grade.peso)),
+            el('button', { dataset: { editGrade: grade.id }, attrs: { title: 'Editar' } }, 'Editar'),
+            el('button', { dataset: { deleteGrade: grade.id }, attrs: { title: 'Eliminar' } }, 'Eliminar'),
+          ),
+        )
+        : tag('Sin notas'),
+    );
+    return [
+      [
+        el('strong', {}, student.nombre),
+        el('small', {}, courseById(student.cursoId)?.nombre || 'Sin curso'),
+      ],
+      avg === null ? '-' : avg.toFixed(1),
+      rate === null ? '-' : `${rate.toFixed(0)}%`,
+      notesList,
+      tag(status === 'danger' ? 'Riesgo' : status === 'warning' ? 'Atencion' : 'Correcto', `tag ${status}`),
+    ];
+  });
+
+  renderTable(
+    table,
+    ['Alumno', 'Promedio', 'Asistencia', 'Calificaciones', 'Estado'],
+    rows,
+    emptyState('Sin alumnos', 'No hay alumnos para los filtros seleccionados.'),
+  );
 }
 
 function renderInlineSubjects(list) {
   if (!list) return;
-  const subjects = activeSubjects();
-  list.innerHTML = subjects.length
-    ? subjects.map((subject) => `<span class="tag">${esc(subject.nombre)}</span>`).join('')
-    : '<span class="tag">Sin materias</span>';
+  renderTags(list, activeSubjects(), (subject) => subject.nombre, 'Sin materias');
 }
 
 function deliveryStatusLabel(status) {
@@ -1038,10 +2708,11 @@ function filterUpcomingActivities(items, filters = {}) {
   });
 }
 
-async function renderUpcomingActivities(list, summary, subjectId = '', courseId = '', filters = {}) {
+async function renderUpcomingActivities(list, summary, subjectId = '', courseId = '', filters = {}, options = {}) {
+  const { onActivitySelect } = options;
   if (!list) return;
 
-  list.innerHTML = '<div class="empty"><h3>Cargando actividades...</h3></div>';
+  replaceContent(list, emptyState('Cargando actividades...'));
 
   const [actividades, entregas] = await Promise.all([
     fetchActividadesForContext(courseId, subjectId),
@@ -1066,45 +2737,59 @@ async function renderUpcomingActivities(list, summary, subjectId = '', courseId 
   const enProgreso = items.filter((item) => item.seguimiento === 'en_progreso').length;
 
   if (summary) {
-    summary.innerHTML = `
-      <article class="metric panel">
-        <span>Total filtradas</span>
-        <strong>${items.length}</strong>
-      </article>
-      <article class="metric panel">
-        <span>Pr├│ximas</span>
-        <strong>${proximas}</strong>
-      </article>
-      <article class="metric panel">
-        <span>En progreso</span>
-        <strong>${enProgreso}</strong>
-      </article>
-    `;
+    renderPanelMetrics(summary, [
+      { label: 'Total filtradas', value: items.length },
+      { label: 'Próximas', value: proximas },
+      { label: 'En progreso', value: enProgreso },
+    ]);
   }
 
-  list.innerHTML = items.length ? items.map((item) => {
-    const fecha = item.fecha_vencimiento || item.fecha_publicacion || 'Sin fecha';
-    const tipoLabel = item.tipo === 'tp' ? 'TP' : 'Evaluaci├│n';
+  if (!items.length) {
+    replaceContent(list, emptyState('Sin actividades para este filtro', 'Creá actividades en la sección Actividades o ajustá curso/materia.'));
+    return { actividades: enriched, entregas };
+  }
+
+  replaceContent(list, ...items.map((item) => {
+    const fechaPublicacion = item.fecha_publicacion || '';
+    const fechaEntrega = item.fecha_vencimiento || '';
+    const fecha = fechaEntrega || fechaPublicacion || 'Sin fecha';
+    const tipoLabel = item.tipo === 'tp' ? 'TP' : 'Evaluación';
     const proxima = item.fecha_vencimiento && new Date(`${item.fecha_vencimiento}T23:59:59`).getTime() >= Date.now();
     const cardClass = proxima ? 'event-card--warning' : item.seguimiento === 'completado' ? 'event-card--info' : '';
-    return `
-      <article class="event-card ${cardClass}">
-        <div>
-          <span class="tag">${esc(tipoLabel)}</span>
-          <span class="tag ${deliveryStatusClass(item.seguimiento)}">${esc(deliveryStatusLabel(item.seguimiento))}</span>
-          ${proxima ? '<span class="tag warning">Pr├│xima</span>' : ''}
-        </div>
-        <strong>${esc(item.titulo)}</strong>
-        <small>${esc([item.curso, item.materia].filter(Boolean).join(' ┬À '))}</small>
-        <p>Entrega: ${esc(fecha)} ┬À ${item.entregasCount} trabajo(s) cargado(s)</p>
-      </article>
-    `;
-  }).join('') : `
-    <div class="empty">
-      <h3>Sin actividades para este filtro</h3>
-      <p>Cre├í actividades en la secci├│n Actividades o ajust├í curso/materia.</p>
-    </div>
-  `;
+    const card = el('article', {
+      className: `event-card grade-activity-card ${cardClass}`.trim(),
+      ...(onActivitySelect ? {
+        dataset: { gradeActivityId: item.id },
+        attrs: { role: 'button', tabindex: '0', title: 'Usar esta actividad para cargar notas' },
+      } : {}),
+    },
+      el('div', {},
+        tag(tipoLabel),
+        tag(deliveryStatusLabel(item.seguimiento), `tag ${deliveryStatusClass(item.seguimiento)}`),
+        proxima ? tag('Próxima', 'tag warning') : null,
+      ),
+      el('strong', {}, item.titulo),
+      el('small', {}, [item.colegio, item.turno, item.curso, item.materia].filter(Boolean).join(' · ')),
+      el('p', {}, [
+        fechaPublicacion ? `Publicación: ${fechaPublicacion}` : null,
+        fechaEntrega ? `Entrega: ${fechaEntrega}` : null,
+      ].filter(Boolean).join(' · ') || `Fecha: ${fecha}`),
+      el('p', {}, `${item.entregasCount} entrega(s) · ${alumnosCount} alumno(s) en contexto`),
+    );
+
+    if (onActivitySelect) {
+      const activate = () => onActivitySelect(item);
+      card.addEventListener('click', activate);
+      card.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          activate();
+        }
+      });
+    }
+
+    return card;
+  }));
 
   return { actividades: enriched, entregas };
 }
@@ -1133,7 +2818,7 @@ function trabajoEstadoLabel(item) {
 
 async function renderTrabajoHistory(list, courseId = '', subjectId = '', estado = '') {
   if (!list) return [];
-  list.innerHTML = '<div class="empty"><h3>Cargando trabajos...</h3></div>';
+  replaceContent(list, emptyState('Cargando trabajos...'));
 
   let entregas = await fetchTrabajosForContext(courseId, subjectId, estado === 'enviado' ? { estado } : {});
   if (estado === 'calificado') {
@@ -1142,35 +2827,36 @@ async function renderTrabajoHistory(list, courseId = '', subjectId = '', estado 
     entregas = entregas.filter((item) => !trabajoTieneCalificacion(item));
   }
 
-  list.innerHTML = entregas.length ? entregas.map((item) => {
-    const archivos = Array.isArray(item.archivos) ? item.archivos : [];
-    const archivosHtml = archivos.map((archivo) => `
-      <span class="tag">
-        ${esc(archivo.filename)} (${formatFileSize(archivo.size_bytes)})
-        <a href="/api/trabajos/archivos/${esc(archivo.id)}" target="_blank" rel="noopener">Descargar</a>
-        <a href="/api/trabajos/archivos/${esc(archivo.id)}?preview=1" target="_blank" rel="noopener">Vista previa</a>
-      </span>
-    `).join('');
+  if (!entregas.length) {
+    replaceContent(list, emptyState('Sin trabajos cargados', 'Usá el formulario para subir entregas de alumnos o docentes.'));
+    return entregas;
+  }
 
-    return `
-      <article class="student-row">
-        <div>
-          <strong>${esc(item.titulo)}</strong>
-          <small>${esc([item.curso, item.materia, item.alumno].filter(Boolean).join(' ┬À '))}</small>
-          <small>${esc(item.submitted_at?.slice(0, 10) || '')} ┬À ${esc(trabajoEstadoLabel(item))}</small>
-        </div>
-        <div class="notes-list">${archivosHtml || '<span class="tag">Sin archivos</span>'}</div>
-        <div class="actions-group">
-          <button class="btn btn-secondary btn-sm" type="button" data-reenviar-trabajo="${esc(item.id)}">Reenviar</button>
-        </div>
-      </article>
-    `;
-  }).join('') : `
-    <div class="empty">
-      <h3>Sin trabajos cargados</h3>
-      <p>Us├í el formulario para subir entregas de alumnos o docentes.</p>
-    </div>
-  `;
+  replaceContent(list, ...entregas.map((item) => {
+    const archivos = Array.isArray(item.archivos) ? item.archivos : [];
+    const archivosNodes = archivos.length
+      ? archivos.map((archivo) =>
+        el('span', { className: 'tag' },
+          `${archivo.filename} (${formatFileSize(archivo.size_bytes)}) `,
+          el('a', { href: `/api/trabajos/archivos/${archivo.id}`, target: '_blank', rel: 'noopener' }, 'Descargar'),
+          ' ',
+          el('a', { href: `/api/trabajos/archivos/${archivo.id}?preview=1`, target: '_blank', rel: 'noopener' }, 'Vista previa'),
+        ),
+      )
+      : [tag('Sin archivos')];
+
+    return el('article', { className: 'student-row' },
+      el('div', {},
+        el('strong', {}, item.titulo),
+        el('small', {}, [item.curso, item.materia, item.alumno].filter(Boolean).join(' · ')),
+        el('small', {}, `${item.submitted_at?.slice(0, 10) || ''} · ${trabajoEstadoLabel(item)}`),
+      ),
+      el('div', { className: 'notes-list' }, ...archivosNodes),
+      el('div', { className: 'actions-group' },
+        el('button', { className: 'btn btn-secondary btn-sm', type: 'button', dataset: { reenviarTrabajo: item.id } }, 'Reenviar'),
+      ),
+    );
+  }));
 
   return entregas;
 }
@@ -1188,8 +2874,13 @@ function fillActividadSelect(select, actividades = [], options = {}) {
     (!cursoId || item.curso_id === cursoId) &&
     (!materiaId || item.materia_id === materiaId)
   );
-  select.innerHTML = `<option value="">${esc(placeholder)}</option>` +
-    filtered.map((item) => `<option value="${esc(item.id)}">${esc(item.titulo)} (${activityTipoLabel(item)})</option>`).join('');
+  fillSelectOptions(
+    select,
+    filtered,
+    placeholder,
+    'id',
+    (item) => `${item.titulo} (${activityTipoLabel(item)})`,
+  );
   select.required = required;
   if (current && filtered.some((item) => item.id === current)) select.value = current;
 }
@@ -1221,7 +2912,7 @@ function initTrabajosEntregas(root, context = {}) {
       (!getCourseId() || student.cursoId === getCourseId()) &&
       studentHasSubject(student, getMateriaId())
     );
-    fillSelect(trabajoAlumnoSelect, students, 'Sin alumno espec├¡fico');
+    fillSelect(trabajoAlumnoSelect, students, 'Sin alumno específico');
   };
 
   const refresh = async () => {
@@ -1229,11 +2920,11 @@ function initTrabajosEntregas(root, context = {}) {
     const materiaId = getMateriaId();
     if (!cursoId || !materiaId) {
       fillActividadSelect(trabajoActividadSelect, [], {
-        placeholder: 'Eleg├¡ curso y materia arriba',
+        placeholder: 'Elegí curso y materia arriba',
         required: true,
       });
       if (trabajoHistory) {
-        trabajoHistory.innerHTML = '<div class="empty"><h3>Eleg├¡ curso y materia</h3><p>Defin├¡ el contexto arriba para cargar entregas.</p></div>';
+        replaceContent(trabajoHistory, emptyState('Elegí curso y materia', 'Definí el contexto arriba para cargar entregas.'));
       }
       return;
     }
@@ -1247,7 +2938,7 @@ function initTrabajosEntregas(root, context = {}) {
     fillActividadSelect(trabajoActividadSelect, actividades, {
       cursoId,
       materiaId,
-      placeholder: 'Eleg├¡ una actividad',
+      placeholder: 'Elegí una actividad',
       required: true,
     });
     await renderTrabajoHistory(
@@ -1265,7 +2956,7 @@ function initTrabajosEntregas(root, context = {}) {
     const students = activeStudents().filter((student) =>
       (!reenviarCurso.value || student.cursoId === reenviarCurso.value)
     );
-    fillSelect(reenviarAlumno, students, 'Sin alumno espec├¡fico');
+    fillSelect(reenviarAlumno, students, 'Sin alumno específico');
   });
 
   trabajoEstadoFilter?.addEventListener('change', () => { refresh(); });
@@ -1292,7 +2983,7 @@ function initTrabajosEntregas(root, context = {}) {
     const cursoId = getCourseId();
     const materiaId = getMateriaId();
     if (!course || !materiaId) {
-      alert('Complet├í colegio, turno, curso y materia antes de cargar un trabajo.');
+      alert('Completá colegio, turno, curso y materia antes de cargar un trabajo.');
       return;
     }
 
@@ -1304,7 +2995,7 @@ function initTrabajosEntregas(root, context = {}) {
 
     const data = Object.fromEntries(new FormData(trabajoForm));
     if (!data.actividadId) {
-      alert('Eleg├¡ la actividad del curso a la que corresponde la entrega.');
+      alert('Elegí la actividad del curso a la que corresponde la entrega.');
       return;
     }
 
@@ -1367,7 +3058,7 @@ function initTrabajosEntregas(root, context = {}) {
     const course = courseById(data.cursoId);
     const subject = subjectById(data.materiaId);
     if (!course || !data.materiaId || !data.titulo?.trim()) {
-      alert('Complet├í curso, materia y t├¡tulo.');
+      alert('Completá curso, materia y título.');
       return;
     }
 
@@ -1424,7 +3115,7 @@ function validateTrabajoFiles(input, feedback, limits = {}) {
   }
 
   if (files.length > maxFiles) {
-    const msg = `M├íximo ${maxFiles} archivos por carga.`;
+    const msg = `Máximo ${maxFiles} archivos por carga.`;
     if (feedback) {
       feedback.textContent = msg;
       feedback.classList.remove('is-hidden');
@@ -1472,11 +3163,10 @@ function initSubjects() {
     const payload = { id: editingId || uid('mat'), nombre: data.nombre.trim(), activo: true, updatedAt: nowIso() };
     const subjects = read(KEYS.subjects);
     write(KEYS.subjects, editingId ? subjects.map((subject) => subject.id === editingId ? payload : subject) : [...subjects, payload]);
-    await queue('subject', 'upsert', payload);
     form.reset();
     delete form.dataset.editingId;
     form.querySelector('button[type="submit"]').textContent = 'Crear materia';
-    renderSubjects(list, form);
+    await persistAndRefresh('subject', 'upsert', payload, () => renderSubjects(list, form));
   });
 
   list.addEventListener('click', async (event) => {
@@ -1496,89 +3186,148 @@ function initSubjects() {
       const msg = deps ? 'Esta materia tiene notas/asistencias. Se marcara como inactiva.' : 'Eliminar esta materia?';
       if (!confirm(msg)) return;
       write(KEYS.subjects, subjects.map((subject) => subject.id === id ? { ...subject, activo: false, updatedAt: nowIso() } : subject));
-      await queue('subject', 'delete', { id, updatedAt: nowIso() });
-      renderSubjects(list, form);
+      await persistAndRefresh('subject', 'delete', { id, updatedAt: nowIso() }, () => renderSubjects(list, form));
     }
   });
 
   renderSubjects(list, form);
+  onPanelRefresh(() => renderSubjects(list, form));
 }
 
 function renderSubjects(list) {
   const subjects = activeSubjects();
   const grades = read(KEYS.grades);
-  list.innerHTML = subjects.map((subject) => {
+  replaceContent(list, ...subjects.map((subject) => {
     const count = grades.filter((grade) => grade.subjectId === subject.id).length;
-    return `
-      <article class="course-row">
-        <div><strong>${esc(subject.nombre)}</strong><small>${count} notas vinculadas</small></div>
-        <div class="row-actions">
-          <span class="tag">Activa</span>
-          <button class="btn btn-ghost" data-edit-subject="${esc(subject.id)}">Editar</button>
-          <button class="btn btn-danger" data-delete-subject="${esc(subject.id)}">Eliminar</button>
-        </div>
-      </article>
-    `;
-  }).join('');
+    return el('article', { className: 'course-row' },
+      el('div', {},
+        el('strong', {}, subject.nombre),
+        el('small', {}, `${count} notas vinculadas`),
+      ),
+      el('div', { className: 'row-actions' },
+        tag('Activa'),
+        el('button', { className: 'btn btn-ghost', dataset: { editSubject: subject.id } }, 'Editar'),
+        el('button', { className: 'btn btn-danger', dataset: { deleteSubject: subject.id } }, 'Eliminar'),
+      ),
+    );
+  }));
 }
 
 function initCourses() {
   const root = document.querySelector('[data-courses]');
   if (!root) return;
-  const list = root.querySelector('[data-course-list]');
   const form = root.querySelector('[data-course-form]');
+  const newSchoolInput = root.querySelector('[data-new-school]');
+  const addSchoolButton = root.querySelector('[data-add-school]');
+
+  const refreshCoursePanel = (selectedSchool = '', highlightCourseId = '') => {
+    renderSchoolTags(root.querySelector('[data-school-list]'));
+    fillSchoolSelect(root.querySelector('[data-course-school]'), 'Seleccionar escuela', selectedSchool);
+    renderCourses(root.querySelector('[data-course-list]'), highlightCourseId);
+  };
+
+  const addSchoolFromInput = async () => {
+    const schoolPayload = await upsertSchoolByName(newSchoolInput?.value);
+    if (!schoolPayload) {
+      newSchoolInput?.focus();
+      return;
+    }
+    if (newSchoolInput) newSchoolInput.value = '';
+    refreshCoursePanel(schoolPayload.nombre);
+  };
+
+  window.addEventListener('aula-clara:schools-changed', (event) => {
+    refreshCoursePanel(event.detail?.selected || '');
+  });
+
+  addSchoolButton?.addEventListener('click', () => { void addSchoolFromInput(); });
+  newSchoolInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addSchoolFromInput();
+    }
+  });
+
+  refreshCoursePanel();
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!appReady) return;
     const data = Object.fromEntries(new FormData(form));
+    const escuela = String(data.escuela || '').trim();
+    const nombre = String(data.nombre || '').trim();
+    const turno = String(data.turno || '').trim();
+    if (!escuela) {
+      alert('Elegí una escuela.');
+      return;
+    }
+    if (!nombre || !turno) {
+      alert('Completá curso y turno.');
+      return;
+    }
     const courses = read(KEYS.courses);
     const payload = {
       id: uid('curso'),
-      nombre: data.nombre.trim(),
-      escuela: data.escuela.trim(),
-      turno: data.turno,
+      nombre,
+      escuela,
+      turno,
       cicloLectivo: new Date().getFullYear(),
       updatedAt: nowIso(),
     };
     courses.push(payload);
     write(KEYS.courses, courses);
-    await queue('course', 'upsert', payload);
     form.reset();
-    renderCourses(list);
+    await persistAndRefresh('course', 'upsert', payload, () => refreshCoursePanel('', payload.id));
   });
-  renderCourses(list);
+
+  onPanelRefresh(() => refreshCoursePanel());
 }
 
-function renderCourses(list) {
+function renderCourses(list, highlightCourseId = '') {
+  if (!list) return;
   const courses = read(KEYS.courses);
   const students = activeStudents();
   const subjects = activeSubjects();
-  list.innerHTML = courses.map((course) => {
+  if (!courses.length) {
+    replaceContent(list, emptyState('No hay cursos creados', 'Agregá una escuela y completá el formulario para crear el primer curso.'));
+    return;
+  }
+  replaceContent(list, ...courses.map((course) => {
     const courseStudents = students.filter((student) => student.cursoId === course.id);
     const defaultSubjectId = subjects[0]?.id || '';
     const actionContext = { curso: course.id, materia: defaultSubjectId };
-    return `
-      <details class="course-accordion">
-        <summary>
-          <span><strong>${esc(course.nombre)}</strong><small>${esc(course.escuela)} ┬À Turno ${esc(course.turno)}</small></span>
-          <span class="tag">${courseStudents.length} alumnos</span>
-        </summary>
-        <div class="course-detail">
-          <div>
-            <h3>Alumnos</h3>
-            <div class="notes-list">${courseStudents.map((student) => `<span class="tag">${esc(student.nombre)}</span>`).join('') || '<span class="tag">Sin alumnos</span>'}</div>
-          </div>
-          <div>
-            <h3>Materias</h3>
-            <div class="notes-list">${subjects.map((subject) => `<span class="tag">${esc(subject.nombre)}</span>`).join('')}</div>
-          </div>
-          <div class="button-row">
-            <a class="btn btn-primary" href="${esc(contextUrl('/asistencia', actionContext))}">Tomar asistencia</a>
-            <a class="btn btn-secondary" href="${esc(contextUrl('/notas', actionContext))}">Calificaciones</a>
-          </div>
-        </div>
-      </details>
-    `;
-  }).join('');
+    const isHighlighted = highlightCourseId && course.id === highlightCourseId;
+    return el('details', {
+      className: 'course-accordion',
+      ...(isHighlighted ? { attrs: { open: '' } } : {}),
+    },
+      el('summary', {},
+        el('span', {},
+          el('strong', {}, course.nombre),
+          el('small', {}, `${course.escuela} · Turno ${course.turno}`),
+        ),
+        tag(`${courseStudents.length} alumnos`),
+      ),
+      el('div', { className: 'course-detail' },
+        el('div', {},
+          el('h3', {}, 'Alumnos'),
+          el('div', { className: 'notes-list' },
+            courseStudents.length
+              ? courseStudents.map((student) => tag(student.nombre))
+              : tag('Sin alumnos'),
+          ),
+        ),
+        el('div', {},
+          el('h3', {}, 'Materias'),
+          el('div', { className: 'notes-list' }, ...subjects.map((subject) => tag(subject.nombre))),
+        ),
+        el('div', { className: 'button-row' },
+          el('a', { className: 'btn btn-primary', href: contextUrl('/asistencia', actionContext) }, 'Tomar asistencia'),
+          el('a', { className: 'btn btn-secondary', href: contextUrl('/notas', actionContext) }, 'Calificaciones'),
+        ),
+      ),
+    );
+  }));
 }
 
 function getCalendarEventMeta(tipo = '') {
@@ -1747,6 +3496,13 @@ function initCalendar() {
   });
 
   load();
+  onPanelRefresh(() => {
+    fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
+    fillSelect(subjectSelect, activeSubjects(), 'Todas las materias');
+    fillSelect(eventCourseSelect, read(KEYS.courses), 'Sin curso', 'id', (course) => `${course.nombre} - ${course.turno}`);
+    fillSelect(eventSubjectSelect, activeSubjects(), 'Sin materia');
+    load();
+  });
 }
 
 async function loadCalendar(root, monthValue, courseId = '', subjectId = '') {
@@ -1791,28 +3547,36 @@ function renderCalendar(root, monthStart, events) {
     return acc;
   }, {});
 
-  const days = Array.from({ length: 42 }, (_, index) => {
+  const dayButtons = Array.from({ length: 42 }, (_, index) => {
     const date = new Date(start);
     date.setDate(start.getDate() + index);
     const key = date.toISOString().slice(0, 10);
     const dayItems = eventsByDate[key] || [];
     const outside = date.getMonth() !== monthStart.getMonth();
     const tone = getCalendarDayTone(dayItems);
-    return `
-      <button class="calendar-day ${outside ? 'is-outside' : ''} ${tone ? `is-${tone}` : ''}" type="button" data-calendar-day="${esc(key)}">
-        <strong>${date.getDate()}</strong>
-        <span>${dayItems.length ? `${dayItems.length} eventos` : ''}</span>
-        <div class="calendar-day-items">${dayItems.slice(0, 2).map((event) => {
+    return el('button', {
+      className: `calendar-day ${outside ? 'is-outside' : ''} ${tone ? `is-${tone}` : ''}`.trim(),
+      type: 'button',
+      dataset: { calendarDay: key },
+    },
+      el('strong', {}, date.getDate()),
+      el('span', {}, dayItems.length ? `${dayItems.length} eventos` : ''),
+      el('div', { className: 'calendar-day-items' },
+        ...dayItems.slice(0, 2).map((event) => {
           const meta = getCalendarEventMeta(event.tipo);
-          return `<small class="calendar-event-chip calendar-event-chip--${meta.tone}"><span class="calendar-event-emoji">${meta.icon}</span><span>${esc(meta.label)}</span></small>`;
-        }).join('')}</div>
-      </button>
-    `;
+          return el('small', { className: `calendar-event-chip calendar-event-chip--${meta.tone}` },
+            el('span', { className: 'calendar-event-emoji' }, meta.icon),
+            el('span', {}, meta.label),
+          );
+        }),
+      ),
+    );
   });
 
-  grid.innerHTML = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom']
-    .map((day) => `<div class="calendar-weekday">${day}</div>`)
-    .join('') + days.join('');
+  replaceContent(grid,
+    ...['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'].map((day) => el('div', { className: 'calendar-weekday' }, day)),
+    ...dayButtons,
+  );
 
   const showDay = (key) => {
     const selected = eventsByDate[key] || [];
@@ -1820,20 +3584,23 @@ function renderCalendar(root, monthStart, events) {
     title.textContent = new Date(`${key}T00:00:00`).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
     summary.textContent = selected.length ? `${selected.length} eventos programados o registrados.` : 'Sin eventos para este dia.';
     summary.className = dayTone ? `calendar-summary is-${dayTone}` : 'calendar-summary';
-    dayEvents.innerHTML = selected.length ? selected.map((event) => {
-      const meta = getCalendarEventMeta(event.tipo);
-      return `
-        <article class="event-card event-card--${meta.tone}">
-          <span class="tag ${meta.tone === 'danger' ? 'danger' : meta.tone === 'warning' ? 'warning' : meta.tone === 'info' ? 'info' : ''}">
-            <span class="calendar-event-emoji">${meta.icon}</span>
-            ${esc(meta.label)}
-          </span>
-          <strong>${meta.icon} ${esc(event.titulo)}</strong>
-          <small>${esc([event.colegio, event.curso, event.materia].filter(Boolean).join(' - '))}</small>
-          <p>${esc(event.descripcion || '')}</p>
-        </article>
-      `;
-    }).join('') : '<div class="empty"><h3>Sin eventos</h3><p>No hay registros para este dia.</p></div>';
+    replaceContent(dayEvents,
+      selected.length
+        ? selected.map((event) => {
+          const meta = getCalendarEventMeta(event.tipo);
+          const tagClass = meta.tone === 'danger' ? 'danger' : meta.tone === 'warning' ? 'warning' : meta.tone === 'info' ? 'info' : '';
+          return el('article', { className: `event-card event-card--${meta.tone}` },
+            el('span', { className: `tag ${tagClass}`.trim() },
+              el('span', { className: 'calendar-event-emoji' }, meta.icon),
+              meta.label,
+            ),
+            el('strong', {}, `${meta.icon} ${event.titulo}`),
+            el('small', {}, [event.colegio, event.curso, event.materia].filter(Boolean).join(' - ')),
+            el('p', {}, event.descripcion || ''),
+          );
+        })
+        : emptyState('Sin eventos', 'No hay registros para este dia.'),
+    );
   };
 
   grid.querySelectorAll('[data-calendar-day]').forEach((button) => {
@@ -1866,7 +3633,7 @@ function downloadActivityWord(html, titulo) {
 
 function downloadActivityPdf(html, titulo) {
   // Intento generar y descargar PDF directamente usando html2pdf (CDN).
-  // Si falla o el script no carga, cae al fallback de impresi├│n.
+  // Si falla o el script no carga, cae al fallback de impresión.
   const filename = `${(titulo || 'Actividad').replace(/\s+/g, '_')}.pdf`;
   const wrappedHtml = `<div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1f2937; max-width: 800px; margin: auto;">${html}</div>`;
 
@@ -1888,7 +3655,7 @@ function downloadActivityPdf(html, titulo) {
       const container = document.createElement('div');
       container.style.display = 'block';
       container.style.padding = '10px';
-      container.innerHTML = wrappedHtml;
+      setTrustedHtml(container, wrappedHtml);
       document.body.appendChild(container);
 
       const opt = {
@@ -1902,10 +3669,10 @@ function downloadActivityPdf(html, titulo) {
       await html2pdf().from(container).set(opt).save();
       document.body.removeChild(container);
     } catch (err) {
-      // Fallback: abrir ventana de impresi├│n como antes
+      // Fallback: abrir ventana de impresión como antes
       const ventanaImpresion = window.open('', '_blank');
       if (!ventanaImpresion) {
-        alert('No se pudo abrir la ventana de impresi├│n. Permit├¡ ventanas emergentes para esta p├ígina.');
+        alert('No se pudo abrir la ventana de impresión. Permití ventanas emergentes para esta página.');
         return;
       }
       ventanaImpresion.document.write(`
@@ -2020,12 +3787,12 @@ function initActivities() {
     const files = Array.from(aiFilesInput.files || []);
     if (!files.length) {
       aiFileFeedback.classList.add('is-hidden');
-      aiFileFeedback.innerHTML = '';
+      replaceContent(aiFileFeedback);
       return;
     }
 
     const issues = [];
-    if (files.length > maxFiles) issues.push(`Seleccionaste ${files.length} archivos. El m├íximo es ${maxFiles}.`);
+    if (files.length > maxFiles) issues.push(`Seleccionaste ${files.length} archivos. El máximo es ${maxFiles}.`);
     files.forEach((file) => {
       if (file.size > maxFileBytes) {
         issues.push(`${file.name} supera ${Math.round(maxFileBytes / (1024 * 1024))} MB.`);
@@ -2037,11 +3804,16 @@ function initActivities() {
     aiFileFeedback.classList.remove('is-hidden');
     aiFileFeedback.classList.toggle('is-warning', !ok);
     aiFileFeedback.classList.toggle('is-ok', ok);
-    aiFileFeedback.innerHTML = `
-      <p><strong>${files.length} archivo${files.length === 1 ? '' : 's'} seleccionado${files.length === 1 ? '' : 's'}</strong> ┬À ${totalMb.toFixed(1)} MB en total</p>
-      <p class="muted">La IA usar├í como m├íximo ${formatChars(maxInputChars)} caracteres del material extra├¡do (~10-15 p├íginas). Si hay m├ís texto, se resume o se recorta autom├íticamente.</p>
-      ${issues.length ? `<ul>${issues.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>` : ''}
-    `;
+    replaceContent(aiFileFeedback,
+      el('p', {},
+        el('strong', {}, `${files.length} archivo${files.length === 1 ? '' : 's'} seleccionado${files.length === 1 ? '' : 's'}`),
+        ` · ${totalMb.toFixed(1)} MB en total`,
+      ),
+      el('p', { className: 'muted' }, `La IA usará como máximo ${formatChars(maxInputChars)} caracteres del material extraído (~10-15 páginas). Si hay más texto, se resume o se recorta automáticamente.`),
+      issues.length
+        ? el('ul', {}, ...issues.map((item) => el('li', {}, item)))
+        : null,
+    );
   };
 
   const renderAiSourceReport = (meta) => {
@@ -2049,31 +3821,36 @@ function initActivities() {
     const source = meta?.source;
     if (!source) {
       aiSourceReport.classList.add('is-hidden');
-      aiSourceReport.innerHTML = '';
+      replaceContent(aiSourceReport);
       return;
     }
 
     const tags = [];
     if (source.summarized) tags.push('Resumido con modelo liviano');
-    if (source.extractionTruncated) tags.push('Extracci├│n recortada');
+    if (source.extractionTruncated) tags.push('Extracción recortada');
     if (source.inputTruncated) tags.push('Texto final recortado');
 
     aiSourceReport.classList.remove('is-hidden');
-    aiSourceReport.innerHTML = `
-      <div class="ai-source-report-head">
-        <strong>Material procesado para la IA</strong>
-        ${tags.length ? `<div class="tag-row">${tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join('')}</div>` : ''}
-      </div>
-      <p>
-        Extra├¡dos <strong>${formatChars(source.extractedChars)}</strong> caracteres de
-        <strong>${source.filesProcessed}</strong> archivo${source.filesProcessed === 1 ? '' : 's'}.
-        Se enviaron <strong>${formatChars(source.usedChars)}</strong> a la generaci├│n
-        (tope ${formatChars(source.maxInputChars)}).
-      </p>
-      ${Array.isArray(source.messages) && source.messages.length
-        ? `<ul>${source.messages.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`
-        : '<p class="muted">No fue necesario resumir ni recortar el material.</p>'}
-    `;
+    replaceContent(aiSourceReport,
+      el('div', { className: 'ai-source-report-head' },
+        el('strong', {}, 'Material procesado para la IA'),
+        tags.length
+          ? el('div', { className: 'tag-row' }, ...tags.map((label) => tag(label)))
+          : null,
+      ),
+      el('p', {},
+        'Extraídos ',
+        el('strong', {}, formatChars(source.extractedChars)),
+        ' caracteres de ',
+        el('strong', {}, source.filesProcessed),
+        ` archivo${source.filesProcessed === 1 ? '' : 's'}. Se enviaron `,
+        el('strong', {}, formatChars(source.usedChars)),
+        ` a la generación (tope ${formatChars(source.maxInputChars)}).`,
+      ),
+      Array.isArray(source.messages) && source.messages.length
+        ? el('ul', {}, ...source.messages.map((item) => el('li', {}, item)))
+        : el('p', { className: 'muted' }, 'No fue necesario resumir ni recortar el material.'),
+    );
   };
 
   aiLimitsOpen?.addEventListener('click', () => {
@@ -2134,7 +3911,7 @@ function initActivities() {
       const mainData = new FormData(form);
       const files = aiForm.querySelector('[data-activity-ai-files]')?.files;
       if (!files?.length) {
-        alert('Adjunt├í al menos un documento PDF, DOCX o TXT.');
+        alert('Adjuntá al menos un documento PDF, DOCX o TXT.');
         return;
       }
       const maxFiles = Number(aiForm.dataset.maxFiles || 6);
@@ -2143,11 +3920,11 @@ function initActivities() {
       const invalidSize = Array.from(files).some((file) => file.size > maxFileBytes);
       if (invalidCount || invalidSize) {
         renderAiFileFeedback();
-        alert('Revis├í los archivos seleccionados: superan los l├¡mites permitidos.');
+        alert('Revisá los archivos seleccionados: superan los límites permitidos.');
         return;
       }
       if (!mainData.get('colegio') || !mainData.get('turno') || !mainData.get('cursoId') || !mainData.get('materiaId')) {
-        alert('Complet├í colegio, turno, curso y materia antes de generar con IA.');
+        alert('Completá colegio, turno, curso y materia antes de generar con IA.');
         return;
       }
 
@@ -2166,7 +3943,7 @@ function initActivities() {
       payload.set('notasDocente', aiData.get('notasDocente') || '');
       Array.from(files).forEach((file) => payload.append('documentos', file));
 
-      setAiLoading(true, 'Sincronizando cursos y generando material con IAÔÇª');
+      setAiLoading(true, 'Sincronizando cursos y generando material con IA…');
       await syncPendingOperations();
       aiPreview?.classList.add('is-hidden');
       aiSourceReport?.classList.add('is-hidden');
@@ -2183,7 +3960,7 @@ function initActivities() {
 
         lastGenerated = data;
         renderAiSourceReport(data.meta);
-        if (aiPreviewBody) aiPreviewBody.innerHTML = data.html || '';
+        if (aiPreviewBody) setTrustedHtml(aiPreviewBody, data.html || '');
         aiPreview?.classList.remove('is-hidden');
         setAiLoading(false, '');
       } catch (error) {
@@ -2194,19 +3971,19 @@ function initActivities() {
   }
 
   aiWord?.addEventListener('click', () => {
-    if (!lastGenerated?.html) return alert('Gener├í una actividad antes de exportar.');
+    if (!lastGenerated?.html) return alert('Generá una actividad antes de exportar.');
     downloadActivityWord(lastGenerated.html, lastGenerated.titulo);
   });
 
   aiPdf?.addEventListener('click', () => {
-    if (!lastGenerated?.html) return alert('Gener├í una actividad antes de exportar.');
+    if (!lastGenerated?.html) return alert('Generá una actividad antes de exportar.');
     downloadActivityPdf(lastGenerated.html, lastGenerated.titulo);
   });
 
   aiApply?.addEventListener('click', () => {
     if (!lastGenerated) return alert('No hay contenido generado para aplicar.');
     applyGeneratedToForm(lastGenerated);
-    alert('Contenido aplicado. Revis├í en ┬½Realizar a mano┬╗ y guard├í la actividad.');
+    alert('Contenido aplicado. Revisá en «Realizar a mano» y guardá la actividad.');
   });
 
   function obtenerDatosDocumento() {
@@ -2278,7 +4055,7 @@ function initActivities() {
     btnDescargarWord.addEventListener('click', () => {
       const { html, titulo } = obtenerDatosDocumento();
       if (!titulo && !form.titulo.value) {
-        return alert('Ingres├í un t├¡tulo o gener├í una actividad con IA antes de descargar.');
+        return alert('Ingresá un título o generá una actividad con IA antes de descargar.');
       }
       downloadActivityWord(html, titulo || form.titulo.value);
     });
@@ -2288,13 +4065,13 @@ function initActivities() {
     btnDescargarPdf.addEventListener('click', () => {
       const { html, titulo } = obtenerDatosDocumento();
       if (!titulo && !form.titulo.value) {
-        return alert('Ingres├í un t├¡tulo o gener├í una actividad con IA antes de exportar.');
+        return alert('Ingresá un título o generá una actividad con IA antes de exportar.');
       }
       downloadActivityPdf(html, titulo || form.titulo.value);
     });
   }
 
-  const schools = [...new Set(read(KEYS.courses).map((course) => course.escuela).filter(Boolean))];
+  const schools = schoolNamesForSelect();
   const shifts = [...new Set(read(KEYS.courses).map((course) => course.turno).filter(Boolean))];
   fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Colegio');
   fillSelect(shiftSelect, shifts.map((shift) => ({ id: shift, nombre: shift })), 'Turno');
@@ -2318,29 +4095,33 @@ function initActivities() {
 
   const renderEditor = () => {
     const tipo = new FormData(form).get('tipo') || 'evaluacion';
-    editor.innerHTML = tipo === 'evaluacion' ? `
-      <div class="section-title">
-        <h2>Aviso de evaluaci├│n</h2>
-        <p>Deja claro tema, modalidad y materiales necesarios.</p>
-      </div>
-      <label>
-        <span>Descripci├│n</span>
-        <textarea rows="7" data-activity-questions placeholder="Tema, modalidad, material para traer o aclaraciones"></textarea>
-      </label>
-    ` : `
-      <div class="section-title">
-        <h2>Publicaci├│n del TP</h2>
-        <p>Define consigna, criterios de seguimiento y fecha de entrega.</p>
-      </div>
-      <label>
-        <span>Consigna</span>
-        <textarea rows="7" data-activity-brief placeholder="Describe la actividad"></textarea>
-      </label>
-      <label>
-        <span>Criterios de seguimiento</span>
-        <input data-activity-criteria placeholder="Entrega, desarrollo, presentaci├│n" />
-      </label>
-    `;
+    if (tipo === 'evaluacion') {
+      replaceContent(editor,
+        el('div', { className: 'section-title' },
+          el('h2', {}, 'Aviso de evaluación'),
+          el('p', {}, 'Deja claro tema, modalidad y materiales necesarios.'),
+        ),
+        el('label', {},
+          el('span', {}, 'Descripción'),
+          el('textarea', { rows: 7, attrs: { 'data-activity-questions': '', placeholder: 'Tema, modalidad, material para traer o aclaraciones' } }),
+        ),
+      );
+      return;
+    }
+    replaceContent(editor,
+      el('div', { className: 'section-title' },
+        el('h2', {}, 'Publicación del TP'),
+        el('p', {}, 'Define consigna, criterios de seguimiento y fecha de entrega.'),
+      ),
+      el('label', {},
+        el('span', {}, 'Consigna'),
+        el('textarea', { rows: 7, attrs: { 'data-activity-brief': '', placeholder: 'Describe la actividad' } }),
+      ),
+      el('label', {},
+        el('span', {}, 'Criterios de seguimiento'),
+        el('input', { attrs: { 'data-activity-criteria': '', placeholder: 'Entrega, desarrollo, presentación' } }),
+      ),
+    );
   };
 
   form.querySelectorAll('[name="tipo"]').forEach((input) => input.addEventListener('change', renderEditor));
@@ -2416,7 +4197,7 @@ function initActivities() {
   const enviarCurso = root.querySelector('[data-enviar-curso]');
   const enviarMateria = root.querySelector('[data-enviar-materia]');
 
-  const schoolsForEnviar = [...new Set(read(KEYS.courses).map((course) => course.escuela).filter(Boolean))];
+  const schoolsForEnviar = schoolNamesForSelect();
   const shiftsForEnviar = [...new Set(read(KEYS.courses).map((course) => course.turno).filter(Boolean))];
   fillSelect(enviarColegio, schoolsForEnviar.map((school) => ({ id: school, nombre: school })), 'Colegio');
   fillSelect(enviarTurno, shiftsForEnviar.map((shift) => ({ id: shift, nombre: shift })), 'Turno');
@@ -2448,7 +4229,7 @@ function initActivities() {
     syncEnviarCourseFields();
 
     if (enviarSourceLabel) {
-      enviarSourceLabel.textContent = `Vas a enviar ┬½${actividad.titulo}┬╗ (${activityTipoLabel(actividad)}) desde ${[actividad.curso, actividad.materia].filter(Boolean).join(' ┬À ')}.`;
+      enviarSourceLabel.textContent = `Vas a enviar «${actividad.titulo}» (${activityTipoLabel(actividad)}) desde ${[actividad.curso, actividad.materia].filter(Boolean).join(' · ')}.`;
     }
 
     enviarDialog.showModal();
@@ -2496,7 +4277,7 @@ function initActivities() {
     const selectedCourse = courseById(data.cursoId);
     const selectedSubject = subjectById(data.materiaId);
     if (!data.actividadId || !data.colegio || !data.turno || !data.cursoId || !data.materiaId) {
-      alert('Complet├í colegio, turno, curso y materia destino.');
+      alert('Completá colegio, turno, curso y materia destino.');
       return;
     }
 
@@ -2538,14 +4319,14 @@ function activityTipoLabel(item) {
   const tipoGen = String(item?.contenido?.tipoGeneracion || item?.contenido?.generadoPor || '');
   if (template.includes('integrador') || tipoGen === 'integrador') return 'Integrador';
   if (template.includes('examen') || tipoGen === 'examen') return 'Examen';
-  return item?.tipo === 'tp' ? 'TP' : 'Evaluaci├│n';
+  return item?.tipo === 'tp' ? 'TP' : 'Evaluación';
 }
 
 async function renderActivitiesList(list, onLoaded) {
   if (!list) return [];
   const response = await fetch('/api/actividades');
   if (!response.ok) {
-    list.innerHTML = '<div class="empty"><h3>Sin actividades</h3><p>Todavia no se pudieron cargar actividades.</p></div>';
+    replaceContent(list, emptyState('Sin actividades', 'Todavia no se pudieron cargar actividades.'));
     if (onLoaded) onLoaded([]);
     return [];
   }
@@ -2553,22 +4334,27 @@ async function renderActivitiesList(list, onLoaded) {
   const actividades = Array.isArray(data.actividades) ? data.actividades : [];
   if (onLoaded) onLoaded(actividades);
 
-  list.innerHTML = actividades.length ? actividades.map((item) => `
-    <article class="event-card">
-      <div>
-        <span class="tag">${esc(activityTipoLabel(item))}</span>
-        ${item.estado === 'publicado' ? '<span class="tag ok">Publicado</span>' : '<span class="tag">Borrador</span>'}
-      </div>
-      <strong>${esc(item.titulo)}</strong>
-      <small>${esc([item.colegio, item.turno, item.curso, item.materia].filter(Boolean).join(' ┬À '))}</small>
-      <p>${item.fecha_publicacion ? `Publicaci├│n: ${esc(item.fecha_publicacion)}` : 'Sin fecha de publicaci├│n'}</p>
-      <p>${item.fecha_vencimiento ? `Entrega: ${esc(item.fecha_vencimiento)}` : 'Sin fecha de entrega'}</p>
-      <div class="actions-group">
-        <button class="btn btn-primary btn-sm" type="button" data-cargar-entrega-actividad="${esc(item.id)}">Cargar entrega</button>
-        <button class="btn btn-secondary btn-sm" type="button" data-enviar-actividad="${esc(item.id)}">Enviar a curso</button>
-      </div>
-    </article>
-  `).join('') : '<div class="empty"><h3>Sin actividades</h3><p>Prepara una evaluaci├│n o TP para empezar.</p></div>';
+  if (!actividades.length) {
+    replaceContent(list, emptyState('Sin actividades', 'Prepara una evaluación o TP para empezar.'));
+    return actividades;
+  }
+
+  replaceContent(list, ...actividades.map((item) =>
+    el('article', { className: 'event-card' },
+      el('div', {},
+        tag(activityTipoLabel(item)),
+        tag(item.estado === 'publicado' ? 'Publicado' : 'Borrador', item.estado === 'publicado' ? 'tag ok' : 'tag'),
+      ),
+      el('strong', {}, item.titulo),
+      el('small', {}, [item.colegio, item.turno, item.curso, item.materia].filter(Boolean).join(' · ')),
+      el('p', {}, item.fecha_publicacion ? `Publicación: ${item.fecha_publicacion}` : 'Sin fecha de publicación'),
+      el('p', {}, item.fecha_vencimiento ? `Entrega: ${item.fecha_vencimiento}` : 'Sin fecha de entrega'),
+      el('div', { className: 'actions-group' },
+        el('button', { className: 'btn btn-primary btn-sm', type: 'button', dataset: { cargarEntregaActividad: item.id } }, 'Cargar entrega'),
+        el('button', { className: 'btn btn-secondary btn-sm', type: 'button', dataset: { enviarActividad: item.id } }, 'Enviar a curso'),
+      ),
+    ),
+  ));
 
   return actividades;
 }
@@ -2580,56 +4366,189 @@ function formatSyncStatus(counts = {}) {
   return `${pending} pendientes ┬À ${synced} sincronizadas ┬À ${error} con error`;
 }
 
-function registerSpaRefreshHandlers() {
-  registerSpaViewRefresh('panel', () => {
-    initDashboard();
-    initTeacherContext();
-  });
-  registerSpaViewRefresh('registro', initStudents);
-  registerSpaViewRefresh('cursos', initCourses);
-  registerSpaViewRefresh('asistencia', initAttendance);
-  registerSpaViewRefresh('notas', initGrades);
-  registerSpaViewRefresh('actividades', () => {
-    initActivities();
-    initCalendar();
-  });
+function renderImportResult(container, result, isError = false) {
+  if (!container) return;
+  container.hidden = false;
+  container.className = `import-result ${isError ? 'import-result-error' : 'import-result-ok'}`;
+
+  if (isError) {
+    container.textContent = result?.error || 'No se pudo importar el archivo.';
+    return;
+  }
+
+  const lines = [result.message || 'Importación completada.'];
+  if (Array.isArray(result.errors) && result.errors.length) {
+    const preview = result.errors.slice(0, 5).map((item) => `Fila ${item.row}: ${item.message}`);
+    lines.push(`Errores (${result.errors.length}): ${preview.join(' · ')}${result.errors.length > 5 ? ' · …' : ''}`);
+  }
+  container.textContent = lines.join(' ');
 }
 
-async function pullRemoteData(scope = 'all') {
-  await syncPendingOperations();
+function refreshExportPanelFilters(panel) {
+  const schoolSelect = panel.querySelector('[data-export-school]');
+  const courseSelect = panel.querySelector('[data-export-course]');
+  const subjectSelect = panel.querySelector('[data-export-subject]');
 
-  if (scope === 'all' || scope === 'calendario') {
-    const root = document.querySelector('[data-activities][data-calendar]') || document.querySelector('[data-calendar]');
-    if (root) {
-      const monthInput = root.querySelector('[data-calendar-month]');
-      const courseSelect = root.querySelector('[data-calendar-course]');
-      const subjectSelect = root.querySelector('[data-calendar-subject]');
-      await loadCalendar(
-        root,
-        monthInput?.value || today().slice(0, 7),
-        courseSelect?.value || '',
-        subjectSelect?.value || '',
-      );
+  if (schoolSelect) {
+    const selectedSchool = schoolSelect.value;
+    fillSelect(
+      schoolSelect,
+      schoolNamesForSelect().map((nombre) => ({ id: nombre, nombre })),
+      'Todas las escuelas',
+    );
+    if (selectedSchool) schoolSelect.value = selectedSchool;
+  }
+
+  if (courseSelect) {
+    const selectedCourse = courseSelect.value;
+    fillSelect(
+      courseSelect,
+      read(KEYS.courses).filter((course) => !schoolSelect?.value || course.escuela === schoolSelect.value),
+      'Todos los cursos',
+      'id',
+      courseLabel,
+    );
+    if (selectedCourse && [...courseSelect.options].some((option) => option.value === selectedCourse)) {
+      courseSelect.value = selectedCourse;
     }
   }
 
-  if (scope === 'all' || scope === 'actividades') {
-    const list = document.querySelector('[data-activity-list]');
-    if (list) await renderActivitiesList(list);
+  if (subjectSelect) {
+    const selectedSubject = subjectSelect.value;
+    fillSelect(subjectSelect, activeSubjects(), 'Todas las materias');
+    if (selectedSubject && [...subjectSelect.options].some((option) => option.value === selectedSubject)) {
+      subjectSelect.value = selectedSubject;
+    }
   }
 }
 
-const spaRuntime = window.__AULA_CLARA_SPA__ || { enabled: false, initialView: 'panel' };
+function initExcelExport() {
+  document.querySelectorAll('[data-excel-export]').forEach((panel) => {
+    const schoolSelect = panel.querySelector('[data-export-school]');
+    const courseSelect = panel.querySelector('[data-export-course]');
+    const submitButton = panel.querySelector('[data-export-submit]');
+    if (!submitButton) return;
+
+    schoolSelect?.addEventListener('change', () => {
+      if (!courseSelect) return;
+      const selectedCourse = courseSelect.value;
+      fillSelect(
+        courseSelect,
+        read(KEYS.courses).filter((course) => !schoolSelect.value || course.escuela === schoolSelect.value),
+        'Todos los cursos',
+        'id',
+        courseLabel,
+      );
+      if (selectedCourse && [...courseSelect.options].some((option) => option.value === selectedCourse)) {
+        courseSelect.value = selectedCourse;
+      }
+    });
+
+    refreshExportPanelFilters(panel);
+
+    submitButton.addEventListener('click', async () => {
+      submitButton.disabled = true;
+      const previousLabel = submitButton.textContent;
+      submitButton.textContent = 'Preparando...';
+      try {
+        await syncPendingOperations();
+        const params = new URLSearchParams();
+        params.set('type', panel.dataset.excelExport || '');
+        if (schoolSelect?.value) params.set('colegio', schoolSelect.value);
+        if (courseSelect?.value) params.set('curso', courseSelect.value);
+        const subjectSelect = panel.querySelector('[data-export-subject]');
+        const fromInput = panel.querySelector('[data-export-from]');
+        const toInput = panel.querySelector('[data-export-to]');
+        if (subjectSelect?.value) params.set('materia', subjectSelect.value);
+        if (fromInput?.value) params.set('desde', fromInput.value);
+        if (toInput?.value) params.set('hasta', toInput.value);
+        window.location.href = `/api/export?${params.toString()}`;
+      } finally {
+        window.setTimeout(() => {
+          submitButton.disabled = false;
+          submitButton.textContent = previousLabel;
+        }, 800);
+      }
+    });
+  });
+
+  window.addEventListener('aula-clara:data-hydrated', () => {
+    document.querySelectorAll('[data-excel-export]').forEach((panel) => refreshExportPanelFilters(panel));
+  });
+}
+
+function initExcelImport() {
+  document.querySelectorAll('[data-excel-import]').forEach((panel) => {
+    const type = panel.dataset.excelImport;
+    const fileInput = panel.querySelector('[data-import-file]');
+    const submitButton = panel.querySelector('[data-import-submit]');
+    const resultEl = panel.querySelector('[data-import-result]');
+    if (!type || !fileInput || !submitButton) return;
+
+    submitButton.addEventListener('click', async () => {
+      const file = fileInput.files?.[0];
+      if (!file) {
+        alert('Seleccioná un archivo Excel (.xlsx).');
+        fileInput.focus();
+        return;
+      }
+
+      submitButton.disabled = true;
+      const previousLabel = submitButton.textContent;
+      submitButton.textContent = 'Importando...';
+      if (resultEl) {
+        resultEl.hidden = true;
+        resultEl.textContent = '';
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('type', type);
+        formData.append('file', file);
+
+        const response = await fetch('/api/import', {
+          method: 'POST',
+          body: formData,
+          credentials: 'same-origin',
+        });
+
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          renderImportResult(resultEl, result, true);
+          return;
+        }
+
+        if (currentUser?.id) {
+          await hydrateLocalStorageFromServer(currentUser.id);
+        }
+        notifyDataChanged();
+        renderImportResult(resultEl, result, false);
+        fileInput.value = '';
+      } catch (error) {
+        console.error('[aula-clara] excel import failed', error);
+        renderImportResult(resultEl, { error: 'Error de red al importar. Revisá tu conexión e intentá de nuevo.' }, true);
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = previousLabel;
+      }
+    });
+  });
+}
 
 async function bootstrap() {
-  if (currentUser?.id) {
-    await hydrateLocalStorageFromServer(currentUser.id);
-  }
+  document.documentElement.dataset.appBooting = 'true';
   seed();
   initTheme();
   initMobileNav();
+  window.addEventListener('aula-clara:data-hydrated', refreshAllPanels);
+
+  await resetOfflineDatabaseOnce();
+
+  if (currentUser?.id) {
+    await hydrateLocalStorageFromServer(currentUser.id, { notify: false });
+  }
+
   initResponsiveTables();
-  startAutoSync();
   initDashboard();
   initTeacherContext();
   initStudents();
@@ -2639,18 +4558,20 @@ async function bootstrap() {
   initSubjects();
   initCalendar();
   initActivities();
-
-  document.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-pull-remote]');
-    if (!button) return;
-    event.preventDefault();
-    void pullRemoteData(button.dataset.pullScope || 'all');
-  });
-
-  if (spaRuntime.enabled) {
-    registerSpaRefreshHandlers();
-    initSpaRouter(spaRuntime.initialView);
-  }
+  initExcelExport();
+  initExcelImport();
+  startAutoSync();
+  appReady = true;
+  delete document.documentElement.dataset.appBooting;
+  refreshAllPanels();
 }
+
+document.addEventListener('submit', (event) => {
+  if (appReady) return;
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement)) return;
+  if (!form.closest('[data-courses], [data-students], [data-subjects], [data-grades], [data-attendance], [data-teacher-context], [data-student-form]')) return;
+  event.preventDefault();
+}, true);
 
 void bootstrap();

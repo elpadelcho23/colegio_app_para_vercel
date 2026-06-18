@@ -57,10 +57,20 @@ interface GradePayload {
   peso?: number;
   fecha?: string;
   fechaEntrega?: string;
+  periodo?: string;
+  motivo?: string;
   updatedAt: string;
 }
 
 interface SubjectPayload {
+  id: string;
+  docenteId: string;
+  nombre?: string;
+  activo?: boolean;
+  updatedAt: string;
+}
+
+interface SchoolPayload {
   id: string;
   docenteId: string;
   nombre?: string;
@@ -316,8 +326,8 @@ function applyGrade(operation: PendingOperation<GradePayload>, user: User) {
   }
 
   db.prepare(`
-    INSERT INTO notas (id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion, valor, calificacion_texto, peso, fecha, fecha_entrega, updated_at)
-    VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @titulo, @tipo_evaluacion, @valor, @calificacion_texto, @peso, @fecha, @fecha_entrega, @updated_at)
+    INSERT INTO notas (id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion, valor, calificacion_texto, peso, fecha, fecha_entrega, periodo, motivo, updated_at)
+    VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @titulo, @tipo_evaluacion, @valor, @calificacion_texto, @peso, @fecha, @fecha_entrega, @periodo, @motivo, @updated_at)
     ON CONFLICT(id) DO UPDATE SET
       titulo = excluded.titulo,
       tipo_evaluacion = excluded.tipo_evaluacion,
@@ -326,6 +336,8 @@ function applyGrade(operation: PendingOperation<GradePayload>, user: User) {
       peso = excluded.peso,
       fecha = excluded.fecha,
       fecha_entrega = excluded.fecha_entrega,
+      periodo = excluded.periodo,
+      motivo = excluded.motivo,
       updated_at = excluded.updated_at
   `).run({
     id: payload.id,
@@ -340,6 +352,8 @@ function applyGrade(operation: PendingOperation<GradePayload>, user: User) {
     peso: payload.peso || 100,
     fecha: payload.fecha,
     fecha_entrega: payload.fechaEntrega || null,
+    periodo: payload.periodo || null,
+    motivo: payload.motivo?.trim() || null,
     updated_at: payload.updatedAt,
   });
 
@@ -396,51 +410,52 @@ function applySubject(operation: PendingOperation<SubjectPayload>, user: User) {
   return { status: 'synced' as const };
 }
 
-export const GET: APIRoute = ({ locals, url }) => {
-  const user = locals.user;
-  if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+function applySchool(operation: PendingOperation<SchoolPayload>, user: User) {
+  const payload = operation.payload;
+  const docenteId = user.rol === 'admin' ? payload.docenteId : user.id;
+  const tenantId = user.rol === 'admin'
+    ? (db.prepare('SELECT tenant_id FROM usuarios WHERE id = ?').get(docenteId) as { tenant_id: string } | undefined)?.tenant_id || user.tenant_id
+    : user.tenant_id;
 
-  const view = url.searchParams.get('view');
-  if (view !== 'curso-detalle') {
-    return Response.json({ error: 'Vista no soportada.' }, { status: 400 });
+  if (operation.action === 'delete') {
+    const school = db.prepare('SELECT nombre FROM escuelas WHERE id = ? AND tenant_id = ?').get(payload.id, tenantId) as { nombre: string } | undefined;
+    if (school) {
+      const hasCourses = db.prepare('SELECT 1 FROM cursos WHERE tenant_id = ? AND escuela = ? LIMIT 1').get(tenantId, school.nombre);
+      if (hasCourses) {
+        db.prepare('UPDATE escuelas SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
+        return { status: 'synced' as const };
+      }
+    }
+    db.prepare('DELETE FROM docente_escuelas WHERE tenant_id = ? AND escuela_id = ?').run(tenantId, payload.id);
+    db.prepare('DELETE FROM escuelas WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
+    return { status: 'synced' as const };
   }
 
-  const subjectId = url.searchParams.get('materiaId') || '';
-  const courseId = url.searchParams.get('cursoId') || '';
-  const courseKey = url.searchParams.get('cursoKey') || '';
-
-  if (!subjectId) {
-    return Response.json({ error: 'materiaId requerido.' }, { status: 400 });
+  if (!payload.nombre) return { status: 'error' as const, message: 'Nombre de escuela requerido.' };
+  const existing = db.prepare('SELECT tenant_id, updated_at FROM escuelas WHERE id = ?').get(payload.id) as { tenant_id: string; updated_at: string } | undefined;
+  if (existing && existing.tenant_id !== tenantId) return { status: 'error' as const, message: 'La escuela pertenece a otra cuenta.' };
+  if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
+    return { status: 'synced' as const, ignoredOlderWrite: true };
   }
 
-  if (!courseId && !courseKey) {
-    return Response.json({ error: 'cursoId o cursoKey requerido.' }, { status: 400 });
-  }
-
-  if (!canAccessSubject(user, subjectId)) {
-    return Response.json({ error: 'Sin permiso sobre la materia.' }, { status: 403 });
-  }
-
-  if (courseId && !canAccessCourse(user, courseId)) {
-    return Response.json({ error: 'Sin permiso sobre el curso.' }, { status: 403 });
-  }
-
-  const snapshot = getCourseViewSnapshot(user, {
-    courseId: courseId || undefined,
-    courseKey: courseKey || undefined,
-    subjectId,
+  db.prepare(`
+    INSERT INTO escuelas (id, tenant_id, nombre, activo, updated_at)
+    VALUES (@id, @tenant_id, @nombre, @activo, @updated_at)
+    ON CONFLICT(id) DO UPDATE SET
+      nombre = excluded.nombre,
+      activo = excluded.activo,
+      updated_at = excluded.updated_at
+  `).run({
+    id: payload.id,
+    tenant_id: tenantId,
+    nombre: payload.nombre,
+    activo: payload.activo === false ? 0 : 1,
+    updated_at: payload.updatedAt,
   });
+  db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
 
-  if (!snapshot) {
-    return Response.json({ error: 'No se encontraron datos para la vista.' }, { status: 404 });
-  }
-
-  return Response.json(snapshot, {
-    headers: {
-      'Cache-Control': 'private, no-store',
-    },
-  });
-};
+  return { status: 'synced' as const };
+}
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;
@@ -472,7 +487,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         continue;
       }
 
-      if (!['attendance', 'student', 'grade', 'subject', 'course'].includes(operation.entity)) {
+      if (!['attendance', 'student', 'grade', 'subject', 'school', 'course'].includes(operation.entity)) {
         results.push({
           clientMutationId: operation.clientMutationId,
           status: 'error',
@@ -525,6 +540,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         }
       } else if (operation.entity === 'grade') {
         applied = applyGrade(operation as PendingOperation<GradePayload>, user);
+      } else if (operation.entity === 'school') {
+        applied = applySchool(operation as PendingOperation<SchoolPayload>, user);
       } else {
         applied = applySubject(operation as PendingOperation<SubjectPayload>, user);
       }

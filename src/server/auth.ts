@@ -1,28 +1,12 @@
 import bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
+import { CLIENT_DATA_STORAGE, PULL_FIELD_BY_KEY } from '../lib/client-storage-keys';
 import { db, type User } from './db';
 
 export const SESSION_COOKIE = 'aula_clara_session';
 const SESSION_DAYS = 7;
 
-/** Claves de localStorage por usuario (sin prefijo de usuario). */
-export const CLIENT_DATA_STORAGE: Record<string, string> = {
-  aula_clara_students: '[]',
-  aula_clara_courses: '[]',
-  aula_clara_subjects: '[]',
-  aula_clara_attendance: '[]',
-  aula_clara_grades: '[]',
-  aula_clara_dashboard_filters: '{}',
-  aula_clara_teacher_context: '[]',
-};
-
-const PULL_FIELD_BY_KEY: Record<string, string> = {
-  aula_clara_students: 'students',
-  aula_clara_courses: 'courses',
-  aula_clara_subjects: 'subjects',
-  aula_clara_attendance: 'attendance',
-  aula_clara_grades: 'grades',
-};
+export { CLIENT_DATA_STORAGE };
 
 function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: 'login' | 'register') {
   const storageInit = JSON.stringify(
@@ -58,14 +42,44 @@ function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: '
     });
   }
 
+  function mergeById(serverItems, localItems) {
+    var map = {};
+    function add(item) {
+      if (!item || !item.id) return;
+      var current = map[item.id];
+      if (!current) {
+        map[item.id] = item;
+        return;
+      }
+      var currentTime = new Date(current.updatedAt || 0).getTime();
+      var nextTime = new Date(item.updatedAt || 0).getTime();
+      if (nextTime >= currentTime) map[item.id] = item;
+    }
+    (serverItems || []).forEach(add);
+    (localItems || []).forEach(add);
+    return Object.keys(map).map(function (id) { return map[id]; });
+  }
+
   function applyServerData(data) {
     entries.forEach(function (pair) {
       var key = pair[0];
       var fallback = pair[1];
       var field = pullMap[key];
-      var payload = field && Object.prototype.hasOwnProperty.call(data, field)
+      var serverPayload = field && Object.prototype.hasOwnProperty.call(data, field)
         ? data[field]
         : JSON.parse(fallback);
+      var localRaw = localStorage.getItem(scopedKey(key));
+      var localPayload = localRaw ? JSON.parse(localRaw) : JSON.parse(fallback);
+      var payload;
+
+      if (key === 'aula_clara_dashboard_filters') {
+        payload = Object.assign({}, serverPayload, localPayload);
+      } else if (Array.isArray(serverPayload)) {
+        payload = mergeById(serverPayload, Array.isArray(localPayload) ? localPayload : []);
+      } else {
+        payload = localPayload != null ? localPayload : serverPayload;
+      }
+
       localStorage.setItem(scopedKey(key), JSON.stringify(payload));
     });
   }
@@ -82,7 +96,27 @@ function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: '
     return;
   }
 
-  if (localStorage.getItem(scopedKey('aula_clara_students'))) {
+  function hasCachedData() {
+    try {
+      var missingKey = entries.some(function (pair) {
+        return !localStorage.getItem(scopedKey(pair[0]));
+      });
+      if (missingKey) return false;
+
+      var keys = ['aula_clara_students', 'aula_clara_courses', 'aula_clara_subjects'];
+      for (var i = 0; i < keys.length; i++) {
+        var raw = localStorage.getItem(scopedKey(keys[i]));
+        if (!raw) return false;
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  if (hasCachedData()) {
     initMissingEmpty();
     finish();
     return;

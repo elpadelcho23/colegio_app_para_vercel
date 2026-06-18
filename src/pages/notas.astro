@@ -2,4 +2,227 @@
 import Layout from '../layouts/Layout.astro';
 ---
 
-<Layout title="Calificaciones" />
+<Layout title="Calificaciones">
+  <main class="page page-stack" data-grades>
+    <header class="page-header">
+      <div class="header-content">
+        <p class="eyebrow">Calificaciones</p>
+        <h1>Carga de notas</h1>
+        <p>Calificá a todo el curso de una vez según escuela, turno, materia y actividad.</p>
+      </div>
+      <div class="actions-group">
+        <button class="btn btn-primary btn-block" type="button" data-grades-view-toggle>Ver calificaciones</button>
+      </div>
+    </header>
+
+    <div data-grades-take-view>
+    <section class="panel context-workbar">
+      <div>
+        <strong>Contexto</strong>
+        <p data-grade-context-text>Seleccioná escuela, curso y materia.</p>
+      </div>
+      <div class="filters-grid">
+        <select data-grade-school-filter aria-label="Escuela">
+          <option value="">Todas las escuelas</option>
+        </select>
+        <select data-grade-course-filter aria-label="Curso"></select>
+        <select data-grade-subject-filter aria-label="Materia"></select>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>Actividades del contexto</h2>
+        <p>TPs y evaluaciones con escuela, turno, curso, materia y fechas. Tocá una actividad para cargar la evaluación.</p>
+      </div>
+
+      <div class="filters-grid">
+        <select data-delivery-type-filter aria-label="Tipo de actividad">
+          <option value="">Todos los tipos</option>
+          <option value="tp">Trabajo práctico</option>
+          <option value="evaluacion">Evaluación</option>
+        </select>
+        <select data-delivery-status-filter aria-label="Estado de seguimiento">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="en_progreso">En progreso</option>
+          <option value="completado">Completado</option>
+        </select>
+        <input type="date" data-delivery-from-filter aria-label="Entrega desde" />
+        <input type="date" data-delivery-to-filter aria-label="Entrega hasta" />
+      </div>
+
+      <section class="summary-strip" data-grade-deliveries-summary></section>
+      <div class="list" data-grade-deliveries></div>
+    </section>
+
+    <section class="panel">
+      <form class="form-grid" data-grade-meta-form>
+        <div class="section-title full-width">
+          <h2>Cargar evaluación</h2>
+          <p>Completá los datos de la evaluación y asigná la nota a cada alumno del listado.</p>
+        </div>
+
+        <input type="hidden" name="subjectId" />
+
+        <div class="input-row full-width">
+          <label>
+            <span>Tipo</span>
+            <select name="tipoEvaluacion" data-evaluation-type>
+              <option>TP</option>
+              <option>Oral</option>
+              <option>Integrador</option>
+              <option value="Evaluacion">Evaluación</option>
+            </select>
+          </label>
+          <label>
+            <span>Importancia</span>
+            <select name="peso" data-grade-importance>
+              <option value="40">Baja</option>
+              <option value="60">Media</option>
+              <option value="100">Alta</option>
+            </select>
+          </label>
+          <label>
+            <span>Modo de calificación</span>
+            <select name="modoCalificacion" data-grade-mode>
+              <option value="numerica">Numérica (1-10)</option>
+              <option value="conceptual">Conceptual</option>
+              <option value="trayectoria">Trayectoria</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="full-width"><span>Título de la evaluación</span><input name="titulo" placeholder="Ej: TP 1 - Ecuaciones" required /></label>
+
+        <div class="input-row full-width">
+          <label><span>Fecha</span><input name="fecha" type="date" /></label>
+          <label><span>Entrega</span><input name="fechaEntrega" type="date" /></label>
+          <label>
+            <span>Período</span>
+            <select name="periodo" data-grade-period>
+              <option value="1c">1er cuatrimestre</option>
+              <option value="2c">2do cuatrimestre</option>
+              <option value="anual">Anual</option>
+              <option value="recuperatorio">Recuperatorio</option>
+              <option value="previa">Previa</option>
+            </select>
+          </label>
+        </div>
+      </form>
+
+      <div class="section-title">
+        <h3>Alumnos</h3>
+        <p data-grade-bulk-summary>Seleccioná curso y materia para ver el listado.</p>
+      </div>
+
+      <div class="list grade-bulk-list" data-grade-bulk-list></div>
+
+      <div class="attendance-save-bar" data-grades-save-bar>
+        <p class="attendance-save-hint is-hidden" data-grades-save-hint>
+          Tenés calificaciones sin guardar. Revisá el listado y confirmá cuando termines.
+        </p>
+        <button class="btn btn-primary" type="button" data-grades-save disabled>
+          Guardar calificaciones
+        </button>
+      </div>
+    </section>
+
+    <section class="responsive-grid is-balanced">
+      <div class="stack">
+        <section class="panel">
+          <div class="section-title">
+            <h2>Materias</h2>
+          </div>
+          <form class="inline-form" data-inline-subject-form>
+            <input name="nombre" placeholder="Nueva materia" aria-label="Nueva materia" />
+            <button class="btn btn-secondary" type="submit">+</button>
+          </form>
+          <div class="notes-list" data-inline-subject-list></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>Estado académico</h2>
+        <p>Vista consolidada por alumno para lectura rápida.</p>
+      </div>
+      <div class="table-container" data-grade-table></div>
+    </section>
+
+    </div>
+
+    <section class="panel import-panel" data-excel-import="notas">
+      <div class="section-title">
+        <h2>Cargar notas desde Excel</h2>
+        <p>Podés importar la hoja <strong>Notas</strong> de un Excel exportado desde esta app.</p>
+      </div>
+      <ul class="import-requirements">
+        <li>Columnas obligatorias: <strong>Fecha</strong>, <strong>Colegio</strong>, <strong>Curso</strong>, <strong>Turno</strong>, <strong>Materia</strong>, <strong>Alumno</strong>, <strong>Evaluacion</strong>, <strong>Calificacion</strong>.</li>
+        <li>Calificación: número del <strong>1 al 10</strong> o texto (S/C, Ausente, etc.).</li>
+        <li>Opcionales: <strong>Importancia</strong> (Alta/Media/Baja), <strong>Entrega</strong>, <strong>Motivo</strong>, <strong>Tipo</strong>, <strong>Periodo</strong>.</li>
+      </ul>
+      <div class="inline-form import-form">
+        <input type="file" accept=".xlsx,.xls" data-import-file aria-label="Archivo Excel de notas" />
+        <a class="btn btn-ghost" href="/api/import/template?type=notas" data-import-template>Descargar plantilla</a>
+        <button class="btn btn-secondary" type="button" data-import-submit>Importar notas</button>
+      </div>
+      <div class="import-result" data-import-result hidden></div>
+    </section>
+
+    <section class="panel export-panel" data-excel-export="notas">
+      <div class="section-title">
+        <h2>Exportar notas a Excel</h2>
+        <p>Descargá calificaciones filtradas por escuela, curso, materia y rango de fechas.</p>
+      </div>
+      <div class="filters-grid">
+        <select data-export-school aria-label="Escuela">
+          <option value="">Todas las escuelas</option>
+        </select>
+        <select data-export-course aria-label="Curso">
+          <option value="">Todos los cursos</option>
+        </select>
+        <select data-export-subject aria-label="Materia">
+          <option value="">Todas las materias</option>
+        </select>
+        <input type="date" data-export-from aria-label="Desde" />
+        <input type="date" data-export-to aria-label="Hasta" />
+      </div>
+      <button class="btn btn-secondary" type="button" data-export-submit>Exportar notas</button>
+    </section>
+
+    <section class="panel is-hidden" data-grades-detail-view>
+      <div class="section-title">
+        <h2>Detalle de calificaciones</h2>
+        <p>Actividades realizadas por alumno con nota y promedio según el período elegido.</p>
+      </div>
+
+      <div class="filters-grid">
+        <select data-detail-course-filter aria-label="Curso"></select>
+        <select data-detail-subject-filter aria-label="Materia"></select>
+        <select data-detail-period-filter aria-label="Período">
+          <option value="1c">1er cuatrimestre</option>
+          <option value="2c">2do cuatrimestre</option>
+          <option value="anual">Anual</option>
+          <option value="recuperatorio">Recuperatorio</option>
+          <option value="previa">Previa</option>
+        </select>
+      </div>
+
+      <section class="summary-strip" data-grades-detail-summary></section>
+
+      <div class="section-title">
+        <h3>Actividades y notas</h3>
+      </div>
+      <div class="table-container" data-grades-detail-table></div>
+
+      <div class="section-title">
+        <h3>Promedio por alumno</h3>
+        <p>Mínimo 6 para aprobar en el período seleccionado.</p>
+      </div>
+      <div class="table-container" data-grades-detail-averages></div>
+    </section>
+
+  </main>
+</Layout>

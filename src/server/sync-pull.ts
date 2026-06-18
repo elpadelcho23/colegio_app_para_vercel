@@ -32,6 +32,24 @@ export function pullClientData(user: User) {
     cicloLectivo: number;
   }>;
 
+  const schools = (isAdmin
+    ? db.prepare(`
+      SELECT id, nombre, activo
+      FROM escuelas
+      WHERE tenant_id = ?
+    `)
+    : db.prepare(`
+      SELECT escuelas.id, escuelas.nombre, escuelas.activo
+      FROM escuelas
+      JOIN docente_escuelas ON docente_escuelas.escuela_id = escuelas.id AND docente_escuelas.tenant_id = escuelas.tenant_id
+      WHERE escuelas.tenant_id = ? AND docente_escuelas.docente_id = ?
+    `)
+  ).all(...(isAdmin ? [tenantId] : [tenantId, docenteId])) as Array<{
+    id: string;
+    nombre: string;
+    activo: number;
+  }>;
+
   const subjects = (isAdmin
     ? db.prepare(`
       SELECT id, nombre, activo
@@ -104,6 +122,8 @@ export function pullClientData(user: User) {
       peso,
       fecha,
       fecha_entrega AS fechaEntrega,
+      periodo,
+      motivo,
       updated_at AS updatedAt
     FROM notas
     ${gradesFilter.clause}
@@ -118,11 +138,18 @@ export function pullClientData(user: User) {
     peso: number;
     fecha: string;
     fechaEntrega: string | null;
+    periodo: string | null;
+    motivo: string | null;
     updatedAt: string;
   }>;
 
   return {
     courses,
+    schools: schools.map((school) => ({
+      id: school.id,
+      nombre: school.nombre,
+      activo: school.activo !== 0,
+    })),
     subjects: subjects.map((subject) => ({
       id: subject.id,
       nombre: subject.nombre,

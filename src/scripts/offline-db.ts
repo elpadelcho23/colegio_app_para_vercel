@@ -1,4 +1,4 @@
-export type SyncEntity = 'attendance' | 'student' | 'grade' | 'subject' | 'course';
+export type SyncEntity = 'attendance' | 'student' | 'grade' | 'subject' | 'school' | 'course';
 export type SyncAction = 'upsert' | 'delete';
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'conflict' | 'error';
 
@@ -29,9 +29,103 @@ const DB_NAME = 'aula_clara_offline';
 const DB_VERSION = 2;
 const ATTENDANCE_STORE = 'attendance_records';
 const OPERATIONS_STORE = 'pending_operations';
-const VIEW_CACHE_STORE = 'view_snapshots';
+const ATTENDANCE_NATURAL_KEY = ['docenteId', 'studentId', 'subjectId', 'fecha'] as const;
+const OFFLINE_DB_RESET_FLAG = 'aula_clara_offline_reset_v2';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+
+function closeOfflineDbConnection() {
+  if (!dbPromise) return Promise.resolve();
+  return dbPromise
+    .then((db) => db.close())
+    .catch(() => undefined)
+    .finally(() => {
+      dbPromise = null;
+    });
+}
+
+function deleteOfflineDatabase() {
+  return closeOfflineDbConnection().then(() => new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onblocked = () => {
+      console.warn('[aula-clara] IndexedDB delete blocked; close other tabs with Aula Clara open.');
+    };
+    request.onerror = () => reject(request.error ?? new Error('No se pudo borrar IndexedDB offline.'));
+  }));
+}
+
+/** One-time wipe of corrupted offline storage (equivalent to DevTools → Delete database). */
+export async function resetOfflineDatabaseOnce() {
+  if (typeof indexedDB === 'undefined') return false;
+  if (localStorage.getItem(OFFLINE_DB_RESET_FLAG) === '1') return false;
+
+  try {
+    await deleteOfflineDatabase();
+    await openOfflineDb();
+    localStorage.setItem(OFFLINE_DB_RESET_FLAG, '1');
+    console.info('[aula-clara] IndexedDB offline reset to schema v2.');
+    return true;
+  } catch (error) {
+    console.error('[aula-clara] offline database reset failed', error);
+    return false;
+  }
+}
+
+function parseDocenteIdFromAttendanceId(id: string) {
+  const parts = id.split(':');
+  if (parts[0] !== 'attendance' || parts.length < 5) return '';
+  return parts[1] || '';
+}
+
+function attendanceNaturalKey(record: Pick<AttendancePayload, 'docenteId' | 'studentId' | 'subjectId' | 'fecha'>) {
+  return `${record.docenteId}|${record.studentId}|${record.subjectId}|${record.fecha}`;
+}
+
+function dedupeAttendanceRecords(records: AttendancePayload[]) {
+  const map = new Map<string, AttendancePayload>();
+
+  for (const record of records) {
+    const docenteId = record.docenteId || parseDocenteIdFromAttendanceId(record.id);
+    const normalized: AttendancePayload = {
+      ...record,
+      docenteId,
+      id: docenteId
+        ? `attendance:${docenteId}:${record.studentId}:${record.subjectId}:${record.fecha}`
+        : record.id,
+    };
+    const key = attendanceNaturalKey(normalized);
+    const current = map.get(key);
+    if (!current || new Date(normalized.updatedAt).getTime() >= new Date(current.updatedAt).getTime()) {
+      map.set(key, normalized);
+    }
+  }
+
+  return [...map.values()];
+}
+
+function createAttendanceStore(db: IDBDatabase) {
+  const store = db.createObjectStore(ATTENDANCE_STORE, { keyPath: 'id' });
+  store.createIndex('byNaturalKey', [...ATTENDANCE_NATURAL_KEY], { unique: true });
+  store.createIndex('byUpdatedAt', 'updatedAt', { unique: false });
+  return store;
+}
+
+function migrateAttendanceStoreToV2(store: IDBObjectStore) {
+  if (store.indexNames.contains('byNaturalKey')) {
+    store.deleteIndex('byNaturalKey');
+  }
+
+  const getAllRequest = store.getAll();
+  getAllRequest.onsuccess = () => {
+    const deduped = dedupeAttendanceRecords(getAllRequest.result as AttendancePayload[]);
+    store.clear();
+    for (const record of deduped) {
+      store.put(record);
+    }
+    store.createIndex('byNaturalKey', [...ATTENDANCE_NATURAL_KEY], { unique: true });
+  };
+}
 
 export function createId(prefix: string) {
   if (typeof globalThis.crypto?.randomUUID === 'function') return `${prefix}-${crypto.randomUUID()}`;
@@ -44,13 +138,15 @@ export function openOfflineDb() {
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
+      const tx = request.transaction;
+      const oldVersion = event.oldVersion;
 
       if (!db.objectStoreNames.contains(ATTENDANCE_STORE)) {
-        const store = db.createObjectStore(ATTENDANCE_STORE, { keyPath: 'id' });
-        store.createIndex('byNaturalKey', ['studentId', 'subjectId', 'fecha'], { unique: true });
-        store.createIndex('byUpdatedAt', 'updatedAt', { unique: false });
+        createAttendanceStore(db);
+      } else if (oldVersion > 0 && oldVersion < 2) {
+        migrateAttendanceStoreToV2(tx.objectStore(ATTENDANCE_STORE));
       }
 
       if (!db.objectStoreNames.contains(OPERATIONS_STORE)) {
@@ -87,6 +183,31 @@ function transactionDone(tx: IDBTransaction) {
   });
 }
 
+function removeConflictingAttendanceRecord(
+  store: IDBObjectStore,
+  input: Pick<AttendancePayload, 'docenteId' | 'studentId' | 'subjectId' | 'fecha'>,
+  id: string,
+) {
+  return new Promise<void>((resolve, reject) => {
+    const index = store.index('byNaturalKey');
+    const lookupKey = [input.docenteId, input.studentId, input.subjectId, input.fecha];
+    const getRequest = index.get(lookupKey);
+
+    getRequest.onsuccess = () => {
+      const existing = getRequest.result as AttendancePayload | undefined;
+      if (!existing || existing.id === id) {
+        resolve();
+        return;
+      }
+
+      const deleteRequest = store.delete(existing.id);
+      deleteRequest.onsuccess = () => resolve();
+      deleteRequest.onerror = () => reject(deleteRequest.error);
+    };
+    getRequest.onerror = () => reject(getRequest.error);
+  });
+}
+
 export async function saveAttendanceOffline(input: {
   docenteId: string;
   studentId: string;
@@ -111,7 +232,9 @@ export async function saveAttendanceOffline(input: {
   };
 
   const tx = db.transaction([ATTENDANCE_STORE, OPERATIONS_STORE], 'readwrite');
-  tx.objectStore(ATTENDANCE_STORE).put(record);
+  const attendanceStore = tx.objectStore(ATTENDANCE_STORE);
+  await removeConflictingAttendanceRecord(attendanceStore, input, id);
+  attendanceStore.put(record);
   tx.objectStore(OPERATIONS_STORE).put(operation);
   await transactionDone(tx);
 
