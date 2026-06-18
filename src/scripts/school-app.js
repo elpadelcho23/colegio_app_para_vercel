@@ -1,6 +1,7 @@
 import { countPendingOperations, getOperationStatusCounts, queueOfflineOperation, resetOfflineDatabaseOnce, saveAttendanceOffline } from './offline-db.ts';
 import { hydrateLocalStorageFromServer, startAutoSync, syncPendingOperations } from './sync-client.ts';
 import { initMobileNav, openMenu, closeMenu } from './ui-nav.js';
+import { initSpaRouter } from './spa-router.ts';
 import {
   el,
   emptyState,
@@ -594,7 +595,7 @@ function applySuggestedContextTo(selects = {}, options = {}) {
 }
 
 function describeContext(context) {
-  if (!context) return 'Configur├í tu horario para ver sugerencias autom├íticas.';
+  if (!context) return 'Configurá tu horario para ver sugerencias automáticas.';
   const course = courseById(context.cursoId);
   const subject = subjectById(context.materiaId);
   return `${context.escuela || course?.escuela || 'Escuela'} - ${course?.nombre || 'Curso'} - ${subject?.nombre || 'Materia'} (${context.desde || '--:--'} a ${context.hasta || '--:--'})`;
@@ -789,7 +790,7 @@ function initTeacherContext() {
     const data = new FormData(form);
     const dias = data.getAll('dias').map(String);
     if (!dias.length) {
-      alert('Eleg├¡ al menos un d├¡a.');
+      alert('Elegí al menos un día.');
       return;
     }
 
@@ -2572,7 +2573,7 @@ function initGrades() {
     }
     if (remove) {
       const id = remove.dataset.deleteGrade;
-      if (!confirm('┬┐Eliminar esta calificaci├│n? El promedio se recalcular├í autom├íticamente.')) return;
+      if (!confirm('¿Eliminar esta calificación? El promedio se recalculará automáticamente.')) return;
       write(KEYS.grades, grades.filter((grade) => grade.id !== id));
       await persistAndRefresh('grade', 'delete', { id, updatedAt: nowIso() }, renderAll);
     }
@@ -3333,19 +3334,19 @@ function renderCourses(list, highlightCourseId = '') {
 function getCalendarEventMeta(tipo = '') {
   const normalized = String(tipo);
   const meta = {
-    evaluacion: { icon: '­ƒôØ', label: 'Evaluaci├│n', tone: 'neutral' },
-    tp: { icon: '­ƒôÿ', label: 'TP', tone: 'neutral' },
-    cierre_tp: { icon: '­ƒôñ', label: 'Entrega', tone: 'neutral' },
-    asistencia: { icon: '­ƒº¥', label: 'Asistencia', tone: 'neutral' },
-    nota: { icon: '­ƒÅÀ´©Å', label: 'Nota', tone: 'neutral' },
-    evento: { icon: '­ƒôà', label: 'Evento', tone: 'neutral' },
-    ausencia: { icon: 'Ô£û', label: 'Falta docente', tone: 'danger' },
-    lluvia: { icon: '­ƒîº´©Å', label: 'D├¡a de lluvia', tone: 'info' },
-    salida_educativa: { icon: '­ƒÜî', label: 'Salida educativa', tone: 'warning' },
-    acto: { icon: '­ƒÅø´©Å', label: 'Acto escolar', tone: 'warning' },
-    jornada: { icon: 'ÔÅ▒´©Å', label: 'Jornada institucional', tone: 'warning' },
+    evaluacion: { icon: '📝', label: 'Evaluación', tone: 'neutral' },
+    tp: { icon: '📘', label: 'TP', tone: 'neutral' },
+    cierre_tp: { icon: '📤', label: 'Entrega', tone: 'neutral' },
+    asistencia: { icon: '🧾', label: 'Asistencia', tone: 'neutral' },
+    nota: { icon: '🏷️', label: 'Nota', tone: 'neutral' },
+    evento: { icon: '📅', label: 'Evento', tone: 'neutral' },
+    ausencia: { icon: '✖', label: 'Falta docente', tone: 'danger' },
+    lluvia: { icon: '🌧️', label: 'Día de lluvia', tone: 'info' },
+    salida_educativa: { icon: '🚌', label: 'Salida educativa', tone: 'warning' },
+    acto: { icon: '🏛️', label: 'Acto escolar', tone: 'warning' },
+    jornada: { icon: '⏱️', label: 'Jornada institucional', tone: 'warning' },
   };
-  return meta[normalized] || { icon: '­ƒôà', label: 'Evento', tone: 'neutral' };
+  return meta[normalized] || { icon: '📅', label: 'Evento', tone: 'neutral' };
 }
 
 function getCalendarEventIcon(tipo) {
@@ -3390,7 +3391,7 @@ function buildTeacherScheduleEvents(monthStart, monthEnd, courseId = '', subject
         id: `horario-${context.id}-${fecha}`,
         tipo: 'evento',
         titulo: `Horario: ${subject?.nombre || 'Materia'} ${context.desde || ''} - ${context.hasta || ''}`.trim(),
-        descripcion: `${context.escuela || course?.escuela || 'Escuela'} ┬À ${course?.nombre || 'Curso'}`,
+        descripcion: `${context.escuela || course?.escuela || 'Escuela'} · ${course?.nombre || 'Curso'}`,
         fecha,
         fecha_fin: null,
         curso: course?.nombre || '',
@@ -3995,7 +3996,7 @@ function initActivities() {
     const cursoNombre = cursoOpcion ? cursoOpcion.text : data.cursoId;
     const materiaOpcion = subjectSelect.options[subjectSelect.selectedIndex];
     const materiaNombre = materiaOpcion ? materiaOpcion.text : data.materiaId;
-    const tituloDoc = data.titulo ? data.titulo.toUpperCase() : 'ACTIVIDAD SIN T├ìTULO';
+    const tituloDoc = data.titulo ? data.titulo.toUpperCase() : 'ACTIVIDAD SIN TÍTULO';
 
     let html = `
       <div style="font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: auto;">
@@ -4010,7 +4011,7 @@ function initActivities() {
             <td style="padding: 8px; border: 1px solid #ddd;"><strong>Materia:</strong> ${materiaNombre || ''}</td>
           </tr>
           <tr>
-            <td style="padding: 8px; border: 1px solid #ddd;"><strong>${data.tipo === 'tp' ? 'Publicaci├│n del TP' : 'Aviso'}:</strong> ${data.fechaPublicacion || '-'}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;"><strong>${data.tipo === 'tp' ? 'Publicación del TP' : 'Aviso'}:</strong> ${data.fechaPublicacion || '-'}</td>
             <td style="padding: 8px; border: 1px solid #ddd;"><strong>${data.tipo === 'tp' ? 'Entrega del TP' : 'Entrega'}:</strong> ${data.fechaVencimiento || '-'}</td>
           </tr>
         </table>
@@ -4034,12 +4035,12 @@ function initActivities() {
       const criterios = String(editor.querySelector('[data-activity-criteria]')?.value || '').trim();
 
       html += `
-        <h3 style="color: #2c3e50; margin-top: 30px;">Consigna del Trabajo Pr├íctico:</h3>
+        <h3 style="color: #2c3e50; margin-top: 30px;">Consigna del Trabajo Práctico:</h3>
         <p style="white-space: pre-wrap; background: #f9f9f9; padding: 15px; border-left: 4px solid #3498db; font-size: 15px; line-height: 1.6;">${consigna || 'Sin consigna detallada.'}</p>
       `;
       if (criterios) {
         html += `
-          <h4 style="color: #2c3e50; margin-top: 20px;">Criterios de Evaluaci├│n:</h4>
+          <h4 style="color: #2c3e50; margin-top: 20px;">Criterios de Evaluación:</h4>
           <ul>
             ${criterios.split(',').map(c => `<li style="margin-bottom: 5px; font-size: 14px;">${c.trim()}</li>`).join('')}
           </ul>
@@ -4363,7 +4364,7 @@ function formatSyncStatus(counts = {}) {
   const pending = (counts.pending || 0) + (counts.syncing || 0);
   const synced = counts.synced || 0;
   const error = counts.error || 0;
-  return `${pending} pendientes ┬À ${synced} sincronizadas ┬À ${error} con error`;
+  return `${pending} pendientes · ${synced} sincronizadas · ${error} con error`;
 }
 
 function renderImportResult(container, result, isError = false) {
@@ -4540,6 +4541,12 @@ async function bootstrap() {
   seed();
   initTheme();
   initMobileNav();
+
+  const spaConfig = window.__AULA_CLARA_SPA__;
+  if (spaConfig?.enabled) {
+    initSpaRouter(spaConfig.initialView);
+  }
+
   window.addEventListener('aula-clara:data-hydrated', refreshAllPanels);
 
   await resetOfflineDatabaseOnce();

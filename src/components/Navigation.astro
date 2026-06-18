@@ -2,41 +2,41 @@
 const { currentPath = '/', spaEnabled = false } = Astro.props;
 const user = Astro.locals.user;
 
-const links = [
-  { href: '/', label: 'Panel' },
-  { href: '/registro', label: 'Alumnos' },
-  { href: '/cursos', label: 'Cursos' },
-  { href: '/asistencia', label: 'Asistencia' },
-  { href: '/notas', label: 'Calificaciones' },
-  { href: '/actividades', label: 'Actividades' },
+const spaLinks = [
+  { view: 'panel', href: '/', label: 'Panel' },
+  { view: 'registro', href: '/registro', label: 'Alumnos' },
+  { view: 'cursos', href: '/cursos', label: 'Cursos' },
+  { view: 'asistencia', href: '/asistencia', label: 'Asistencia' },
+  { view: 'notas', href: '/notas', label: 'Calificaciones' },
+  { view: 'actividades', href: '/actividades', label: 'Actividades' },
+] as const;
+
+const staticLinks = [
   { href: '/seguridad', label: 'Seguridad' },
   ...(user?.rol === 'admin' ? [{ href: '/admin/usuarios', label: 'Admin' }] : []),
 ];
 
-const isActive = (view: string) => {
-  if (!spaEnabled) {
-    const href = view === 'panel' ? '/' : `/${view === 'registro' ? 'registro' : view}`;
-    return view === 'panel' ? currentPath === '/' : currentPath.startsWith(href);
-  }
-  return false;
+const isActive = (href: string) => {
+  if (href === '/') return currentPath === '/';
+  return currentPath.startsWith(href);
 };
 ---
 
 <header class="app-shell">
   <div class="institution-strip">
     <div>
-      <strong>Escuela T├®cnica 1</strong>
+      <strong>Escuela Técnica 1</strong>
       <span>Seguimiento escolar simple para docentes</span>
     </div>
     {user && <span>{user.nombre} - {user.rol}</span>}
   </div>
-  <nav class="topbar" aria-label="Navegaci├│n principal">
+  <nav class="topbar" aria-label="Navegación principal">
     {spaEnabled ? (
       <button class="brand brand-button" type="button" data-spa-nav="panel" aria-label="Ir al panel principal">
         <span class="brand-mark">AC</span>
         <span>
           <strong>Aula Clara</strong>
-          <small>Gesti├│n docente</small>
+          <small>Gestión docente</small>
         </span>
       </button>
     ) : (
@@ -44,7 +44,7 @@ const isActive = (view: string) => {
         <span class="brand-mark">AC</span>
         <span>
           <strong>Aula Clara</strong>
-          <small>Gesti├│n docente</small>
+          <small>Gestión docente</small>
         </span>
       </a>
     )}
@@ -52,7 +52,7 @@ const isActive = (view: string) => {
     <button
       class="menu-toggle"
       type="button"
-      aria-label="Abrir men├║"
+      aria-label="Abrir menú"
       aria-controls="main-navigation-menu"
       aria-expanded="false"
       data-menu-toggle
@@ -63,18 +63,9 @@ const isActive = (view: string) => {
     </button>
 
     <div class="nav-links" id="main-navigation-menu" data-nav-menu role="menu">
-      <p class="nav-section-label">Men├║</p>
-      {links.map((link) => (
-        'href' in link ? (
-          <a
-            href={link.href}
-            class:list={[{ active: currentPath.startsWith(link.href) }]}
-            aria-current={currentPath.startsWith(link.href) ? 'page' : undefined}
-            role="menuitem"
-          >
-            {link.label}
-          </a>
-        ) : spaEnabled ? (
+      <p class="nav-section-label">Menú</p>
+      {spaEnabled ? (
+        spaLinks.map((link) => (
           <button
             type="button"
             class="nav-tab"
@@ -83,16 +74,28 @@ const isActive = (view: string) => {
           >
             {link.label}
           </button>
-        ) : (
+        ))
+      ) : (
+        spaLinks.map((link) => (
           <a
-            href={link.view === 'panel' ? '/' : `/${link.view === 'registro' ? 'registro' : link.view}`}
-            class:list={[{ active: isActive(link.view) }]}
-            aria-current={isActive(link.view) ? 'page' : undefined}
+            href={link.href}
+            class:list={[{ active: isActive(link.href) }]}
+            aria-current={isActive(link.href) ? 'page' : undefined}
             role="menuitem"
           >
             {link.label}
           </a>
-        )
+        ))
+      )}
+      {staticLinks.map((link) => (
+        <a
+          href={link.href}
+          class:list={[{ active: isActive(link.href) }]}
+          aria-current={isActive(link.href) ? 'page' : undefined}
+          role="menuitem"
+        >
+          {link.label}
+        </a>
       ))}
       {user ? (
         <form method="post" action="/api/auth/logout" class="nav-form">

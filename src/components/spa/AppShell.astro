@@ -14,11 +14,11 @@ const limitsLines = activityLimitsSummaryLines();
   <section class="spa-view page page-stack" data-spa-view="panel" data-spa-title="Panel docente">
 <section class="hero-card">
       <p class="eyebrow">Hoy</p>
-      <h1>Panel del d├¡a</h1>
+      <h1>Panel del día</h1>
 
       <div class="context-banner" data-context-banner>
         <strong>Contexto sugerido</strong>
-        <p data-context-summary>Configur├í tu horario para sugerencias.</p>
+        <p data-context-summary>Configurá tu horario para sugerencias.</p>
       </div>
 
       <div class="hero-actions">
@@ -30,8 +30,8 @@ const limitsLines = activityLimitsSummaryLines();
 
     <section class="panel">
       <div class="section-title">
-        <h2>Resumen del d├¡a</h2>
-        <p>Filtros r├ípidos para ver asistencia, cursos y alertas del contexto actual.</p>
+        <h2>Resumen del día</h2>
+        <p>Filtros rápidos para ver asistencia, cursos y alertas del contexto actual.</p>
       </div>
       <div class="filters-grid" data-dashboard-filters>
         <select name="escuela" aria-label="Escuela"></select>
@@ -49,11 +49,11 @@ const limitsLines = activityLimitsSummaryLines();
       </div>
       <form class="form-grid" data-context-form>
         <fieldset class="day-picker">
-          <legend>D├¡as</legend>
+          <legend>Días</legend>
           <div class="days-checkboxes">
             <label><input type="checkbox" name="dias" value="1" /> Lun</label>
             <label><input type="checkbox" name="dias" value="2" /> Mar</label>
-            <label><input type="checkbox" name="dias" value="3" /> Mi├®</label>
+            <label><input type="checkbox" name="dias" value="3" /> Mié</label>
             <label><input type="checkbox" name="dias" value="4" /> Jue</label>
             <label><input type="checkbox" name="dias" value="5" /> Vie</label>
           </div>
@@ -127,7 +127,7 @@ const limitsLines = activityLimitsSummaryLines();
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="cursos" data-spa-title="Cursos" data-courses>
 <header class="page-header">
       <div class="header-content">
-        <p class="eyebrow">Organizaci├│n</p>
+        <p class="eyebrow">Organización</p>
         <h1>Cursos y divisiones</h1>
         <p>Base de trabajo para inscripciones, asistencia y reportes.</p>
       </div>
@@ -151,7 +151,7 @@ const limitsLines = activityLimitsSummaryLines();
           <span>Turno</span>
           <select name="turno" required>
             <option value="">Seleccionar turno</option>
-            <option>Ma├▒ana</option>
+            <option>Mañana</option>
             <option>Tarde</option>
             <option>Noche</option>
           </select>
@@ -162,7 +162,7 @@ const limitsLines = activityLimitsSummaryLines();
       <section class="panel">
         <div class="section-title">
           <h2>Cursos activos</h2>
-          <p>Resumen de alumnos y materias por divisi├│n.</p>
+          <p>Resumen de alumnos y materias por división.</p>
         </div>
         <div class="list" data-course-list></div>
       </section>
@@ -174,7 +174,7 @@ const limitsLines = activityLimitsSummaryLines();
       <div class="header-content">
         <p class="eyebrow">Control diario</p>
         <h1>Toma de asistencia</h1>
-        <p>Filtr├í por fecha, curso y materia para marcar presentes o ausentes.</p>
+        <p>Filtrá por fecha, curso y materia para marcar presentes o ausentes.</p>
       </div>
       <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block" >Ver notas</button>
     </header>
@@ -201,7 +201,7 @@ const limitsLines = activityLimitsSummaryLines();
     <section class="panel">
       <div class="section-title">
         <h2>Alumnos</h2>
-        <p>Listado filtrado del d├¡a.</p>
+        <p>Listado filtrado del día.</p>
       </div>
       <div class="list" data-attendance-list></div>
     </section>
@@ -212,7 +212,7 @@ const limitsLines = activityLimitsSummaryLines();
       <div class="header-content">
         <p class="eyebrow">Calificaciones</p>
         <h1>Carga de notas</h1>
-        <p>Promedios, entregas y estado acad├®mico por curso y materia.</p>
+        <p>Promedios, entregas y estado académico por curso y materia.</p>
       </div>
       <a class="btn btn-secondary btn-block" href="/api/export">Exportar Excel</a>
     </header>
@@ -220,7 +220,7 @@ const limitsLines = activityLimitsSummaryLines();
     <section class="panel context-workbar">
       <div>
         <strong>Contexto</strong>
-        <p data-grade-context-text>Seleccion├í curso y materia.</p>
+        <p data-grade-context-text>Seleccioná curso y materia.</p>
       </div>
       <div class="filters-grid">
         <select data-grade-course-filter aria-label="Curso"></select>
@@ -230,15 +230,15 @@ const limitsLines = activityLimitsSummaryLines();
 
     <section class="panel">
       <div class="section-title">
-        <h2>Actividades pr├│ximas</h2>
-        <p>TPs y evaluaciones del curso con seguimiento de entregas. Para subir trabajos, us├í <button type="button" data-spa-nav="actividades" >Actividades ÔåÆ Cargar ya hecha</button>.</p>
+        <h2>Actividades próximas</h2>
+        <p>TPs y evaluaciones del curso con seguimiento de entregas. Para subir trabajos, usá <button type="button" data-spa-nav="actividades" >Actividades → Cargar ya hecha</button>.</p>
       </div>
 
       <div class="filters-grid">
         <select data-delivery-type-filter aria-label="Tipo de actividad">
           <option value="">Todos los tipos</option>
-          <option value="tp">Trabajo pr├íctico</option>
-          <option value="evaluacion">Evaluaci├│n</option>
+          <option value="tp">Trabajo práctico</option>
+          <option value="evaluacion">Evaluación</option>
         </select>
         <select data-delivery-status-filter aria-label="Estado de seguimiento">
           <option value="">Todos los estados</option>
@@ -257,7 +257,7 @@ const limitsLines = activityLimitsSummaryLines();
     <section class="responsive-grid is-balanced">
       <form class="panel form-grid" data-grade-form>
         <div class="section-title">
-          <h2>Cargar evaluaci├│n</h2>
+          <h2>Cargar evaluación</h2>
         </div>
 
         <label class="full-width"><span>Alumno</span><select name="studentId" required></select></label>
@@ -270,7 +270,7 @@ const limitsLines = activityLimitsSummaryLines();
               <option>TP</option>
               <option>Oral</option>
               <option>Integrador</option>
-              <option value="Evaluacion">Evaluaci├│n</option>
+              <option value="Evaluacion">Evaluación</option>
             </select>
           </label>
           <label>
@@ -283,26 +283,26 @@ const limitsLines = activityLimitsSummaryLines();
           </label>
         </div>
 
-        <label class="full-width"><span>T├¡tulo</span><input name="titulo" placeholder="Ej: TP 1" required /></label>
+        <label class="full-width"><span>Título</span><input name="titulo" placeholder="Ej: TP 1" required /></label>
 
         <label class="full-width">
-          <span>Modo de calificaci├│n</span>
+          <span>Modo de calificación</span>
           <select name="modoCalificacion" data-grade-mode>
-            <option value="numerica">Num├®rica (1-10)</option>
+            <option value="numerica">Numérica (1-10)</option>
             <option value="conceptual">Conceptual</option>
             <option value="trayectoria">Trayectoria</option>
           </select>
         </label>
 
         <label data-numeric-grade-field><span>Nota</span><input name="valor" type="number" min="1" max="10" step="0.1" /></label>
-        <label class="is-hidden" data-text-grade-field><span>Calificaci├│n</span><select name="calificacionTexto"></select></label>
+        <label class="is-hidden" data-text-grade-field><span>Calificación</span><select name="calificacionTexto"></select></label>
 
         <div class="input-row full-width">
           <label><span>Fecha</span><input name="fecha" type="date" /></label>
           <label><span>Entrega</span><input name="fechaEntrega" type="date" /></label>
         </div>
 
-        <button class="btn btn-primary btn-block" type="submit">Guardar calificaci├│n</button>
+        <button class="btn btn-primary btn-block" type="submit">Guardar calificación</button>
       </form>
 
       <div class="stack">
@@ -321,8 +321,8 @@ const limitsLines = activityLimitsSummaryLines();
 
     <section class="panel">
       <div class="section-title">
-        <h2>Estado acad├®mico</h2>
-        <p>Vista consolidada por alumno para lectura r├ípida.</p>
+        <h2>Estado académico</h2>
+        <p>Vista consolidada por alumno para lectura rápida.</p>
       </div>
       <div class="table-container" data-grade-table></div>
     </section>
@@ -333,7 +333,7 @@ const limitsLines = activityLimitsSummaryLines();
       <div class="header-content">
         <p class="eyebrow">Agenda docente</p>
         <h1>Actividades y calendario</h1>
-        <p>Avisos de evaluaci├│n, TP, entregas y fechas importantes en una sola pantalla.</p>
+        <p>Avisos de evaluación, TP, entregas y fechas importantes en una sola pantalla.</p>
       </div>
       <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block" >Ir a calificaciones</button>
     </header>
@@ -342,29 +342,29 @@ const limitsLines = activityLimitsSummaryLines();
       <section class="panel activity-workspace" data-activity-workspace>
         <div class="section-title">
           <h2>Realizar actividades</h2>
-          <p>Arm├í evaluaciones o TP a mano, o gener├ílos con IA a partir de tus apuntes y documentos (PDF, DOCX o TXT).</p>
+          <p>Armá evaluaciones o TP a mano, o generálos con IA a partir de tus apuntes y documentos (PDF, DOCX o TXT).</p>
         </div>
 
-        <div class="activity-mode-picker full-width" role="tablist" aria-label="Modo de realizaci├│n">
+        <div class="activity-mode-picker full-width" role="tablist" aria-label="Modo de realización">
           <label class="template-card activity-mode-card">
             <input type="radio" name="activityMode" value="manual" checked data-activity-mode-input />
             <span>
               <strong>Realizar a mano</strong>
-              <small>Complet├í consigna, fechas y guard├í en el colegio.</small>
+              <small>Completá consigna, fechas y guardá en el colegio.</small>
             </span>
           </label>
           <label class="template-card activity-mode-card">
             <input type="radio" name="activityMode" value="ai" data-activity-mode-input />
             <span>
               <strong>Realizar con IA</strong>
-              <small>Sub├¡ documentos y gener├í el material did├íctico.</small>
+              <small>Subí documentos y generá el material didáctico.</small>
             </span>
           </label>
           <label class="template-card activity-mode-card">
             <input type="radio" name="activityMode" value="cargar" data-activity-mode-input />
             <span>
               <strong>Cargar ya hecha</strong>
-              <small>Sub├¡ entregas o material de una actividad existente por curso.</small>
+              <small>Subí entregas o material de una actividad existente por curso.</small>
             </span>
           </label>
         </div>
@@ -378,18 +378,18 @@ const limitsLines = activityLimitsSummaryLines();
           </div>
 
           <label class="full-width">
-            <span>T├¡tulo</span>
-            <input name="titulo" placeholder="Ej: Evaluaci├│n integradora" required />
+            <span>Título</span>
+            <input name="titulo" placeholder="Ej: Evaluación integradora" required />
           </label>
 
           <div class="input-group full-width">
-            <label><span>Publicaci├│n</span><input type="date" name="fechaPublicacion" /></label>
+            <label><span>Publicación</span><input type="date" name="fechaPublicacion" /></label>
             <label><span>Entrega</span><input type="date" name="fechaVencimiento" /></label>
           </div>
 
           <div class="activity-mode-panel full-width" data-activity-mode-panel="manual">
             <div class="activity-template-picker full-width" role="radiogroup">
-              <label class="template-card"><input type="radio" name="tipo" value="evaluacion" checked /> <strong>Evaluaci├│n</strong></label>
+              <label class="template-card"><input type="radio" name="tipo" value="evaluacion" checked /> <strong>Evaluación</strong></label>
               <label class="template-card"><input type="radio" name="tipo" value="tp" /> <strong>TP</strong></label>
             </div>
 
@@ -406,7 +406,7 @@ const limitsLines = activityLimitsSummaryLines();
         <div class="activity-mode-panel full-width is-hidden" data-activity-mode-panel="cargar">
           <div class="section-title full-width">
             <h3>Cargar actividad ya hecha</h3>
-            <p>Us├í el curso y materia de arriba. Sub├¡ trabajos entregados (PDF, Word, im├ígenes, TXT).</p>
+            <p>Usá el curso y materia de arriba. Subí trabajos entregados (PDF, Word, imágenes, TXT).</p>
           </div>
 
           <form
@@ -418,19 +418,19 @@ const limitsLines = activityLimitsSummaryLines();
             <label class="full-width">
               <span>Actividad del curso</span>
               <select name="actividadId" data-trabajo-actividad-select required>
-                <option value="">Eleg├¡ una actividad</option>
+                <option value="">Elegí una actividad</option>
               </select>
             </label>
 
             <label class="full-width">
               <span>Alumno (opcional)</span>
               <select name="alumnoId" data-trabajo-alumno-select>
-                <option value="">Sin alumno espec├¡fico</option>
+                <option value="">Sin alumno específico</option>
               </select>
             </label>
 
             <label class="full-width">
-              <span>T├¡tulo del trabajo</span>
+              <span>Título del trabajo</span>
               <input name="titulo" placeholder="Ej: TP HTML - Martina Ruiz" required />
             </label>
 
@@ -445,7 +445,7 @@ const limitsLines = activityLimitsSummaryLines();
                 data-trabajo-files
               />
               <small class="muted">
-                Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} archivos ┬À {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u
+                Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} archivos · {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u
               </small>
             </label>
 
@@ -464,7 +464,7 @@ const limitsLines = activityLimitsSummaryLines();
               <h3>Trabajos cargados en este curso</h3>
             </div>
             <div class="filters-grid">
-              <select data-trabajo-estado-filter aria-label="Estado de calificaci├│n">
+              <select data-trabajo-estado-filter aria-label="Estado de calificación">
                 <option value="">Todos</option>
                 <option value="enviado">Pendiente de calificar</option>
                 <option value="calificado">Calificado</option>
@@ -477,10 +477,10 @@ const limitsLines = activityLimitsSummaryLines();
         <div class="activity-mode-panel full-width is-hidden" data-activity-mode-panel="ai">
           <div class="ai-limits-banner full-width">
             <div>
-              <strong>L├¡mites de generaci├│n con IA</strong>
+              <strong>Límites de generación con IA</strong>
               <p class="muted">
-                Hasta {ACTIVITY_AI_LIMITS.maxFiles} archivos ┬À {ACTIVITY_AI_LIMITS.maxFileMb} MB c/u ┬À
-                m├íx. {formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres enviados (~{ACTIVITY_AI_LIMITS.approxPagesAtInputCap} p├íginas).
+                Hasta {ACTIVITY_AI_LIMITS.maxFiles} archivos · {ACTIVITY_AI_LIMITS.maxFileMb} MB c/u ·
+                máx. {formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres enviados (~{ACTIVITY_AI_LIMITS.approxPagesAtInputCap} páginas).
               </p>
             </div>
             <button type="button" class="btn btn-secondary btn-sm" data-activity-ai-limits-open>
@@ -498,7 +498,7 @@ const limitsLines = activityLimitsSummaryLines();
             <label class="full-width">
               <span>Tipo de actividad a generar</span>
               <select name="tipoGeneracion" required>
-                <option value="tp">Trabajo Pr├íctico</option>
+                <option value="tp">Trabajo Práctico</option>
                 <option value="examen">Examen</option>
                 <option value="integrador">Trabajo Integrador</option>
               </select>
@@ -516,15 +516,15 @@ const limitsLines = activityLimitsSummaryLines();
               />
               <small class="muted">
                 Hasta {ACTIVITY_AI_LIMITS.maxFiles} archivos ({ACTIVITY_AI_LIMITS.maxFileMb} MB c/u).
-                Si el material es extenso, se resume autom├íticamente antes de generar la actividad.
+                Si el material es extenso, se resume automáticamente antes de generar la actividad.
               </small>
             </label>
 
             <div class="ai-file-feedback full-width is-hidden" data-activity-ai-file-feedback aria-live="polite"></div>
 
             <label>
-              <span>Nivel acad├®mico (opcional)</span>
-              <input name="nivelAcademico" placeholder="Ej: 6to a├▒o t├®cnico" />
+              <span>Nivel académico (opcional)</span>
+              <input name="nivelAcademico" placeholder="Ej: 6to año técnico" />
             </label>
 
             <label>
@@ -540,8 +540,8 @@ const limitsLines = activityLimitsSummaryLines();
           <div class="ai-generation-status is-hidden" data-activity-ai-status aria-live="polite">
             <div class="ai-spinner" aria-hidden="true"></div>
             <div>
-              <strong data-activity-ai-status-title>Generando material did├ícticoÔÇª</strong>
-              <p class="muted" data-activity-ai-status-detail>La solicitud est├í en cola para respetar los l├¡mites de la API.</p>
+              <strong data-activity-ai-status-title>Generando material didáctico…</strong>
+              <p class="muted" data-activity-ai-status-detail>La solicitud está en cola para respetar los límites de la API.</p>
               <div class="ai-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                 <div class="ai-progress-bar" data-activity-ai-progress></div>
               </div>
@@ -553,7 +553,7 @@ const limitsLines = activityLimitsSummaryLines();
           <div class="ai-preview is-hidden" data-activity-ai-preview>
             <div class="section-title">
               <h3>Vista previa generada</h3>
-              <p>Revis├í el contenido, export├í o aplic├í al formulario para editar y guardar.</p>
+              <p>Revisá el contenido, exportá o aplicá al formulario para editar y guardar.</p>
             </div>
             <div class="ai-preview-body" data-activity-ai-preview-body></div>
             <div class="button-row">
@@ -568,7 +568,7 @@ const limitsLines = activityLimitsSummaryLines();
       <section class="panel">
         <div class="section-title">
           <h2>Actividades preparadas</h2>
-          <p>Envi├í un TP, examen o actividad ya cargada a otro curso o turno.</p>
+          <p>Enviá un TP, examen o actividad ya cargada a otro curso o turno.</p>
         </div>
         <div class="list" data-activity-list></div>
       </section>
@@ -591,7 +591,7 @@ const limitsLines = activityLimitsSummaryLines();
           <div class="calendar-grid" data-calendar-grid></div>
         </div>
         <aside class="panel calendar-day-panel">
-          <h2 data-calendar-selected-title>Seleccion├í un d├¡a</h2>
+          <h2 data-calendar-selected-title>Seleccioná un día</h2>
           <p class="calendar-summary" data-calendar-selected-summary></p>
           <div class="list" data-calendar-day-events></div>
         </aside>
@@ -602,7 +602,7 @@ const limitsLines = activityLimitsSummaryLines();
       <form method="dialog" class="panel form-grid" data-trabajo-reenviar-form>
         <div class="section-title">
           <h2>Reenviar trabajo</h2>
-          <p>Envi├í el mismo material a otro curso, turno o materia.</p>
+          <p>Enviá el mismo material a otro curso, turno o materia.</p>
         </div>
 
         <input type="hidden" name="reenviarDesdeId" />
@@ -618,14 +618,14 @@ const limitsLines = activityLimitsSummaryLines();
         </label>
 
         <label class="full-width">
-          <span>T├¡tulo</span>
+          <span>Título</span>
           <input name="titulo" required />
         </label>
 
         <label class="full-width">
           <span>Alumno (opcional)</span>
           <select name="alumnoId" data-reenviar-alumno>
-            <option value="">Sin alumno espec├¡fico</option>
+            <option value="">Sin alumno específico</option>
           </select>
         </label>
 
@@ -640,7 +640,7 @@ const limitsLines = activityLimitsSummaryLines();
       <form method="dialog" class="panel form-grid" data-activity-enviar-form>
         <div class="section-title">
           <h2>Enviar actividad a un curso</h2>
-          <p id="activity-enviar-source-label">Duplic├í el material a otro curso, turno o materia.</p>
+          <p id="activity-enviar-source-label">Duplicá el material a otro curso, turno o materia.</p>
         </div>
 
         <input type="hidden" name="actividadId" />
@@ -661,12 +661,12 @@ const limitsLines = activityLimitsSummaryLines();
         </label>
 
         <label class="full-width">
-          <span>T├¡tulo</span>
-          <input name="titulo" placeholder="Se copia el t├¡tulo original si lo dej├ís igual" />
+          <span>Título</span>
+          <input name="titulo" placeholder="Se copia el título original si lo dejás igual" />
         </label>
 
         <div class="input-row full-width">
-          <label><span>Publicaci├│n</span><input type="date" name="fechaPublicacion" /></label>
+          <label><span>Publicación</span><input type="date" name="fechaPublicacion" /></label>
           <label><span>Entrega</span><input type="date" name="fechaVencimiento" /></label>
         </div>
 
@@ -680,30 +680,30 @@ const limitsLines = activityLimitsSummaryLines();
     <dialog class="modal ai-limits-modal" data-activity-ai-limits-dialog>
       <form method="dialog" class="panel ai-limits-dialog-panel">
         <div class="section-title">
-          <h2>L├¡mites de IA (plan gratuito Groq)</h2>
-          <p>Informaci├│n visual para planificar tus archivos. No modifica el funcionamiento del formulario.</p>
+          <h2>Límites de IA (plan gratuito Groq)</h2>
+          <p>Información visual para planificar tus archivos. No modifica el funcionamiento del formulario.</p>
         </div>
 
         <div class="ai-limits-grid">
           <article class="ai-limits-card">
             <span class="ai-limits-label">Archivos</span>
             <strong>{ACTIVITY_AI_LIMITS.maxFiles} por solicitud</strong>
-            <p class="muted">PDF, DOCX o TXT ┬À {ACTIVITY_AI_LIMITS.maxFileMb} MB m├íximo cada uno</p>
+            <p class="muted">PDF, DOCX o TXT · {ACTIVITY_AI_LIMITS.maxFileMb} MB máximo cada uno</p>
           </article>
           <article class="ai-limits-card">
             <span class="ai-limits-label">Texto enviado a la IA</span>
             <strong>{formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres</strong>
-            <p class="muted">Aprox. {ACTIVITY_AI_LIMITS.approxPagesAtInputCap} p├íginas de texto corrido</p>
+            <p class="muted">Aprox. {ACTIVITY_AI_LIMITS.approxPagesAtInputCap} páginas de texto corrido</p>
           </article>
           <article class="ai-limits-card">
-            <span class="ai-limits-label">Resumen autom├ítico</span>
+            <span class="ai-limits-label">Resumen automático</span>
             <strong>Desde {formatActivityChars(ACTIVITY_AI_LIMITS.summarizeThresholdChars)} caracteres</strong>
             <p class="muted">Modelo liviano: {ACTIVITY_AI_LIMITS.groqModelLight}</p>
           </article>
           <article class="ai-limits-card">
-            <span class="ai-limits-label">Generaci├│n final</span>
+            <span class="ai-limits-label">Generación final</span>
             <strong>{ACTIVITY_AI_LIMITS.groqModelHeavy}</strong>
-            <p class="muted">Sujeto a l├¡mites de tokens/minuto y tokens/d├¡a de Groq</p>
+            <p class="muted">Sujeto a límites de tokens/minuto y tokens/día de Groq</p>
           </article>
         </div>
 
@@ -721,7 +721,7 @@ const limitsLines = activityLimitsSummaryLines();
       <form method="dialog" class="panel">
         <h2>Recordatorios</h2>
         <label>
-          <span>D├¡as de anticipaci├│n</span>
+          <span>Días de anticipación</span>
           <input type="number" min="1" max="30" value="3" data-calendar-lead-days />
         </label>
         <div class="button-row">
