@@ -1,6 +1,10 @@
 import type { APIRoute } from 'astro';
 import { isAllowedExcelImportFile, parseImportType } from '../../../lib/excel-import-limits';
-import { importExcelBuffer, parseStudentImportMapping } from '../../../server/excel-import';
+import {
+  importExcelBuffer,
+  parseAttendanceImportMapping,
+  parseStudentImportMapping,
+} from '../../../server/excel-import';
 
 export const POST: APIRoute = async ({ locals, request }) => {
   const user = locals.user;
@@ -24,7 +28,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   try {
     const buffer = await file.arrayBuffer();
-    const mapping = type === 'alumnos' ? parseStudentImportMapping(form.get('mapping')) : null;
+    const mapping = type === 'alumnos'
+      ? parseStudentImportMapping(form.get('mapping'))
+      : type === 'asistencias'
+        ? parseAttendanceImportMapping(form.get('mapping'))
+        : null;
     const result = await importExcelBuffer(user, type, buffer, mapping);
     const hasBlockingErrors = result.errors.some((item) => item.row === 0);
     const processed = result.imported + result.updated;

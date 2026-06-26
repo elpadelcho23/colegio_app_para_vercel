@@ -25,3 +25,8 @@ export const PULL_FIELD_BY_KEY: Record<string, string> = Object.fromEntries(
     .filter((entry): entry is ClientStorageEntry & { pullField: string } => entry.pullField !== null)
     .map(({ key, pullField }) => [key, pullField]),
 );
+
+/** localStorage: usuario omitió el checklist de primeros pasos en el panel. */
+export function onboardingDismissedKey(userId: string) {
+  return `aula_clara_onboarding_dismissed:${userId}`;
+}

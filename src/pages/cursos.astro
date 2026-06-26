@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import SchoolCyclePanel from '../components/SchoolCyclePanel.astro';
 ---
 
 <Layout title="Cursos">
@@ -12,6 +13,8 @@ import Layout from '../layouts/Layout.astro';
       </div>
       <a class="btn btn-secondary btn-block" href="/registro">Cargar alumnos</a>
     </header>
+
+    <SchoolCyclePanel />
 
     <section class="responsive-grid">
       <form class="panel form-grid" data-course-form>

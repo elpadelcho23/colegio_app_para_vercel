@@ -1,14 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { EXCEL_IMPORT_LIMITS } from '../lib/excel-import-limits';
-import {
-  STUDENT_EXCEL_COLUMNS,
-  STUDENT_EXCEL_EXAMPLE_ROWS,
-  STUDENT_EXCEL_NOTES,
-  STUDENT_EXCEL_SHEET,
-} from '../lib/student-excel-reference';
-
-const maxFileMb = Math.round(EXCEL_IMPORT_LIMITS.maxFileBytes / (1024 * 1024));
+import ExcelImportWorkspace from '../components/ExcelImportWorkspace.astro';
 ---
 
 <Layout title="Registro de alumnos">
@@ -17,15 +9,20 @@ const maxFileMb = Math.round(EXCEL_IMPORT_LIMITS.maxFileBytes / (1024 * 1024));
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
         <h1>Registro simple</h1>
-        <p>Cargá alumnos uno a uno o subí una hoja Excel desde tu computadora para usarlos en asistencia y notas.</p>
+        <p>Cargá alumnos uno a uno o subí una hoja Excel con una plantilla personalizada.</p>
       </div>
-      <a class="btn btn-secondary btn-block" href="/cursos">Organizar cursos</a>
+      <div class="actions-group">
+        <button type="button" class="btn btn-primary btn-block" data-student-mode-trigger="excel">
+          Importar desde Excel
+        </button>
+        <a class="btn btn-secondary btn-block" href="/cursos">Organizar cursos</a>
+      </div>
     </header>
 
     <section class="panel student-workspace">
       <div class="section-title">
         <h2>Registrar alumnos</h2>
-        <p>Elegí cómo querés cargar el legajo. Todo arranca acá: después podés tomar asistencia y calificar.</p>
+        <p>Elegí cómo querés cargar el legajo. Podés guardar la estructura de tu Excel como plantilla reutilizable.</p>
       </div>
 
       <div class="activity-mode-picker full-width" role="tablist" aria-label="Modo de registro">
@@ -40,7 +37,7 @@ const maxFileMb = Math.round(EXCEL_IMPORT_LIMITS.maxFileBytes / (1024 * 1024));
           <input type="radio" name="studentMode" value="excel" data-student-mode-input />
           <span>
             <strong>Cargar desde hoja Excel</strong>
-            <small>Subí un .xlsx de tu computadora con escuela, curso, turno y alumnos.</small>
+            <small>Usá tu planilla: mapeá columnas y guardá plantillas para la próxima vez.</small>
           </span>
         </label>
       </div>
@@ -81,116 +78,7 @@ const maxFileMb = Math.round(EXCEL_IMPORT_LIMITS.maxFileBytes / (1024 * 1024));
       </div>
 
       <div class="student-mode-panel full-width is-hidden" data-student-mode-panel="excel">
-        <div class="section-title full-width">
-          <h3>Cargar hoja de alumnos</h3>
-          <p>Seleccioná un Excel (.xlsx) de tu equipo. Si la escuela o el curso no existen, se crean solos al importar.</p>
-        </div>
-
-        <form
-          class="form-grid full-width"
-          data-student-excel-form
-          data-max-file-mb={maxFileMb}
-        >
-          <section class="excel-reference full-width">
-            <div class="section-title">
-              <h4>Referencia: cómo debe verse tu Excel</h4>
-              <p>
-                Hoja <strong>{STUDENT_EXCEL_SHEET}</strong> · fila 1 = encabezados · datos desde la fila 2.
-                Podés copiar esta estructura o descargar la plantilla lista para usar.
-              </p>
-            </div>
-
-            <div class="table-container excel-reference-table" role="region" aria-label="Ejemplo de hoja Excel de alumnos">
-              <table>
-                <thead>
-                  <tr>
-                    {STUDENT_EXCEL_COLUMNS.map((column) => (
-                      <th>
-                        {column.label}
-                        {column.required
-                          ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
-                          : <span class="excel-ref-tag">opcional</span>}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {STUDENT_EXCEL_EXAMPLE_ROWS.map((row) => (
-                    <tr>
-                      {STUDENT_EXCEL_COLUMNS.map((column) => (
-                        <td>{row[column.label as keyof typeof row] || '—'}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <ul class="import-requirements excel-reference-notes">
-              {STUDENT_EXCEL_NOTES.map((note) => (
-                <li>{note}</li>
-              ))}
-              <li>Formato <strong>.xlsx</strong> · máx. {maxFileMb} MB.</li>
-            </ul>
-          </section>
-
-          <label class="full-width">
-            <span>Hoja de alumnos</span>
-            <input
-              type="file"
-              name="archivo"
-              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              data-student-excel-file
-              required
-            />
-          </label>
-
-          <div class="ai-file-feedback full-width is-hidden" data-student-excel-feedback aria-live="polite"></div>
-
-          <section class="excel-mapping full-width is-hidden" data-student-excel-mapping>
-            <div class="section-title">
-              <h4>Mapeo de columnas</h4>
-              <p>Indicá qué columna de tu Excel corresponde a cada dato. Si tenés Apellido y Nombre separados, asigná ambas.</p>
-            </div>
-
-            <div class="excel-mapping-toolbar">
-              <label>
-                <span>Fila de encabezados</span>
-                <input type="number" min="1" value="1" data-student-excel-header-row />
-              </label>
-
-              <label>
-                <span>Plantilla guardada</span>
-                <select data-student-excel-template-select>
-                  <option value="">Sin plantilla</option>
-                </select>
-              </label>
-            </div>
-
-            <div class="excel-mapping-grid" data-student-excel-mapping-fields></div>
-
-            <div class="excel-mapping-templates">
-              <input
-                type="text"
-                data-student-excel-template-name
-                placeholder="Nombre de plantilla (ej. Planilla ministerio)"
-                aria-label="Nombre de plantilla"
-              />
-              <button class="btn btn-secondary" type="button" data-student-excel-template-save>Guardar plantilla</button>
-              <button class="btn btn-ghost" type="button" data-student-excel-template-delete>Eliminar</button>
-            </div>
-
-            <button class="btn btn-secondary" type="button" data-student-excel-apply-mapping>Actualizar vista previa</button>
-          </section>
-
-          <div class="import-result full-width" data-student-excel-preview hidden></div>
-          <div class="import-result full-width" data-student-excel-result hidden></div>
-
-          <div class="button-row full-width">
-            <a class="btn btn-ghost" href="/api/import/template?type=alumnos">Descargar plantilla</a>
-            <button class="btn btn-primary" type="submit" data-student-excel-submit>Cargar alumnos</button>
-          </div>
-        </form>
+        <ExcelImportWorkspace importType="alumnos" />
       </div>
     </section>
 
@@ -207,7 +95,7 @@ const maxFileMb = Math.round(EXCEL_IMPORT_LIMITS.maxFileBytes / (1024 * 1024));
     <section class="panel export-panel" data-excel-export="alumnos">
       <div class="section-title">
         <h2>Exportar alumnos a Excel</h2>
-        <p>Descargá el listado con escuela, curso, DNI, tutor y materias. Compatible con la plantilla de carga.</p>
+        <p>Descargá el listado con escuela, curso, DNI, tutor y materias.</p>
       </div>
       <div class="filters-grid">
         <select data-export-school aria-label="Escuela">

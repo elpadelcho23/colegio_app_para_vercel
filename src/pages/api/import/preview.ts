@@ -1,6 +1,10 @@
 import type { APIRoute } from 'astro';
-import { isAllowedExcelImportFile } from '../../../lib/excel-import-limits';
-import { previewStudentExcelBuffer, parseStudentImportMapping } from '../../../server/excel-import';
+import { isAllowedExcelImportFile, parseImportType } from '../../../lib/excel-import-limits';
+import {
+  parseAttendanceImportMapping,
+  parseStudentImportMapping,
+  previewExcelBuffer,
+} from '../../../server/excel-import';
 
 export const POST: APIRoute = async ({ locals, request }) => {
   const user = locals.user;
@@ -8,6 +12,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   const form = await request.formData().catch(() => null);
   if (!form) return Response.json({ error: 'Formulario inválido.' }, { status: 400 });
+
+  const type = parseImportType(form.get('type'));
+  if (!type || (type !== 'alumnos' && type !== 'asistencias')) {
+    return Response.json({ error: 'Tipo inválido. Usá alumnos o asistencias para vista previa con mapeo.' }, { status: 400 });
+  }
 
   const file = form.get('file');
   if (!(file instanceof File)) {
@@ -19,8 +28,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   try {
     const buffer = await file.arrayBuffer();
-    const mapping = parseStudentImportMapping(form.get('mapping'));
-    const preview = await previewStudentExcelBuffer(user, buffer, mapping);
+    const mapping = type === 'alumnos'
+      ? parseStudentImportMapping(form.get('mapping'))
+      : parseAttendanceImportMapping(form.get('mapping'));
+    const preview = await previewExcelBuffer(user, type, buffer, mapping);
     return Response.json({ ok: true, ...preview });
   } catch (error) {
     console.error('[import/preview]', error);

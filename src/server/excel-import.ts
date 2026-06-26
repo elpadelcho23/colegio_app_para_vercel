@@ -18,8 +18,19 @@ import {
   type StudentExcelMapping,
 } from '../lib/student-excel-mapping';
 import {
+  attendanceColumnMapToMapping,
+  ATTENDANCE_MAPPABLE_FIELDS,
+  parseAttendanceExcelMappingJson,
+  serializeAttendanceMappingForClient,
+  validateAttendanceExcelMapping,
+  type AttendanceExcelMapping,
+} from '../lib/attendance-excel-mapping';
+import {
   buildStudentSheetError,
+  buildAttendanceSheetError,
+  parseAttendanceWorksheet,
   parseStudentWorksheet,
+  type ParsedAttendanceRow,
   type ParsedStudentRow,
 } from './excel-parse';
 import { canAccessStudent, canAccessSubject } from './auth';
@@ -233,14 +244,16 @@ function ensureSubject(user: User, nombre: string, updatedAt: string) {
   return subjectId;
 }
 
-function findCourse(user: User, escuela: string, nombre: string, turno: string) {
+function findCourse(user: User, escuela: string, nombre: string, turno: string, cicloLectivo = new Date().getFullYear()) {
+  const year = Number.isFinite(cicloLectivo) ? cicloLectivo : new Date().getFullYear();
   return db.prepare(`
     SELECT id FROM cursos
     WHERE tenant_id = ?
       AND LOWER(escuela) = LOWER(?)
       AND LOWER(nombre) = LOWER(?)
       AND LOWER(turno) = LOWER(?)
-  `).get(user.tenant_id, escuela, nombre, turno) as { id: string } | undefined;
+      AND ciclo_lectivo = ?
+  `).get(user.tenant_id, escuela, nombre, turno, year) as { id: string } | undefined;
 }
 
 function findStudent(user: User, courseId: string, nombre: string, dni: string | null) {
@@ -371,7 +384,7 @@ function ensureCourse(
   cicloLectivo = new Date().getFullYear(),
 ): { id: string; created: boolean } {
   ensureSchool(user, escuela, updatedAt);
-  const existing = findCourse(user, escuela, nombre, turno);
+  const existing = findCourse(user, escuela, nombre, turno, year);
   const courseId = existing?.id || `curso-${randomUUID()}`;
   const year = Number.isFinite(cicloLectivo) ? cicloLectivo : new Date().getFullYear();
 
@@ -422,6 +435,19 @@ function importCourses(user: User, rows: RowRecord[], errors: ImportRowError[]) 
   });
 
   return { imported, updated, skipped: 0 };
+}
+
+function importAttendanceFromParsed(user: User, rows: ParsedAttendanceRow[], errors: ImportRowError[]) {
+  const records: RowRecord[] = rows.map((row) => ({
+    fecha: row.fecha,
+    escuela: row.escuela,
+    curso: row.curso,
+    turno: row.turno,
+    materia: row.materia,
+    nombre: row.nombre,
+    estado: row.estado,
+  }));
+  return importAttendance(user, records, errors);
 }
 
 function importAttendance(user: User, rows: RowRecord[], errors: ImportRowError[]) {
@@ -597,6 +623,48 @@ function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
   return { imported, updated, skipped: 0 };
 }
 
+export async function previewAttendanceExcelBuffer(user: User, buffer: ArrayBuffer, mappingInput?: AttendanceExcelMapping | null) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const parsed = parseAttendanceWorksheet(workbook, { mapping: mappingInput || null });
+  const sheetError = buildAttendanceSheetError(parsed);
+  const mapping = parsed ? attendanceColumnMapToMapping(parsed.headerRow, parsed.columnMap) : null;
+  const mappingErrors = mapping ? validateAttendanceExcelMapping(mapping) : ['No se pudo leer la planilla.'];
+
+  return {
+    sheetName: parsed?.sheetName || null,
+    headerRow: parsed?.headerRow || 0,
+    detectedHeaders: parsed?.detectedHeaders || [],
+    availableColumns: (parsed?.detectedHeaders || []).map((label, index) => ({ index, label: label || `Columna ${index + 1}` })),
+    mapping: mapping ? serializeAttendanceMappingForClient(mapping) : null,
+    mappableFields: ATTENDANCE_MAPPABLE_FIELDS,
+    mappingErrors,
+    requiresMapping: Boolean(parsed?.requiresMapping),
+    columnMap: parsed?.columnMap || {},
+    totalRows: parsed?.rows.length || 0,
+    validRows: parsed?.validRows.length || 0,
+    invalidRows: parsed?.invalidRows.length || 0,
+    preview: (parsed?.validRows || []).slice(0, 5).map((row) => ({
+      row: row.rowNumber,
+      fecha: row.fecha,
+      escuela: row.escuela,
+      curso: row.curso,
+      turno: row.turno,
+      materia: row.materia,
+      nombre: row.nombre,
+      estado: row.estado,
+    })),
+    errors: [
+      ...(sheetError ? [{ row: 0, message: sheetError }] : []),
+      ...(parsed?.mappingErrors || []).map((message) => ({ row: 0, message })),
+      ...(parsed?.invalidRows || []).flatMap((row) =>
+        row.errors.map((message) => ({ row: row.rowNumber, message })),
+      ),
+    ].slice(0, 25),
+    canImport: Boolean(parsed && parsed.validRows.length > 0 && mappingErrors.length === 0),
+  };
+}
+
 export async function previewStudentExcelBuffer(user: User, buffer: ArrayBuffer, mappingInput?: StudentExcelMapping | null) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
@@ -642,11 +710,31 @@ export function parseStudentImportMapping(raw: FormDataEntryValue | null) {
   return parseStudentExcelMappingJson(raw);
 }
 
+export function parseAttendanceImportMapping(raw: FormDataEntryValue | null) {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  return parseAttendanceExcelMappingJson(raw);
+}
+
+export async function previewExcelBuffer(
+  user: User,
+  type: ExcelImportType,
+  buffer: ArrayBuffer,
+  mappingInput?: StudentExcelMapping | AttendanceExcelMapping | null,
+) {
+  if (type === 'alumnos') {
+    return previewStudentExcelBuffer(user, buffer, mappingInput as StudentExcelMapping | null);
+  }
+  if (type === 'asistencias') {
+    return previewAttendanceExcelBuffer(user, buffer, mappingInput as AttendanceExcelMapping | null);
+  }
+  throw new Error(`Vista previa no disponible para ${type}.`);
+}
+
 export async function importExcelBuffer(
   user: User,
   type: ExcelImportType,
   buffer: ArrayBuffer,
-  mappingInput?: StudentExcelMapping | null,
+  mappingInput?: StudentExcelMapping | AttendanceExcelMapping | null,
 ): Promise<ImportResult> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
@@ -687,6 +775,44 @@ export async function importExcelBuffer(
     return { ...counts, errors };
   }
 
+  if (type === 'asistencias') {
+    const parsed = parseAttendanceWorksheet(workbook, { mapping: mappingInput as AttendanceExcelMapping | null });
+    const sheetError = buildAttendanceSheetError(parsed);
+    const mappingErrors = parsed
+      ? validateAttendanceExcelMapping(attendanceColumnMapToMapping(parsed.headerRow, parsed.columnMap))
+      : ['No se pudo leer la planilla.'];
+    if (!parsed || sheetError) {
+      return {
+        imported: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [{ row: 0, message: sheetError || mappingErrors[0] || 'No se pudo leer la planilla de asistencias.' }],
+      };
+    }
+
+    if (mappingErrors.length) {
+      return {
+        imported: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [{ row: 0, message: mappingErrors[0] }],
+      };
+    }
+
+    if (parsed.rows.length > EXCEL_IMPORT_LIMITS.maxRows) {
+      return {
+        imported: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [{ row: 0, message: `El archivo supera el máximo de ${EXCEL_IMPORT_LIMITS.maxRows} filas.` }],
+      };
+    }
+
+    const errors: ImportRowError[] = [];
+    const counts = importAttendanceFromParsed(user, parsed.validRows, errors);
+    return { ...counts, errors };
+  }
+
   const worksheet = pickWorksheet(workbook, type);
   if (!worksheet) {
     return { imported: 0, updated: 0, skipped: 0, errors: [{ row: 0, message: 'El archivo no contiene hojas de cálculo.' }] };
@@ -709,7 +835,6 @@ export async function importExcelBuffer(
   const errors: ImportRowError[] = [];
   const run = db.transaction(() => {
     if (type === 'cursos') return importCourses(user, rows, errors);
-    if (type === 'asistencias') return importAttendance(user, rows, errors);
     return importGrades(user, rows, errors);
   });
 

@@ -1,0 +1,142 @@
+---
+import { ACTIVITY_AI_LIMITS, activityLimitsSummaryLines, formatActivityChars } from '../lib/activity-ai-limits';
+
+const limitsLines = activityLimitsSummaryLines();
+---
+
+<section class="panel tools-section" data-tools-section="ai">
+  <div class="section-title">
+    <h2>Inteligencia artificial</h2>
+    <p>Generá evaluaciones o TP a partir de tus apuntes y documentos (PDF, DOCX o TXT).</p>
+  </div>
+
+  <div class="activity-mode-panel full-width" data-activity-mode-panel="ai">
+    <div class="ai-limits-banner full-width">
+      <div>
+        <strong>Límites de generación con IA</strong>
+        <p class="muted">
+          Hasta {ACTIVITY_AI_LIMITS.maxFiles} archivos · {ACTIVITY_AI_LIMITS.maxFileMb} MB c/u ·
+          máx. {formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres enviados (~{ACTIVITY_AI_LIMITS.approxPagesAtInputCap} páginas).
+        </p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" data-activity-ai-limits-open>
+        Ver detalle
+      </button>
+    </div>
+
+    <form
+      class="form-grid"
+      data-activity-ai-form
+      data-max-files={ACTIVITY_AI_LIMITS.maxFiles}
+      data-max-file-bytes={ACTIVITY_AI_LIMITS.maxFileBytes}
+      data-max-input-chars={ACTIVITY_AI_LIMITS.maxInputChars}
+    >
+      <label class="full-width">
+        <span>Tipo de actividad a generar</span>
+        <select name="tipoGeneracion" required>
+          <option value="tp">Trabajo Práctico</option>
+          <option value="examen">Examen</option>
+          <option value="integrador">Trabajo Integrador</option>
+        </select>
+      </label>
+
+      <label class="full-width">
+        <span>Documentos de referencia</span>
+        <input
+          type="file"
+          name="documentos"
+          accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          multiple
+          required
+          data-activity-ai-files
+        />
+        <small class="muted">
+          Hasta {ACTIVITY_AI_LIMITS.maxFiles} archivos ({ACTIVITY_AI_LIMITS.maxFileMb} MB c/u).
+          Si el material es extenso, se resume automáticamente antes de generar la actividad.
+        </small>
+      </label>
+
+      <div class="ai-file-feedback full-width is-hidden" data-activity-ai-file-feedback aria-live="polite"></div>
+
+      <label>
+        <span>Nivel académico (opcional)</span>
+        <input name="nivelAcademico" placeholder="Ej: 6to año técnico" />
+      </label>
+
+      <label>
+        <span>Indicaciones para la IA (opcional)</span>
+        <input name="notasDocente" placeholder="Ej: enfoque en laboratorio, 90 minutos" />
+      </label>
+
+      <div class="button-row full-width">
+        <button class="btn btn-primary" type="submit" data-activity-ai-submit>Generar con IA</button>
+      </div>
+    </form>
+
+    <div class="ai-generation-status is-hidden" data-activity-ai-status aria-live="polite">
+      <div class="ai-spinner" aria-hidden="true"></div>
+      <div>
+        <strong data-activity-ai-status-title>Generando material didáctico…</strong>
+        <p class="muted" data-activity-ai-status-detail>La solicitud está en cola para respetar los límites de la API.</p>
+        <div class="ai-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="ai-progress-bar" data-activity-ai-progress></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ai-source-report full-width is-hidden" data-activity-ai-source-report aria-live="polite"></div>
+
+    <div class="ai-preview is-hidden" data-activity-ai-preview>
+      <div class="section-title">
+        <h3>Vista previa generada</h3>
+        <p>Revisá el contenido, exportá o aplicá al formulario de Actividades para editar y guardar.</p>
+      </div>
+      <div class="ai-preview-body" data-activity-ai-preview-body></div>
+      <div class="button-row">
+        <button type="button" class="btn btn-secondary" data-activity-ai-word>Descargar Word</button>
+        <button type="button" class="btn btn-secondary" data-activity-ai-pdf>Descargar PDF</button>
+        <button type="button" class="btn btn-primary" data-activity-ai-apply>Usar en formulario</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<dialog class="modal ai-limits-modal" data-activity-ai-limits-dialog>
+  <form method="dialog" class="panel ai-limits-dialog-panel">
+    <div class="section-title">
+      <h2>Límites de IA (plan gratuito Groq)</h2>
+      <p>Información visual para planificar tus archivos. No modifica el funcionamiento del formulario.</p>
+    </div>
+
+    <div class="ai-limits-grid">
+      <article class="ai-limits-card">
+        <span class="ai-limits-label">Archivos</span>
+        <strong>{ACTIVITY_AI_LIMITS.maxFiles} por solicitud</strong>
+        <p class="muted">PDF, DOCX o TXT · {ACTIVITY_AI_LIMITS.maxFileMb} MB máximo cada uno</p>
+      </article>
+      <article class="ai-limits-card">
+        <span class="ai-limits-label">Texto enviado a la IA</span>
+        <strong>{formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres</strong>
+        <p class="muted">Aprox. {ACTIVITY_AI_LIMITS.approxPagesAtInputCap} páginas de texto corrido</p>
+      </article>
+      <article class="ai-limits-card">
+        <span class="ai-limits-label">Resumen automático</span>
+        <strong>Desde {formatActivityChars(ACTIVITY_AI_LIMITS.summarizeThresholdChars)} caracteres</strong>
+        <p class="muted">Modelo liviano: {ACTIVITY_AI_LIMITS.groqModelLight}</p>
+      </article>
+      <article class="ai-limits-card">
+        <span class="ai-limits-label">Generación final</span>
+        <strong>{ACTIVITY_AI_LIMITS.groqModelHeavy}</strong>
+        <p class="muted">Sujeto a límites de tokens/minuto y tokens/día de Groq</p>
+      </article>
+    </div>
+
+    <ul class="ai-limits-list">
+      {limitsLines.map((line) => <li>{line}</li>)}
+    </ul>
+
+    <div class="button-row">
+      <button class="btn btn-primary" value="close">Entendido</button>
+    </div>
+  </form>
+</dialog>

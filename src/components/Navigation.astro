@@ -12,7 +12,6 @@ const spaLinks = [
 ] as const;
 
 const staticLinks = [
-  { href: '/seguridad', label: 'Seguridad' },
   ...(user?.rol === 'admin' ? [{ href: '/admin/usuarios', label: 'Admin' }] : []),
 ];
 
@@ -26,9 +25,31 @@ const isActive = (href: string) => {
   <div class="institution-strip">
     <div>
       <strong>Escuela Técnica 1</strong>
-      <span>Seguimiento escolar simple para docentes</span>
+      <span class="institution-strip-secondary">Seguimiento escolar simple para docentes</span>
     </div>
-    {user && <span>{user.nombre} - {user.rol}</span>}
+    {user && (
+      <button
+        type="button"
+        class="sync-indicator is-hidden"
+        data-sync-indicator
+        aria-label="Estado de sincronización"
+        title="Sincronización"
+      >
+        <span class="sync-indicator-dot" aria-hidden="true"></span>
+      </button>
+    )}
+    {user && (
+      <label class="global-cycle-picker global-cycle-picker--strip">
+        <span>Ciclo</span>
+        <select data-global-cycle aria-label="Ciclo lectivo activo"></select>
+      </label>
+    )}
+    {user && (
+      <span class="institution-strip-user">
+        <span class="institution-strip-user-name">{user.nombre}</span>
+        <span class="institution-strip-user-role"> - {user.rol}</span>
+      </span>
+    )}
   </div>
   <nav class="topbar" aria-label="Navegación principal">
     {spaEnabled ? (
@@ -64,28 +85,58 @@ const isActive = (href: string) => {
 
     <div class="nav-links" id="main-navigation-menu" data-nav-menu role="menu">
       <p class="nav-section-label">Menú</p>
+      {user && (
+        <div class="nav-cycle-picker">
+          <label class="global-cycle-picker">
+            <span>Ciclo lectivo</span>
+            <select data-global-cycle aria-label="Ciclo lectivo activo"></select>
+          </label>
+        </div>
+      )}
       {spaEnabled ? (
-        spaLinks.map((link) => (
+        <>
+          {spaLinks.map((link) => (
+            <button
+              type="button"
+              class="nav-tab"
+              data-spa-nav={link.view}
+              role="menuitem"
+            >
+              {link.label}
+            </button>
+          ))}
+          <p class="nav-section-label nav-section-label--secondary">Avanzado</p>
           <button
             type="button"
-            class="nav-tab"
-            data-spa-nav={link.view}
+            class="nav-tab nav-tab--secondary"
+            data-spa-nav="herramientas"
             role="menuitem"
           >
-            {link.label}
+            Más herramientas
           </button>
-        ))
+        </>
       ) : (
-        spaLinks.map((link) => (
+        <>
+          {spaLinks.map((link) => (
+            <a
+              href={link.href}
+              class:list={[{ active: isActive(link.href) }]}
+              aria-current={isActive(link.href) ? 'page' : undefined}
+              role="menuitem"
+            >
+              {link.label}
+            </a>
+          ))}
+          <p class="nav-section-label nav-section-label--secondary">Avanzado</p>
           <a
-            href={link.href}
-            class:list={[{ active: isActive(link.href) }]}
-            aria-current={isActive(link.href) ? 'page' : undefined}
+            href="/herramientas"
+            class:list={[{ active: isActive('/herramientas') }]}
+            aria-current={isActive('/herramientas') ? 'page' : undefined}
             role="menuitem"
           >
-            {link.label}
+            Más herramientas
           </a>
-        ))
+        </>
       )}
       {staticLinks.map((link) => (
         <a
@@ -137,5 +188,97 @@ const isActive = (href: string) => {
     background: color-mix(in srgb, var(--brand) 14%, var(--surface));
     color: var(--brand);
     font-weight: 700;
+  }
+
+  .nav-section-label--secondary {
+    margin-top: 0.65rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted, #5f6b66);
+  }
+
+  .nav-tab--secondary {
+    color: var(--muted, #5f6b66);
+    font-size: 0.95rem;
+  }
+
+  .sync-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--line, #d9e1dc);
+    border-radius: 999px;
+    background: var(--surface, #fff);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .sync-indicator-dot {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    background: var(--ok, #1f7a4d);
+  }
+
+  .sync-indicator[data-sync-state='pending'] .sync-indicator-dot {
+    background: #c98a12;
+  }
+
+  .sync-indicator[data-sync-state='error'] .sync-indicator-dot {
+    background: var(--danger, #b42318);
+  }
+
+  .sync-indicator[data-sync-state='offline'] .sync-indicator-dot {
+    background: #6b7280;
+  }
+
+  .global-cycle-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    color: var(--muted, #5f6b66);
+  }
+
+  .global-cycle-picker select {
+    min-width: 6.5rem;
+    min-height: var(--tap);
+    padding: 0.45rem 0.55rem;
+    border-radius: 0.45rem;
+    border: 1px solid var(--line, #d9e1dc);
+    background: var(--surface, #fff);
+    font: inherit;
+    color: inherit;
+  }
+
+  .nav-cycle-picker {
+    display: none;
+  }
+
+  .nav-cycle-picker .global-cycle-picker {
+    display: grid;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0 0.85rem;
+  }
+
+  .nav-cycle-picker .global-cycle-picker select {
+    width: 100%;
+  }
+
+  @media (max-width: 1023px) {
+    .global-cycle-picker--strip {
+      display: none;
+    }
+
+    .nav-cycle-picker {
+      display: block;
+      padding-bottom: 0.55rem;
+      margin-bottom: 0.35rem;
+      border-bottom: 1px solid var(--line, #d9e1dc);
+    }
   }
 </style>

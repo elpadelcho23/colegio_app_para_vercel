@@ -1,18 +1,42 @@
 ﻿---
-import { ACTIVITY_AI_LIMITS, activityLimitsSummaryLines, formatActivityChars } from '../../lib/activity-ai-limits';
-import { TRABAJO_UPLOAD_LIMITS } from '../../lib/trabajo-upload-limits';
+import AttendanceView from '../AttendanceView.astro';
+import GradesView from '../GradesView.astro';
+import SchoolCyclePanel from '../SchoolCyclePanel.astro';
+import ToolsView from '../ToolsView.astro';
 
 interface Props {
   initialView?: string;
 }
 
 const { initialView = 'panel' } = Astro.props;
-const limitsLines = activityLimitsSummaryLines();
 ---
 
 <div id="spa-root" data-spa-root data-initial-view={initialView}>
   <section class="spa-view page page-stack" data-spa-view="panel" data-spa-title="Panel docente">
-<section class="hero-card">
+    <section class="onboarding hero-card is-hidden" data-onboarding hidden aria-labelledby="onboarding-title">
+      <div class="onboarding-header">
+        <p class="eyebrow">Primeros pasos</p>
+        <h2 id="onboarding-title">Configurá tu aula</h2>
+        <p class="onboarding-progress" data-onboarding-progress aria-live="polite">Paso 1 de 3</p>
+      </div>
+
+      <ol class="onboarding-steps" data-onboarding-steps aria-label="Pasos de configuración inicial"></ol>
+
+      <div class="onboarding-actions">
+        <button type="button" class="btn btn-primary btn-block" data-onboarding-cta data-spa-nav="cursos">
+          Crear curso
+        </button>
+        <button type="button" class="btn btn-ghost btn-block" data-onboarding-dismiss>
+          Omitir por ahora
+        </button>
+      </div>
+    </section>
+
+    <button type="button" class="onboarding-resume btn btn-ghost is-hidden" data-onboarding-resume hidden>
+      Completar configuración
+    </button>
+
+    <section class="hero-card" data-panel-hero>
       <p class="eyebrow">Hoy</p>
       <h1>Panel del día</h1>
 
@@ -74,65 +98,79 @@ const limitsLines = activityLimitsSummaryLines();
     </section>
   </section>
 
-  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="registro" data-spa-title="Registro de alumnos">
-<header class="page-header">
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="registro" data-spa-title="Registro de alumnos" data-students>
+    <header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
         <h1>Registro simple</h1>
-        <p>Datos, materias y contacto de cada estudiante en una vista clara.</p>
+        <p>Cargá alumnos uno a uno con curso y materias.</p>
       </div>
-      <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block" >Organizar cursos</button>
+      <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block">Organizar cursos</button>
     </header>
 
-    <section class="responsive-grid">
-      <form class="panel form-grid" data-student-form>
-        <div class="section-title">
-          <h2>Nuevo alumno</h2>
-        </div>
+    <section class="panel student-workspace">
+      <div class="section-title">
+        <h2>Registrar alumnos</h2>
+      </div>
 
-        <div class="input-group full-width">
-          <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /></label>
-          <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
-        </div>
+      <section class="responsive-grid">
+        <form class="panel form-grid" data-student-form>
+          <div class="section-title">
+            <h2>Nuevo alumno</h2>
+          </div>
 
-        <label class="full-width">
-          <span>Curso</span>
-          <select name="cursoId" required></select>
-        </label>
+          <div class="input-group full-width">
+            <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /></label>
+            <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
+          </div>
 
-        <fieldset class="subject-picker">
-          <legend>Materias del alumno</legend>
-          <div class="subject-search" data-student-subjects></div>
-          <input name="nuevaMateria" data-student-new-subject placeholder="Agregar materia nueva..." />
-        </fieldset>
+          <label class="full-width">
+            <span>Curso</span>
+            <select name="cursoId" required></select>
+          </label>
 
-        <label class="full-width">
-          <span>Tutor o contacto</span>
-          <input name="tutor" />
-        </label>
+          <fieldset class="subject-picker">
+            <legend>Materias del alumno</legend>
+            <div class="subject-search" data-student-subjects></div>
+            <input name="nuevaMateria" data-student-new-subject placeholder="Agregar materia nueva..." />
+          </fieldset>
 
-        <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
-      </form>
+          <label class="full-width">
+            <span>Tutor o contacto</span>
+            <input name="tutor" />
+          </label>
 
-      <section class="panel">
-        <div class="section-title">
-          <h2>Alumnos cargados</h2>
-          <p>Listado con curso, materias y promedio actualizado.</p>
-        </div>
-        <div class="list" data-student-list></div>
+          <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
+        </form>
+
+        <section class="panel">
+          <div class="section-title">
+            <h2>Alumnos cargados</h2>
+            <p>Listado con curso, materias y promedio actualizado.</p>
+          </div>
+          <div class="list" data-student-list></div>
+        </section>
       </section>
+
+      <p class="tools-nav-link-wrap">
+        <button type="button" class="tools-nav-link" data-tools-focus="excel" data-tools-tab="alumnos">
+          ¿Muchos alumnos? Importá desde Excel en Más herramientas →
+        </button>
+      </p>
     </section>
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="cursos" data-spa-title="Cursos" data-courses>
-<header class="page-header">
+    <header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Organización</p>
         <h1>Cursos y divisiones</h1>
-        <p>Base de trabajo para inscripciones, asistencia y reportes.</p>
+        <p>Base de trabajo por ciclo lectivo: escuela, curso, materias y horarios.</p>
       </div>
       <button type="button" data-spa-nav="registro" class="btn btn-secondary btn-block" >Cargar alumnos</button>
     </header>
+
+    <SchoolCyclePanel />
 
     <section class="responsive-grid">
       <form class="panel form-grid" data-course-form>
@@ -162,7 +200,7 @@ const limitsLines = activityLimitsSummaryLines();
       <section class="panel">
         <div class="section-title">
           <h2>Cursos activos</h2>
-          <p>Resumen de alumnos y materias por división.</p>
+          <p>Divisiones del ciclo lectivo seleccionado, con alumnos y materias vinculadas.</p>
         </div>
         <div class="list" data-course-list></div>
       </section>
@@ -170,162 +208,11 @@ const limitsLines = activityLimitsSummaryLines();
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="asistencia" data-spa-title="Asistencia" data-attendance>
-<header class="page-header">
-      <div class="header-content">
-        <p class="eyebrow">Control diario</p>
-        <h1>Toma de asistencia</h1>
-        <p>Filtrá por fecha, curso y materia para marcar presentes o ausentes.</p>
-      </div>
-      <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block" >Ver notas</button>
-    </header>
-
-    <section class="panel">
-      <div class="filters-grid">
-        <input type="date" data-attendance-date aria-label="Fecha" />
-        <select data-filter-course aria-label="Curso"></select>
-        <select data-filter-subject aria-label="Materia"></select>
-        <div class="actions-group">
-          <button class="btn btn-ghost" type="button" data-sync-button>Sincronizar</button>
-          <button class="btn btn-secondary" type="button" data-export-excel>Exportar</button>
-        </div>
-      </div>
-
-      <div class="sync-line">
-        <span class="tag" data-connection-status>Detectando...</span>
-        <small class="sync-status" data-sync-status>0 pendientes - 0 sincronizadas - 0 con error</small>
-      </div>
-    </section>
-
-    <section class="summary-strip" data-attendance-summary></section>
-
-    <section class="panel">
-      <div class="section-title">
-        <h2>Alumnos</h2>
-        <p>Listado filtrado del día.</p>
-      </div>
-      <div class="list" data-attendance-list></div>
-    </section>
+    <AttendanceView spaMode />
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="notas" data-spa-title="Calificaciones" data-grades>
-<header class="page-header">
-      <div class="header-content">
-        <p class="eyebrow">Calificaciones</p>
-        <h1>Carga de notas</h1>
-        <p>Promedios, entregas y estado académico por curso y materia.</p>
-      </div>
-      <a class="btn btn-secondary btn-block" href="/api/export">Exportar Excel</a>
-    </header>
-
-    <section class="panel context-workbar">
-      <div>
-        <strong>Contexto</strong>
-        <p data-grade-context-text>Seleccioná curso y materia.</p>
-      </div>
-      <div class="filters-grid">
-        <select data-grade-course-filter aria-label="Curso"></select>
-        <select data-grade-subject-filter aria-label="Materia"></select>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="section-title">
-        <h2>Actividades próximas</h2>
-        <p>TPs y evaluaciones del curso con seguimiento de entregas. Para subir trabajos, usá <button type="button" data-spa-nav="actividades" >Actividades → Cargar ya hecha</button>.</p>
-      </div>
-
-      <div class="filters-grid">
-        <select data-delivery-type-filter aria-label="Tipo de actividad">
-          <option value="">Todos los tipos</option>
-          <option value="tp">Trabajo práctico</option>
-          <option value="evaluacion">Evaluación</option>
-        </select>
-        <select data-delivery-status-filter aria-label="Estado de seguimiento">
-          <option value="">Todos los estados</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="en_progreso">En progreso</option>
-          <option value="completado">Completado</option>
-        </select>
-        <input type="date" data-delivery-from-filter aria-label="Entrega desde" />
-        <input type="date" data-delivery-to-filter aria-label="Entrega hasta" />
-      </div>
-
-      <section class="summary-strip" data-grade-deliveries-summary></section>
-      <div class="list" data-grade-deliveries></div>
-    </section>
-
-    <section class="responsive-grid is-balanced">
-      <form class="panel form-grid" data-grade-form>
-        <div class="section-title">
-          <h2>Cargar evaluación</h2>
-        </div>
-
-        <label class="full-width"><span>Alumno</span><select name="studentId" required></select></label>
-        <input type="hidden" name="subjectId" />
-
-        <div class="input-row full-width">
-          <label>
-            <span>Tipo</span>
-            <select name="tipoEvaluacion" data-evaluation-type>
-              <option>TP</option>
-              <option>Oral</option>
-              <option>Integrador</option>
-              <option value="Evaluacion">Evaluación</option>
-            </select>
-          </label>
-          <label>
-            <span>Importancia</span>
-            <select name="peso" data-grade-importance>
-              <option value="40">Baja</option>
-              <option value="60">Media</option>
-              <option value="100">Alta</option>
-            </select>
-          </label>
-        </div>
-
-        <label class="full-width"><span>Título</span><input name="titulo" placeholder="Ej: TP 1" required /></label>
-
-        <label class="full-width">
-          <span>Modo de calificación</span>
-          <select name="modoCalificacion" data-grade-mode>
-            <option value="numerica">Numérica (1-10)</option>
-            <option value="conceptual">Conceptual</option>
-            <option value="trayectoria">Trayectoria</option>
-          </select>
-        </label>
-
-        <label data-numeric-grade-field><span>Nota</span><input name="valor" type="number" min="1" max="10" step="0.1" /></label>
-        <label class="is-hidden" data-text-grade-field><span>Calificación</span><select name="calificacionTexto"></select></label>
-
-        <div class="input-row full-width">
-          <label><span>Fecha</span><input name="fecha" type="date" /></label>
-          <label><span>Entrega</span><input name="fechaEntrega" type="date" /></label>
-        </div>
-
-        <button class="btn btn-primary btn-block" type="submit">Guardar calificación</button>
-      </form>
-
-      <div class="stack">
-        <section class="panel">
-          <div class="section-title">
-            <h2>Materias</h2>
-          </div>
-          <form class="inline-form" data-inline-subject-form>
-            <input name="nombre" placeholder="Nueva materia" aria-label="Nueva materia" />
-            <button class="btn btn-secondary" type="submit">+</button>
-          </form>
-          <div class="notes-list" data-inline-subject-list></div>
-        </section>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="section-title">
-        <h2>Estado académico</h2>
-        <p>Vista consolidada por alumno para lectura rápida.</p>
-      </div>
-      <div class="table-container" data-grade-table></div>
-    </section>
+    <GradesView spaMode />
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="actividades" data-spa-title="Actividades" data-activities data-calendar>
@@ -333,7 +220,7 @@ const limitsLines = activityLimitsSummaryLines();
       <div class="header-content">
         <p class="eyebrow">Agenda docente</p>
         <h1>Actividades y calendario</h1>
-        <p>Avisos de evaluación, TP, entregas y fechas importantes en una sola pantalla.</p>
+        <p>Avisos de evaluación, TP y fechas importantes en una sola pantalla.</p>
       </div>
       <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block" >Ir a calificaciones</button>
     </header>
@@ -342,31 +229,7 @@ const limitsLines = activityLimitsSummaryLines();
       <section class="panel activity-workspace" data-activity-workspace>
         <div class="section-title">
           <h2>Realizar actividades</h2>
-          <p>Armá evaluaciones o TP a mano, o generálos con IA a partir de tus apuntes y documentos (PDF, DOCX o TXT).</p>
-        </div>
-
-        <div class="activity-mode-picker full-width" role="tablist" aria-label="Modo de realización">
-          <label class="template-card activity-mode-card">
-            <input type="radio" name="activityMode" value="manual" checked data-activity-mode-input />
-            <span>
-              <strong>Realizar a mano</strong>
-              <small>Completá consigna, fechas y guardá en el colegio.</small>
-            </span>
-          </label>
-          <label class="template-card activity-mode-card">
-            <input type="radio" name="activityMode" value="ai" data-activity-mode-input />
-            <span>
-              <strong>Realizar con IA</strong>
-              <small>Subí documentos y generá el material didáctico.</small>
-            </span>
-          </label>
-          <label class="template-card activity-mode-card">
-            <input type="radio" name="activityMode" value="cargar" data-activity-mode-input />
-            <span>
-              <strong>Cargar ya hecha</strong>
-              <small>Subí entregas o material de una actividad existente por curso.</small>
-            </span>
-          </label>
+          <p>Creá evaluaciones y TP. Completá colegio, curso y materia antes de guardar o generar con IA.</p>
         </div>
 
         <form class="form-grid" data-activity-form>
@@ -403,166 +266,14 @@ const limitsLines = activityLimitsSummaryLines();
           </div>
         </form>
 
-        <div class="activity-mode-panel full-width is-hidden" data-activity-mode-panel="cargar">
-          <div class="section-title full-width">
-            <h3>Cargar actividad ya hecha</h3>
-            <p>Usá el curso y materia de arriba. Subí trabajos entregados (PDF, Word, imágenes, TXT).</p>
-          </div>
-
-          <form
-            class="form-grid full-width"
-            data-trabajo-upload-form
-            data-max-files={TRABAJO_UPLOAD_LIMITS.maxFiles}
-            data-max-file-mb={TRABAJO_UPLOAD_LIMITS.maxFileMb}
-          >
-            <label class="full-width">
-              <span>Actividad del curso</span>
-              <select name="actividadId" data-trabajo-actividad-select required>
-                <option value="">Elegí una actividad</option>
-              </select>
-            </label>
-
-            <label class="full-width">
-              <span>Alumno (opcional)</span>
-              <select name="alumnoId" data-trabajo-alumno-select>
-                <option value="">Sin alumno específico</option>
-              </select>
-            </label>
-
-            <label class="full-width">
-              <span>Título del trabajo</span>
-              <input name="titulo" placeholder="Ej: TP HTML - Martina Ruiz" required />
-            </label>
-
-            <label class="full-width">
-              <span>Archivos</span>
-              <input
-                type="file"
-                name="archivos"
-                multiple
-                required
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.gif,.txt,application/pdf,image/*,text/plain"
-                data-trabajo-files
-              />
-              <small class="muted">
-                Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} archivos · {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u
-              </small>
-            </label>
-
-            <label class="full-width">
-              <span>Observaciones (opcional)</span>
-              <input name="observaciones" placeholder="Ej: entrega en papel y digital" />
-            </label>
-
-            <div class="ai-file-feedback full-width is-hidden" data-trabajo-file-feedback aria-live="polite"></div>
-
-            <button class="btn btn-primary btn-block" type="submit" data-trabajo-submit>Cargar trabajo</button>
-          </form>
-
-          <section class="full-width">
-            <div class="section-title">
-              <h3>Trabajos cargados en este curso</h3>
-            </div>
-            <div class="filters-grid">
-              <select data-trabajo-estado-filter aria-label="Estado de calificación">
-                <option value="">Todos</option>
-                <option value="enviado">Pendiente de calificar</option>
-                <option value="calificado">Calificado</option>
-              </select>
-            </div>
-            <div class="list" data-trabajo-history></div>
-          </section>
-        </div>
-
-        <div class="activity-mode-panel full-width is-hidden" data-activity-mode-panel="ai">
-          <div class="ai-limits-banner full-width">
-            <div>
-              <strong>Límites de generación con IA</strong>
-              <p class="muted">
-                Hasta {ACTIVITY_AI_LIMITS.maxFiles} archivos · {ACTIVITY_AI_LIMITS.maxFileMb} MB c/u ·
-                máx. {formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres enviados (~{ACTIVITY_AI_LIMITS.approxPagesAtInputCap} páginas).
-              </p>
-            </div>
-            <button type="button" class="btn btn-secondary btn-sm" data-activity-ai-limits-open>
-              Ver detalle
-            </button>
-          </div>
-
-          <form
-            class="form-grid"
-            data-activity-ai-form
-            data-max-files={ACTIVITY_AI_LIMITS.maxFiles}
-            data-max-file-bytes={ACTIVITY_AI_LIMITS.maxFileBytes}
-            data-max-input-chars={ACTIVITY_AI_LIMITS.maxInputChars}
-          >
-            <label class="full-width">
-              <span>Tipo de actividad a generar</span>
-              <select name="tipoGeneracion" required>
-                <option value="tp">Trabajo Práctico</option>
-                <option value="examen">Examen</option>
-                <option value="integrador">Trabajo Integrador</option>
-              </select>
-            </label>
-
-            <label class="full-width">
-              <span>Documentos de referencia</span>
-              <input
-                type="file"
-                name="documentos"
-                accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                multiple
-                required
-                data-activity-ai-files
-              />
-              <small class="muted">
-                Hasta {ACTIVITY_AI_LIMITS.maxFiles} archivos ({ACTIVITY_AI_LIMITS.maxFileMb} MB c/u).
-                Si el material es extenso, se resume automáticamente antes de generar la actividad.
-              </small>
-            </label>
-
-            <div class="ai-file-feedback full-width is-hidden" data-activity-ai-file-feedback aria-live="polite"></div>
-
-            <label>
-              <span>Nivel académico (opcional)</span>
-              <input name="nivelAcademico" placeholder="Ej: 6to año técnico" />
-            </label>
-
-            <label>
-              <span>Indicaciones para la IA (opcional)</span>
-              <input name="notasDocente" placeholder="Ej: enfoque en laboratorio, 90 minutos" />
-            </label>
-
-            <div class="button-row full-width">
-              <button class="btn btn-primary" type="submit" data-activity-ai-submit>Generar con IA</button>
-            </div>
-          </form>
-
-          <div class="ai-generation-status is-hidden" data-activity-ai-status aria-live="polite">
-            <div class="ai-spinner" aria-hidden="true"></div>
-            <div>
-              <strong data-activity-ai-status-title>Generando material didáctico…</strong>
-              <p class="muted" data-activity-ai-status-detail>La solicitud está en cola para respetar los límites de la API.</p>
-              <div class="ai-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                <div class="ai-progress-bar" data-activity-ai-progress></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="ai-source-report full-width is-hidden" data-activity-ai-source-report aria-live="polite"></div>
-
-          <div class="ai-preview is-hidden" data-activity-ai-preview>
-            <div class="section-title">
-              <h3>Vista previa generada</h3>
-              <p>Revisá el contenido, exportá o aplicá al formulario para editar y guardar.</p>
-            </div>
-            <div class="ai-preview-body" data-activity-ai-preview-body></div>
-            <div class="button-row">
-              <button type="button" class="btn btn-secondary" data-activity-ai-word>Descargar Word</button>
-              <button type="button" class="btn btn-secondary" data-activity-ai-pdf>Descargar PDF</button>
-              <button type="button" class="btn btn-primary" data-activity-ai-apply>Usar en formulario</button>
-            </div>
-          </div>
-        </div>
+        <p class="tools-nav-link-wrap">
+          <button type="button" class="tools-nav-link" data-tools-focus="ai">
+            Generar con IA → Más herramientas
+          </button>
+          <button type="button" class="tools-nav-link" data-tools-focus="entregas">
+            Gestionar entregas de alumnos → Más herramientas
+          </button>
+        </p>
       </section>
 
       <section class="panel">
@@ -590,6 +301,7 @@ const limitsLines = activityLimitsSummaryLines();
         <div class="calendar-scroll">
           <div class="calendar-grid" data-calendar-grid></div>
         </div>
+        <div class="calendar-mobile-list" data-calendar-mobile-list aria-label="Eventos del mes"></div>
         <aside class="panel calendar-day-panel">
           <h2 data-calendar-selected-title>Seleccioná un día</h2>
           <p class="calendar-summary" data-calendar-selected-summary></p>
@@ -597,44 +309,6 @@ const limitsLines = activityLimitsSummaryLines();
         </aside>
       </div>
     </section>
-
-    <dialog class="modal" data-trabajo-reenviar-dialog>
-      <form method="dialog" class="panel form-grid" data-trabajo-reenviar-form>
-        <div class="section-title">
-          <h2>Reenviar trabajo</h2>
-          <p>Enviá el mismo material a otro curso, turno o materia.</p>
-        </div>
-
-        <input type="hidden" name="reenviarDesdeId" />
-
-        <label class="full-width">
-          <span>Curso destino</span>
-          <select name="cursoId" data-reenviar-curso required></select>
-        </label>
-
-        <label class="full-width">
-          <span>Materia destino</span>
-          <select name="materiaId" data-reenviar-materia required></select>
-        </label>
-
-        <label class="full-width">
-          <span>Título</span>
-          <input name="titulo" required />
-        </label>
-
-        <label class="full-width">
-          <span>Alumno (opcional)</span>
-          <select name="alumnoId" data-reenviar-alumno>
-            <option value="">Sin alumno específico</option>
-          </select>
-        </label>
-
-        <div class="button-row full-width">
-          <button class="btn btn-primary" type="submit" value="confirm">Reenviar</button>
-          <button class="btn btn-secondary" type="submit" value="cancel">Cancelar</button>
-        </div>
-      </form>
-    </dialog>
 
     <dialog class="modal" data-activity-enviar-dialog>
       <form method="dialog" class="panel form-grid" data-activity-enviar-form>
@@ -677,46 +351,6 @@ const limitsLines = activityLimitsSummaryLines();
       </form>
     </dialog>
 
-    <dialog class="modal ai-limits-modal" data-activity-ai-limits-dialog>
-      <form method="dialog" class="panel ai-limits-dialog-panel">
-        <div class="section-title">
-          <h2>Límites de IA (plan gratuito Groq)</h2>
-          <p>Información visual para planificar tus archivos. No modifica el funcionamiento del formulario.</p>
-        </div>
-
-        <div class="ai-limits-grid">
-          <article class="ai-limits-card">
-            <span class="ai-limits-label">Archivos</span>
-            <strong>{ACTIVITY_AI_LIMITS.maxFiles} por solicitud</strong>
-            <p class="muted">PDF, DOCX o TXT · {ACTIVITY_AI_LIMITS.maxFileMb} MB máximo cada uno</p>
-          </article>
-          <article class="ai-limits-card">
-            <span class="ai-limits-label">Texto enviado a la IA</span>
-            <strong>{formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres</strong>
-            <p class="muted">Aprox. {ACTIVITY_AI_LIMITS.approxPagesAtInputCap} páginas de texto corrido</p>
-          </article>
-          <article class="ai-limits-card">
-            <span class="ai-limits-label">Resumen automático</span>
-            <strong>Desde {formatActivityChars(ACTIVITY_AI_LIMITS.summarizeThresholdChars)} caracteres</strong>
-            <p class="muted">Modelo liviano: {ACTIVITY_AI_LIMITS.groqModelLight}</p>
-          </article>
-          <article class="ai-limits-card">
-            <span class="ai-limits-label">Generación final</span>
-            <strong>{ACTIVITY_AI_LIMITS.groqModelHeavy}</strong>
-            <p class="muted">Sujeto a límites de tokens/minuto y tokens/día de Groq</p>
-          </article>
-        </div>
-
-        <ul class="ai-limits-list">
-          {limitsLines.map((line) => <li>{line}</li>)}
-        </ul>
-
-        <div class="button-row">
-          <button class="btn btn-primary" value="close">Entendido</button>
-        </div>
-      </form>
-    </dialog>
-
     <dialog class="modal" data-calendar-opt-in>
       <form method="dialog" class="panel">
         <h2>Recordatorios</h2>
@@ -730,5 +364,9 @@ const limitsLines = activityLimitsSummaryLines();
         </div>
       </form>
     </dialog>
+  </section>
+
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="herramientas" data-spa-title="Más herramientas" data-herramientas>
+    <ToolsView />
   </section>
 </div>

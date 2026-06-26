@@ -1,0 +1,69 @@
+---
+interface Props {
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
+const currentYear = new Date().getFullYear();
+---
+
+<section
+  class:list={['school-cycle-panel', 'panel', { 'school-cycle-panel--compact': compact }]}
+  data-school-cycle
+>
+  <div class="section-title">
+    <h2>Ciclo escolar anual</h2>
+    <p>
+      El ciclo agrupa cursos por año lectivo. Podés reutilizar divisiones, materias y horarios de un ciclo anterior.
+    </p>
+  </div>
+
+  <div class="school-cycle-active">
+    <label class="school-cycle-active-field">
+      <span>Ciclo activo</span>
+      <select data-cycle-active aria-label="Ciclo lectivo activo"></select>
+    </label>
+    <p class="muted school-cycle-active-hint" data-cycle-active-hint>
+      Mostrando cursos y horarios del ciclo {currentYear}.
+    </p>
+  </div>
+
+  {!compact && (
+    <details class="school-cycle-clone" open>
+      <summary>Iniciar ciclo reutilizando estructura anterior</summary>
+      <div class="form-grid school-cycle-clone-form">
+        <label>
+          <span>Escuela</span>
+          <select data-cycle-clone-school aria-label="Escuela para clonar ciclo">
+            <option value="">Todas las escuelas</option>
+          </select>
+        </label>
+        <label>
+          <span>Copiar desde</span>
+          <select data-cycle-clone-source aria-label="Ciclo origen"></select>
+        </label>
+        <label>
+          <span>Crear ciclo</span>
+          <input
+            type="number"
+            min="2000"
+            max="2100"
+            data-cycle-clone-target
+            value={currentYear + 1}
+            aria-label="Ciclo destino"
+          />
+        </label>
+        <label class="school-cycle-checkbox">
+          <input type="checkbox" data-cycle-clone-schedules checked />
+          <span>Copiar también mi horario (bloques de clase)</span>
+        </label>
+        <div class="full-width">
+          <button type="button" class="btn btn-primary" data-cycle-clone-submit>
+            Clonar estructura al nuevo ciclo
+          </button>
+        </div>
+        <div class="import-result full-width is-hidden" data-cycle-clone-result hidden></div>
+      </div>
+    </details>
+  )}
+</section>

@@ -1,6 +1,6 @@
-export type SpaViewId = 'panel' | 'registro' | 'cursos' | 'asistencia' | 'notas' | 'actividades';
+export type SpaViewId = 'panel' | 'registro' | 'cursos' | 'asistencia' | 'notas' | 'actividades' | 'herramientas';
 
-export const SPA_VIEWS: SpaViewId[] = ['panel', 'registro', 'cursos', 'asistencia', 'notas', 'actividades'];
+export const SPA_VIEWS: SpaViewId[] = ['panel', 'registro', 'cursos', 'asistencia', 'notas', 'actividades', 'herramientas'];
 
 export const PATH_TO_VIEW: Record<string, SpaViewId> = {
   '/': 'panel',
@@ -9,6 +9,7 @@ export const PATH_TO_VIEW: Record<string, SpaViewId> = {
   '/asistencia': 'asistencia',
   '/notas': 'notas',
   '/actividades': 'actividades',
+  '/herramientas': 'herramientas',
 };
 
 export const VIEW_TO_PATH: Record<SpaViewId, string> = {
@@ -18,6 +19,7 @@ export const VIEW_TO_PATH: Record<SpaViewId, string> = {
   asistencia: '/asistencia',
   notas: '/notas',
   actividades: '/actividades',
+  herramientas: '/herramientas',
 };
 
 export function resolveInitialView(pathname: string, search = '') {

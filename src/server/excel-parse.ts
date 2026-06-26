@@ -1,16 +1,28 @@
 import type ExcelJS from 'exceljs';
 import {
   buildColumnMapFromHeaders,
+  buildAttendanceColumnMapFromHeaders,
   matchStudentField,
   mergeStudentNombre,
   missingStudentFields,
+  normalizeAttendanceEstado,
   normalizeDniValue,
   normalizeTurnoValue,
+  parseSpreadsheetDate,
+  scoreAttendanceHeaderRow,
   scoreStudentHeaderRow,
   splitMateriasValue,
+  type AttendanceMappingField,
   type StudentField,
   type StudentMappingField,
 } from '../lib/excel-column-map';
+import {
+  attendanceColumnMapToMapping,
+  attendanceFieldLabel,
+  attendanceMappingToColumnMap,
+  type AttendanceExcelMapping,
+  validateAttendanceExcelMapping,
+} from '../lib/attendance-excel-mapping';
 import {
   columnMapToMapping,
   mappingToColumnMap,
@@ -291,6 +303,229 @@ export function buildStudentSheetError(parsed: ParsedStudentSheet | null) {
   }
   if (parsed.validRows.length === 0) {
     return 'Ninguna fila pudo interpretarse. Revisá el mapeo, los turnos (Mañana/Tarde/Noche) y las columnas obligatorias.';
+  }
+  return null;
+}
+
+// --- Asistencias ---
+
+export interface ParsedAttendanceRow {
+  rowNumber: number;
+  fecha: string | null;
+  escuela: string;
+  curso: string;
+  turno: string | null;
+  materia: string;
+  nombre: string;
+  estado: 'presente' | 'ausente' | null;
+  errors: string[];
+}
+
+export interface ParsedAttendanceSheet {
+  sheetName: string;
+  headerRow: number;
+  columnMap: Partial<Record<AttendanceMappingField, number>>;
+  detectedHeaders: string[];
+  rows: ParsedAttendanceRow[];
+  validRows: ParsedAttendanceRow[];
+  invalidRows: ParsedAttendanceRow[];
+  mappingErrors: string[];
+  requiresMapping: boolean;
+}
+
+export interface ParseAttendanceWorksheetOptions {
+  preferredSheetNames?: string[];
+  mapping?: AttendanceExcelMapping | null;
+}
+
+function detectAttendanceHeaderRow(worksheet: ExcelJS.Worksheet, maxScanRows = 15) {
+  const maxColumns = Math.max(worksheet.columnCount || 0, worksheet.actualColumnCount || 0, 12);
+  let bestRow = 1;
+  let bestScore = 0;
+  let bestHeaders: string[] = [];
+  let bestMap: Partial<Record<AttendanceMappingField, number>> = {};
+
+  for (let rowNumber = 1; rowNumber <= Math.min(maxScanRows, worksheet.rowCount || maxScanRows); rowNumber += 1) {
+    const values = readRowValues(worksheet, rowNumber, maxColumns);
+    const headers = values.map((value) => String(value ?? '').trim());
+    const score = scoreAttendanceHeaderRow(headers);
+    if (score <= bestScore) continue;
+
+    bestRow = rowNumber;
+    bestScore = score;
+    bestHeaders = headers;
+    bestMap = buildAttendanceColumnMapFromHeaders(headers);
+  }
+
+  return { headerRow: bestRow, columnMap: bestMap, detectedHeaders: bestHeaders, score: bestScore };
+}
+
+function getAttendanceMappedValue(
+  values: ParsedCellValue[],
+  columnMap: Partial<Record<AttendanceMappingField, number>>,
+  field: AttendanceMappingField,
+) {
+  const index = columnMap[field];
+  if (index == null) return null;
+  return values[index] ?? null;
+}
+
+function attendanceColumnLabel(
+  columnMap: Partial<Record<AttendanceMappingField, number>>,
+  field: AttendanceMappingField,
+  detectedHeaders: string[],
+) {
+  const index = columnMap[field];
+  if (index == null) return null;
+  return detectedHeaders[index] || `columna ${index + 1}`;
+}
+
+function parseAttendanceDataRow(
+  rowNumber: number,
+  values: ParsedCellValue[],
+  columnMap: Partial<Record<AttendanceMappingField, number>>,
+  detectedHeaders: string[],
+): ParsedAttendanceRow | null {
+  const hasValue = values.some((value) => value !== null && value !== '');
+  if (!hasValue) return null;
+
+  const fecha = parseSpreadsheetDate(getAttendanceMappedValue(values, columnMap, 'fecha'));
+  const escuela = String(getAttendanceMappedValue(values, columnMap, 'escuela') ?? '').trim();
+  const curso = String(getAttendanceMappedValue(values, columnMap, 'curso') ?? '').trim();
+  const turnoRaw = getAttendanceMappedValue(values, columnMap, 'turno');
+  const turno = normalizeTurnoValue(turnoRaw);
+  const materia = String(getAttendanceMappedValue(values, columnMap, 'materia') ?? '').trim();
+  const nombre = String(getAttendanceMappedValue(values, columnMap, 'nombre') ?? '').trim();
+  const estadoRaw = getAttendanceMappedValue(values, columnMap, 'estado');
+  const estado = normalizeAttendanceEstado(estadoRaw);
+  const errors: string[] = [];
+
+  const required: Array<[AttendanceMappingField, string | null]> = [
+    ['fecha', fecha],
+    ['escuela', escuela],
+    ['curso', curso],
+    ['turno', turno],
+    ['materia', materia],
+    ['nombre', nombre],
+    ['estado', estado],
+  ];
+
+  for (const [field, value] of required) {
+    if (value) continue;
+    const mappedColumn = attendanceColumnLabel(columnMap, field, detectedHeaders);
+    if (field === 'turno' && String(turnoRaw ?? '').trim()) {
+      errors.push(`Turno no reconocido (fila ${rowNumber}): "${String(turnoRaw).trim()}". Usá Mañana, Tarde o Noche.`);
+      continue;
+    }
+    if (field === 'estado' && String(estadoRaw ?? '').trim()) {
+      errors.push(`Estado no reconocido (fila ${rowNumber}): "${String(estadoRaw).trim()}". Usá Presente o Ausente.`);
+      continue;
+    }
+    errors.push(
+      mappedColumn
+        ? `Falta ${attendanceFieldLabel(field)} en columna "${mappedColumn}" (fila ${rowNumber}).`
+        : `Falta ${attendanceFieldLabel(field)}: no hay columna asignada (fila ${rowNumber}).`,
+    );
+  }
+
+  return { rowNumber, fecha, escuela, curso, turno, materia, nombre, estado, errors };
+}
+
+function hasMinimumAttendanceMapping(columnMap: Partial<Record<AttendanceMappingField, number>>) {
+  return validateAttendanceExcelMapping(attendanceColumnMapToMapping(1, columnMap)).length === 0;
+}
+
+export function pickAttendanceWorksheet(
+  workbook: ExcelJS.Workbook,
+  preferredNames: string[] = ['Asistencias', 'asistencias', 'Asistencia', 'Presentismo'],
+) {
+  for (const name of preferredNames) {
+    const sheet = workbook.getWorksheet(name);
+    if (sheet) return sheet;
+  }
+
+  let bestSheet = workbook.worksheets[0] || null;
+  let bestScore = 0;
+  for (const sheet of workbook.worksheets) {
+    const detection = detectAttendanceHeaderRow(sheet, 10);
+    if (detection.score > bestScore) {
+      bestScore = detection.score;
+      bestSheet = sheet;
+    }
+  }
+  return bestSheet;
+}
+
+export function parseAttendanceWorksheet(
+  workbook: ExcelJS.Workbook,
+  options: ParseAttendanceWorksheetOptions = {},
+): ParsedAttendanceSheet | null {
+  const preferredNames = options.preferredSheetNames || ['Asistencias', 'asistencias', 'Asistencia', 'Presentismo'];
+  const worksheet = pickAttendanceWorksheet(workbook, preferredNames);
+  if (!worksheet) return null;
+
+  const maxColumns = Math.max(worksheet.columnCount || 0, worksheet.actualColumnCount || 0, 12);
+  const detection = detectAttendanceHeaderRow(worksheet, 15);
+  const headerRow = options.mapping?.headerRow || detection.headerRow;
+  const detectedHeaders = readRowValues(worksheet, headerRow, maxColumns).map((value) => String(value ?? '').trim());
+  const columnMap = options.mapping
+    ? attendanceMappingToColumnMap(options.mapping)
+    : detection.headerRow === headerRow
+      ? detection.columnMap
+      : buildAttendanceColumnMapFromHeaders(detectedHeaders);
+
+  const mapping = attendanceColumnMapToMapping(headerRow, columnMap);
+  const mappingErrors = validateAttendanceExcelMapping(mapping);
+  const headerScore = scoreAttendanceHeaderRow(detectedHeaders);
+  const requiresMapping = mappingErrors.length > 0 || headerScore < 50;
+
+  if (!options.mapping && headerScore < 50) {
+    return {
+      sheetName: worksheet.name,
+      headerRow,
+      columnMap,
+      detectedHeaders,
+      rows: [],
+      validRows: [],
+      invalidRows: [],
+      mappingErrors,
+      requiresMapping: true,
+    };
+  }
+
+  const rows: ParsedAttendanceRow[] = [];
+  for (let rowNumber = headerRow + 1; rowNumber <= (worksheet.rowCount || 0); rowNumber += 1) {
+    const values = readRowValues(worksheet, rowNumber, maxColumns);
+    const parsed = parseAttendanceDataRow(rowNumber, values, columnMap, detectedHeaders);
+    if (parsed) rows.push(parsed);
+  }
+
+  const validRows = rows.filter((row) => row.errors.length === 0 && row.turno && row.estado && row.fecha);
+  const invalidRows = rows.filter((row) => row.errors.length > 0 || !row.turno || !row.estado || !row.fecha);
+
+  return {
+    sheetName: worksheet.name,
+    headerRow,
+    columnMap,
+    detectedHeaders,
+    rows,
+    validRows,
+    invalidRows,
+    mappingErrors,
+    requiresMapping: requiresMapping || (!hasMinimumAttendanceMapping(columnMap) && validRows.length === 0),
+  };
+}
+
+export function buildAttendanceSheetError(parsed: ParsedAttendanceSheet | null) {
+  if (!parsed) return 'El archivo no contiene hojas de cálculo.';
+  if (parsed.mappingErrors.length && parsed.validRows.length === 0) {
+    return `${parsed.mappingErrors[0]} Revisá el mapeo de columnas.`;
+  }
+  if (parsed.rows.length === 0 && scoreAttendanceHeaderRow(parsed.detectedHeaders) < 50) {
+    return 'No se encontró una fila de encabezados válida. Ajustá la fila de encabezados y el mapeo manual.';
+  }
+  if (parsed.validRows.length === 0) {
+    return 'Ninguna fila pudo interpretarse. Revisá el mapeo, fechas, turnos y estados (Presente/Ausente).';
   }
   return null;
 }

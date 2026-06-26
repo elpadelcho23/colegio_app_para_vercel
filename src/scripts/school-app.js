@@ -1,7 +1,17 @@
+import { initOnboarding } from './onboarding-ui.js';
+import { initSyncUi } from './sync-ui.js';
+import { initToolsView, navigateToToolsSection } from './tools-ui.js';
 import { countPendingOperations, getOperationStatusCounts, queueOfflineOperation, resetOfflineDatabaseOnce, saveAttendanceOffline } from './offline-db.ts';
 import { hydrateLocalStorageFromServer, startAutoSync, syncPendingOperations } from './sync-client.ts';
 import { initMobileNav, openMenu, closeMenu } from './ui-nav.js';
-import { initSpaRouter } from './spa-router.ts';
+import { initSpaRouter, registerSpaViewRefresh, showSpaView } from './spa-router.ts';
+import { initSchoolCycleUi } from './school-cycle-ui.js';
+import {
+  coursesInCiclo,
+  currentCalendarYear,
+  resolveCourseCiclo,
+  subjectsForCourseDisplay,
+} from '../lib/school-cycle.ts';
 import {
   el,
   emptyState,
@@ -19,6 +29,7 @@ import {
 const currentUser = window.__AULA_CLARA_USER__ || null;
 const panelRefreshers = [];
 let appReady = false;
+let toolsEntregasApi = { refresh: async () => {}, openForActividad: () => {}, setContext: () => {} };
 
 function onPanelRefresh(fn) {
   panelRefreshers.push(fn);
@@ -62,13 +73,12 @@ const KEYS = {
   dashboardFilters: 'aula_clara_dashboard_filters',
   teacherContext: 'aula_clara_teacher_context',
   theme: 'aula_clara_theme',
-  studentExcelMappings: 'aula_clara_student_excel_mappings',
 };
 
 const DEFAULTS = {
   [KEYS.courses]: [
-    { id: 'curso-6-1-manana', nombre: '6to 1ra', escuela: 'Escuela Tecnica 1', turno: 'Manana' },
-    { id: 'curso-5-2-tarde', nombre: '5to 2da', escuela: 'Escuela Tecnica 1', turno: 'Tarde' },
+    { id: 'curso-6-1-manana', nombre: '6to 1ra', escuela: 'Escuela Tecnica 1', turno: 'Manana', cicloLectivo: 2026, subjectIds: ['programacion', 'matematica'] },
+    { id: 'curso-5-2-tarde', nombre: '5to 2da', escuela: 'Escuela Tecnica 1', turno: 'Tarde', cicloLectivo: 2026, subjectIds: ['literatura'] },
   ],
   [KEYS.schools]: [
     { id: 'escuela-tecnica-1', nombre: 'Escuela Tecnica 1', activo: true },
@@ -169,6 +179,28 @@ function activeSubjects() {
   return read(KEYS.subjects).filter((subject) => subject.activo !== false);
 }
 
+function activeCicloLectivo() {
+  const filters = read(KEYS.dashboardFilters) || {};
+  const ciclo = Number(filters.cicloLectivo);
+  return Number.isFinite(ciclo) && ciclo > 0 ? ciclo : currentCalendarYear();
+}
+
+function visibleCourses(escuela = '') {
+  return coursesInCiclo(read(KEYS.courses), activeCicloLectivo(), escuela);
+}
+
+function courseSubjectsForDisplay(course) {
+  const subjectIds = subjectsForCourseDisplay(
+    course,
+    activeSubjects().map((subject) => subject.id),
+    read(KEYS.teacherContext),
+  );
+  const subjects = activeSubjects();
+  return subjectIds.length
+    ? subjects.filter((subject) => subjectIds.includes(subject.id))
+    : subjects;
+}
+
 function activeSchools() {
   ensureSchoolsFromCourses();
   return read(KEYS.schools).filter((school) => school.activo !== false);
@@ -253,7 +285,12 @@ function average(grades) {
 }
 
 function courseLabel(course) {
-  return course ? `${course.nombre} - ${course.turno}` : 'Sin curso';
+  if (!course) return 'Sin curso';
+  const ciclo = resolveCourseCiclo(course);
+  if (ciclo !== activeCicloLectivo()) {
+    return `${course.nombre} - ${course.turno} (${ciclo})`;
+  }
+  return `${course.nombre} - ${course.turno}`;
 }
 
 function studentSubjectIds(student) {
@@ -574,6 +611,8 @@ function currentSuggestedContext() {
   };
 
   return read(KEYS.teacherContext).find((item) => {
+    const itemCiclo = item.cicloLectivo ?? resolveCourseCiclo(courseById(item.cursoId));
+    if (itemCiclo !== activeCicloLectivo()) return false;
     const start = parseTime(item.desde);
     const end = parseTime(item.hasta);
     const days = Array.isArray(item.dias) ? item.dias.map(String) : [];
@@ -682,7 +721,7 @@ function initDashboard() {
     const subjectSelect = filters.querySelector('[name="materia"]');
     const schools = schoolNamesForSelect();
     fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Todas las escuelas');
-    fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
+    fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
     fillSelect(subjectSelect, activeSubjects(), 'Todas las materias');
     schoolSelect.value = saved.escuela || '';
     courseSelect.value = saved.curso || '';
@@ -692,18 +731,28 @@ function initDashboard() {
       escuela: schoolSelect.value,
       curso: courseSelect.value,
       materia: subjectSelect.value,
+      cicloLectivo: saved.cicloLectivo || activeCicloLectivo(),
+    });
+    schoolSelect.addEventListener('change', () => {
+      fillSelect(courseSelect, visibleCourses(schoolSelect.value || ''), 'Todos los cursos', 'id', courseLabel);
     });
     filters.addEventListener('change', () => {
       write(KEYS.dashboardFilters, {
         escuela: schoolSelect.value,
         curso: courseSelect.value,
         materia: subjectSelect.value,
+        cicloLectivo: activeCicloLectivo(),
       });
       renderDashboard(root);
     });
     window.addEventListener('aula-clara:schools-changed', () => {
       const selected = schoolSelect.value;
       fillSchoolSelect(schoolSelect, 'Todas las escuelas', selected);
+      fillSelect(courseSelect, visibleCourses(schoolSelect.value || ''), 'Todos los cursos', 'id', courseLabel);
+    });
+    window.addEventListener('aula-clara:ciclo-changed', () => {
+      fillSelect(courseSelect, visibleCourses(schoolSelect.value || ''), 'Todos los cursos', 'id', courseLabel);
+      renderDashboard(root);
     });
   }
 
@@ -718,7 +767,7 @@ function initDashboard() {
       const subjectSelect = filters.querySelector('[name="materia"]');
       const schools = schoolNamesForSelect();
       fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Todas las escuelas');
-      fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
+      fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
       fillSelect(subjectSelect, activeSubjects(), 'Todas las materias');
     }
     document.querySelectorAll('[data-context-summary]').forEach((item) => {
@@ -730,8 +779,7 @@ function initDashboard() {
 
 function renderDashboard(root) {
   const filters = read(KEYS.dashboardFilters) || {};
-  const courses = read(KEYS.courses).filter((course) =>
-    (!filters.escuela || course.escuela === filters.escuela) &&
+  const courses = visibleCourses(filters.escuela).filter((course) =>
     (!filters.curso || course.id === filters.curso)
   );
   const courseIds = new Set(courses.map((course) => course.id));
@@ -778,11 +826,16 @@ function initTeacherContext() {
   const schools = schoolNamesForSelect();
 
   fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Escuela');
-  fillSelect(courseSelect, read(KEYS.courses), 'Curso', 'id', courseLabel);
+  fillSelect(courseSelect, visibleCourses(), 'Curso', 'id', courseLabel);
   fillSelect(subjectSelect, activeSubjects(), 'Materia');
 
   window.addEventListener('aula-clara:schools-changed', (event) => {
     fillSchoolSelect(schoolSelect, 'Escuela', event.detail?.selected || schoolSelect?.value || '');
+    fillSelect(courseSelect, visibleCourses(schoolSelect?.value || ''), 'Curso', 'id', courseLabel);
+  });
+
+  schoolSelect?.addEventListener('change', () => {
+    fillSelect(courseSelect, visibleCourses(schoolSelect.value || ''), 'Curso', 'id', courseLabel);
   });
 
   form.addEventListener('submit', (event) => {
@@ -802,6 +855,7 @@ function initTeacherContext() {
       escuela: String(data.get('escuela') || ''),
       cursoId: String(data.get('cursoId') || ''),
       materiaId: String(data.get('materiaId') || ''),
+      cicloLectivo: activeCicloLectivo(),
       updatedAt: nowIso(),
     };
     write(KEYS.teacherContext, [...read(KEYS.teacherContext), item]);
@@ -822,7 +876,7 @@ function initTeacherContext() {
   renderTeacherContextList(list);
   onPanelRefresh(() => {
     fillSelect(schoolSelect, schoolNamesForSelect().map((school) => ({ id: school, nombre: school })), 'Escuela');
-    fillSelect(courseSelect, read(KEYS.courses), 'Curso', 'id', courseLabel);
+    fillSelect(courseSelect, visibleCourses(), 'Curso', 'id', courseLabel);
     fillSelect(subjectSelect, activeSubjects(), 'Materia');
     renderTeacherContextList(list);
     document.querySelectorAll('[data-context-summary]').forEach((node) => {
@@ -832,7 +886,10 @@ function initTeacherContext() {
 }
 
 function renderTeacherContextList(list) {
-  const items = read(KEYS.teacherContext);
+  const items = read(KEYS.teacherContext).filter((item) => {
+    const itemCiclo = item.cicloLectivo ?? resolveCourseCiclo(courseById(item.cursoId));
+    return itemCiclo === activeCicloLectivo();
+  });
   if (!items.length) {
     replaceContent(list, emptyState('Sin horario cargado', 'Agregá tus clases habituales para activar sugerencias automáticas.'));
     return;
@@ -870,124 +927,6 @@ async function upsertSubjectByName(name) {
   return subjectPayload;
 }
 
-function validateStudentExcelFile(input, feedback, form) {
-  const maxMb = Number(form?.dataset.maxFileMb || 5);
-  const maxBytes = maxMb * 1024 * 1024;
-  const allowedExt = ['.xlsx', '.xls'];
-  const file = input?.files?.[0];
-
-  if (!file) {
-    if (feedback) {
-      feedback.textContent = '';
-      feedback.classList.add('is-hidden');
-    }
-    return { ok: false, error: 'Seleccioná un archivo Excel (.xlsx).' };
-  }
-
-  const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')).toLowerCase() : '';
-  if (!allowedExt.includes(ext)) {
-    const msg = `"${file.name}" no es un Excel válido. Usá .xlsx o .xls.`;
-    if (feedback) {
-      feedback.textContent = msg;
-      feedback.classList.remove('is-hidden', 'is-ok');
-      feedback.classList.add('is-warning');
-    }
-    return { ok: false, error: msg };
-  }
-
-  if (file.size > maxBytes) {
-    const msg = `"${file.name}" supera ${maxMb} MB.`;
-    if (feedback) {
-      feedback.textContent = msg;
-      feedback.classList.remove('is-hidden', 'is-ok');
-      feedback.classList.add('is-warning');
-    }
-    return { ok: false, error: msg };
-  }
-
-  if (feedback) {
-    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-    feedback.textContent = `${file.name} listo para cargar (${sizeMb} MB).`;
-    feedback.classList.remove('is-hidden', 'is-warning');
-    feedback.classList.add('is-ok');
-  }
-
-  return { ok: true, file };
-}
-
-const STUDENT_MAPPABLE_FIELDS = [
-  { field: 'escuela', label: 'Escuela', required: true },
-  { field: 'curso', label: 'Curso', required: true },
-  { field: 'turno', label: 'Turno', required: true },
-  { field: 'apellido', label: 'Apellido', required: false, hint: 'Opcional si ya tenés Nombre completo' },
-  { field: 'nombre', label: 'Nombre', required: false, hint: 'Obligatorio si no usás Apellido' },
-  { field: 'dni', label: 'DNI', required: false },
-  { field: 'tutor', label: 'Tutor / contacto', required: false },
-  { field: 'materias', label: 'Materias', required: false },
-];
-
-function readStudentExcelTemplates() {
-  return read(KEYS.studentExcelMappings);
-}
-
-function writeStudentExcelTemplates(templates) {
-  write(KEYS.studentExcelMappings, templates);
-}
-
-function normalizeExcelHeaderLabel(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-function scoreExcelTemplateMatch(templateLabels, currentHeaders) {
-  if (!Array.isArray(templateLabels) || !Array.isArray(currentHeaders) || !templateLabels.length || !currentHeaders.length) {
-    return 0;
-  }
-  let hits = 0;
-  templateLabels.forEach((label) => {
-    const normalized = normalizeExcelHeaderLabel(label);
-    if (!normalized) return;
-    if (currentHeaders.some((header) => normalizeExcelHeaderLabel(header) === normalized)) hits += 1;
-  });
-  return hits / Math.max(templateLabels.length, currentHeaders.length);
-}
-
-function findBestExcelTemplate(templates, headers) {
-  let best = null;
-  let bestScore = 0;
-  templates.forEach((template) => {
-    const score = scoreExcelTemplateMatch(template.columnLabels, headers);
-    if (score > bestScore) {
-      bestScore = score;
-      best = template;
-    }
-  });
-  return bestScore >= 0.55 ? best : null;
-}
-
-function buildStudentExcelMappingFromPreview(preview) {
-  return {
-    headerRow: Number(preview?.mapping?.headerRow || preview?.headerRow || 1),
-    columns: { ...(preview?.mapping?.columns || {}) },
-  };
-}
-
-function validateStudentExcelMappingClient(mapping) {
-  const errors = [];
-  const columns = mapping?.columns || {};
-  ['escuela', 'curso', 'turno'].forEach((field) => {
-    if (columns[field] == null || columns[field] === '') errors.push(`Asigná la columna de ${field}.`);
-  });
-  if ((columns.nombre == null || columns.nombre === '') && (columns.apellido == null || columns.apellido === '')) {
-    errors.push('Asigná al menos Nombre o Apellido.');
-  }
-  return errors;
-}
-
 function initStudents() {
   const root = document.querySelector('[data-students]');
   const form = root?.querySelector('[data-student-form]');
@@ -1001,188 +940,6 @@ function initStudents() {
 
   const modeInputs = root.querySelectorAll('[data-student-mode-input]');
   const modePanels = root.querySelectorAll('[data-student-mode-panel]');
-  const excelForm = root.querySelector('[data-student-excel-form]');
-  const excelFileInput = root.querySelector('[data-student-excel-file]');
-  const excelFeedback = root.querySelector('[data-student-excel-feedback]');
-  const excelPreview = root.querySelector('[data-student-excel-preview]');
-  const excelResult = root.querySelector('[data-student-excel-result]');
-  const excelSubmitBtn = excelForm?.querySelector('[data-student-excel-submit]');
-  const excelMappingPanel = root.querySelector('[data-student-excel-mapping]');
-  const excelMappingFields = root.querySelector('[data-student-excel-mapping-fields]');
-  const excelHeaderRowInput = root.querySelector('[data-student-excel-header-row]');
-  const excelApplyMappingBtn = root.querySelector('[data-student-excel-apply-mapping]');
-  const excelTemplateSelect = root.querySelector('[data-student-excel-template-select]');
-  const excelTemplateNameInput = root.querySelector('[data-student-excel-template-name]');
-  const excelTemplateSaveBtn = root.querySelector('[data-student-excel-template-save]');
-  const excelTemplateDeleteBtn = root.querySelector('[data-student-excel-template-delete]');
-
-  let currentStudentExcelPreview = null;
-  let currentStudentExcelMapping = null;
-  let appliedExcelTemplateName = '';
-
-  const renderStudentExcelTemplateOptions = (selectedId = '') => {
-    if (!excelTemplateSelect) return;
-    const templates = readStudentExcelTemplates();
-    const options = ['<option value="">Sin plantilla</option>'];
-    templates.forEach((template) => {
-      const selected = template.id === selectedId ? ' selected' : '';
-      options.push(`<option value="${template.id}"${selected}>${template.name}</option>`);
-    });
-    excelTemplateSelect.innerHTML = options.join('');
-  };
-
-  const renderStudentExcelMappingFields = (preview) => {
-    if (!excelMappingFields) return;
-    const columns = preview?.availableColumns || [];
-    const mapping = preview?.mapping?.columns || {};
-    const fields = preview?.mappableFields || STUDENT_MAPPABLE_FIELDS;
-
-    excelMappingFields.innerHTML = fields.map((field) => {
-      const options = ['<option value="">(No usar)</option>'];
-      columns.forEach((column) => {
-        const selected = Number(mapping[field.field]) === column.index ? ' selected' : '';
-        const label = column.label || `Columna ${column.index + 1}`;
-        options.push(`<option value="${column.index}"${selected}>${label}</option>`);
-      });
-      const tag = field.required ? 'obligatorio' : 'opcional';
-      const hint = field.hint ? `<small>${field.hint}</small>` : '';
-      return `
-        <div class="excel-mapping-field">
-          <label>
-            <span>${field.label} <span class="excel-ref-tag">${tag}</span></span>
-            <select data-student-excel-map-field="${field.field}">
-              ${options.join('')}
-            </select>
-            ${hint}
-          </label>
-        </div>
-      `;
-    }).join('');
-  };
-
-  const collectStudentExcelMapping = () => {
-    const headerRow = Math.max(1, Number(excelHeaderRowInput?.value || currentStudentExcelPreview?.headerRow || 1));
-    const columns = {};
-    excelMappingFields?.querySelectorAll('[data-student-excel-map-field]').forEach((select) => {
-      const field = select.getAttribute('data-student-excel-map-field');
-      if (!field) return;
-      const value = select.value;
-      columns[field] = value === '' ? null : Number(value);
-    });
-    return { headerRow, columns };
-  };
-
-  const syncStudentExcelMappingFromUI = () => {
-    currentStudentExcelMapping = collectStudentExcelMapping();
-    return currentStudentExcelMapping;
-  };
-
-  const showStudentExcelMappingPanel = (preview) => {
-    if (!excelMappingPanel) return;
-    excelMappingPanel.classList.remove('is-hidden');
-    if (excelHeaderRowInput) excelHeaderRowInput.value = String(preview?.mapping?.headerRow || preview?.headerRow || 1);
-    renderStudentExcelMappingFields(preview);
-    renderStudentExcelTemplateOptions();
-  };
-
-  const hideStudentExcelMappingPanel = () => {
-    excelMappingPanel?.classList.add('is-hidden');
-    if (excelMappingFields) excelMappingFields.innerHTML = '';
-    appliedExcelTemplateName = '';
-  };
-
-  const renderStudentExcelPreview = (preview) => {
-    if (!excelPreview) return;
-    if (!preview) {
-      excelPreview.hidden = true;
-      excelPreview.textContent = '';
-      if (excelSubmitBtn) excelSubmitBtn.disabled = false;
-      return;
-    }
-
-    excelPreview.hidden = false;
-    excelPreview.className = `import-result ${preview.canImport ? 'import-result-ok' : 'import-result-error'}`;
-
-    const lines = [
-      `Hoja "${preview.sheetName || '?'}" · encabezados en fila ${preview.headerRow || 1}.`,
-      `${preview.validRows} fila(s) lista(s) para cargar · ${preview.invalidRows} con error · ${preview.totalRows} total.`,
-    ];
-
-    if (appliedExcelTemplateName) {
-      lines.push(`Plantilla aplicada: ${appliedExcelTemplateName}.`);
-    }
-
-    if (preview.requiresMapping) {
-      lines.push('Revisá el mapeo de columnas antes de cargar.');
-    }
-
-    if (preview.preview?.length) {
-      const sample = preview.preview
-        .map((row) => `${row.nombre} (${row.curso}, ${row.turno})`)
-        .join(' · ');
-      lines.push(`Ejemplos: ${sample}${preview.validRows > preview.preview.length ? ' · …' : ''}`);
-    }
-
-    if (preview.mappingErrors?.length) {
-      lines.push(`Mapeo: ${preview.mappingErrors.join(' · ')}`);
-    }
-
-    if (preview.errors?.length) {
-      const errorPreview = preview.errors.slice(0, 4).map((item) => `Fila ${item.row}: ${item.message}`);
-      lines.push(`Errores: ${errorPreview.join(' · ')}${preview.errors.length > 4 ? ' · …' : ''}`);
-    }
-
-    excelPreview.textContent = lines.join(' ');
-    if (excelSubmitBtn) excelSubmitBtn.disabled = !preview.canImport;
-  };
-
-  const previewStudentExcelFile = async (file, mapping = null) => {
-    if (!file) {
-      renderStudentExcelPreview(null);
-      hideStudentExcelMappingPanel();
-      currentStudentExcelPreview = null;
-      currentStudentExcelMapping = null;
-      return null;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-    if (mapping) formData.append('mapping', JSON.stringify(mapping));
-
-    const response = await fetch('/api/import/preview', {
-      method: 'POST',
-      body: formData,
-      credentials: 'same-origin',
-    });
-    const preview = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      renderStudentExcelPreview({ canImport: false, errors: [{ row: 0, message: preview.error || 'No se pudo leer la planilla.' }] });
-      return null;
-    }
-
-    currentStudentExcelPreview = preview;
-    currentStudentExcelMapping = buildStudentExcelMappingFromPreview(preview);
-    showStudentExcelMappingPanel(preview);
-    renderStudentExcelPreview(preview);
-    return preview;
-  };
-
-  const tryApplyMatchingExcelTemplate = async (file, preview) => {
-    const templates = readStudentExcelTemplates();
-    const matched = findBestExcelTemplate(templates, preview?.detectedHeaders || []);
-    if (!matched) return preview;
-
-    appliedExcelTemplateName = matched.name;
-    if (excelTemplateSelect) excelTemplateSelect.value = matched.id;
-    if (excelTemplateNameInput) excelTemplateNameInput.value = matched.name;
-    if (excelHeaderRowInput) excelHeaderRowInput.value = String(matched.headerRow || preview.headerRow || 1);
-
-    const remapped = await previewStudentExcelFile(file, {
-      headerRow: matched.headerRow || preview.headerRow || 1,
-      columns: { ...(matched.columns || {}) },
-    });
-    return remapped || preview;
-  };
 
   const setStudentMode = (mode) => {
     const value = mode === 'excel' ? 'excel' : 'manual';
@@ -1194,218 +951,8 @@ function initStudents() {
     });
   };
 
-  excelFileInput?.addEventListener('change', async () => {
-    const check = validateStudentExcelFile(excelFileInput, excelFeedback, excelForm);
-    if (!check.ok) {
-      renderStudentExcelPreview(null);
-      hideStudentExcelMappingPanel();
-      return;
-    }
-    if (excelResult) {
-      excelResult.hidden = true;
-      excelResult.textContent = '';
-    }
-    try {
-      if (excelSubmitBtn) {
-        excelSubmitBtn.disabled = true;
-        excelSubmitBtn.textContent = 'Analizando...';
-      }
-      await previewStudentExcelFile(check.file);
-      if (check.file && currentStudentExcelPreview) {
-        await tryApplyMatchingExcelTemplate(check.file, currentStudentExcelPreview);
-      }
-    } catch (error) {
-      console.error('[aula-clara] student excel preview failed', error);
-      renderStudentExcelPreview({ canImport: false, errors: [{ row: 0, message: 'No se pudo analizar la planilla.' }] });
-    } finally {
-      if (excelSubmitBtn) excelSubmitBtn.textContent = 'Cargar alumnos';
-    }
-  });
-
-  excelApplyMappingBtn?.addEventListener('click', async () => {
-    const check = validateStudentExcelFile(excelFileInput, excelFeedback, excelForm);
-    if (!check.ok) return;
-
-    const mapping = syncStudentExcelMappingFromUI();
-    const mappingErrors = validateStudentExcelMappingClient(mapping);
-    if (mappingErrors.length) {
-      renderStudentExcelPreview({
-        canImport: false,
-        mappingErrors,
-        errors: mappingErrors.map((message) => ({ row: 0, message })),
-        validRows: 0,
-        invalidRows: 0,
-        totalRows: 0,
-      });
-      return;
-    }
-
-    appliedExcelTemplateName = '';
-    try {
-      if (excelApplyMappingBtn) {
-        excelApplyMappingBtn.disabled = true;
-        excelApplyMappingBtn.textContent = 'Actualizando...';
-      }
-      await previewStudentExcelFile(check.file, mapping);
-    } catch (error) {
-      console.error('[aula-clara] student excel mapping preview failed', error);
-      renderStudentExcelPreview({ canImport: false, errors: [{ row: 0, message: 'No se pudo aplicar el mapeo.' }] });
-    } finally {
-      if (excelApplyMappingBtn) {
-        excelApplyMappingBtn.disabled = false;
-        excelApplyMappingBtn.textContent = 'Actualizar vista previa';
-      }
-    }
-  });
-
-  excelTemplateSelect?.addEventListener('change', async () => {
-    const templateId = excelTemplateSelect.value;
-    if (!templateId) {
-      appliedExcelTemplateName = '';
-      return;
-    }
-    const template = readStudentExcelTemplates().find((item) => item.id === templateId);
-    const check = validateStudentExcelFile(excelFileInput, excelFeedback, excelForm);
-    if (!template || !check.ok) return;
-
-    appliedExcelTemplateName = template.name;
-    if (excelTemplateNameInput) excelTemplateNameInput.value = template.name;
-    if (excelHeaderRowInput) excelHeaderRowInput.value = String(template.headerRow || 1);
-    await previewStudentExcelFile(check.file, {
-      headerRow: template.headerRow,
-      columns: { ...(template.columns || {}) },
-    });
-  });
-
-  excelTemplateSaveBtn?.addEventListener('click', () => {
-    const mapping = syncStudentExcelMappingFromUI();
-    const mappingErrors = validateStudentExcelMappingClient(mapping);
-    if (mappingErrors.length) {
-      alert(mappingErrors.join('\n'));
-      return;
-    }
-
-    const name = String(excelTemplateNameInput?.value || '').trim();
-    if (!name) {
-      alert('Escribí un nombre para la plantilla.');
-      excelTemplateNameInput?.focus();
-      return;
-    }
-
-    const templates = readStudentExcelTemplates();
-    const existing = templates.find((item) => item.name.toLowerCase() === name.toLowerCase());
-    const template = {
-      id: existing?.id || uid('excel-map'),
-      name,
-      headerRow: mapping.headerRow,
-      columns: mapping.columns,
-      columnLabels: (currentStudentExcelPreview?.detectedHeaders || []).map((label) => String(label || '')),
-      updatedAt: new Date().toISOString(),
-    };
-
-    const next = existing
-      ? templates.map((item) => (item.id === existing.id ? template : item))
-      : [...templates, template];
-
-    writeStudentExcelTemplates(next);
-    renderStudentExcelTemplateOptions(template.id);
-    if (excelTemplateSelect) excelTemplateSelect.value = template.id;
-    appliedExcelTemplateName = template.name;
-    alert(`Plantilla "${name}" guardada.`);
-  });
-
-  excelTemplateDeleteBtn?.addEventListener('click', () => {
-    const templateId = excelTemplateSelect?.value;
-    if (!templateId) {
-      alert('Seleccioná una plantilla para eliminar.');
-      return;
-    }
-    const templates = readStudentExcelTemplates();
-    const target = templates.find((item) => item.id === templateId);
-    if (!target) return;
-    if (!window.confirm(`¿Eliminar la plantilla "${target.name}"?`)) return;
-
-    writeStudentExcelTemplates(templates.filter((item) => item.id !== templateId));
-    renderStudentExcelTemplateOptions();
-    if (excelTemplateNameInput) excelTemplateNameInput.value = '';
-    appliedExcelTemplateName = '';
-    alert('Plantilla eliminada.');
-  });
-
-  excelForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const check = validateStudentExcelFile(excelFileInput, excelFeedback, excelForm);
-    if (!check.ok) {
-      alert(check.error || 'Seleccioná un archivo Excel válido.');
-      excelFileInput?.focus();
-      return;
-    }
-
-    const mapping = syncStudentExcelMappingFromUI();
-    const mappingErrors = validateStudentExcelMappingClient(mapping);
-    if (mappingErrors.length) {
-      alert(mappingErrors.join('\n'));
-      return;
-    }
-
-    const submitBtn = excelForm.querySelector('[data-student-excel-submit]');
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Cargando...';
-    }
-    if (excelResult) {
-      excelResult.hidden = true;
-      excelResult.textContent = '';
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append('type', 'alumnos');
-      formData.append('file', check.file);
-      formData.append('mapping', JSON.stringify(mapping));
-
-      const response = await fetch('/api/import', {
-        method: 'POST',
-        body: formData,
-        credentials: 'same-origin',
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        renderImportResult(excelResult, result, true);
-        return;
-      }
-
-      if (currentUser?.id) {
-        await hydrateLocalStorageFromServer(currentUser.id);
-      }
-      window.dispatchEvent(new CustomEvent('aula-clara:schools-changed'));
-      notifyDataChanged();
-      refreshSchoolOptions();
-      renderStudents(list, form);
-      renderImportResult(excelResult, result, false);
-      excelForm.reset();
-      hideStudentExcelMappingPanel();
-      currentStudentExcelPreview = null;
-      currentStudentExcelMapping = null;
-      renderStudentExcelPreview(null);
-      if (excelFeedback) {
-        excelFeedback.textContent = '';
-        excelFeedback.classList.add('is-hidden');
-        excelFeedback.classList.remove('is-ok', 'is-warning');
-      }
-    } catch (error) {
-      console.error('[aula-clara] student excel upload failed', error);
-      renderImportResult(excelResult, { error: 'Error de red al cargar la hoja. Revisá tu conexión e intentá de nuevo.' }, true);
-    } finally {
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Cargar alumnos';
-      }
-    }
-  });
-
   const refreshCourseOptions = (school = '', selectedCourseId = '') => {
-    const courses = read(KEYS.courses).filter((course) => !school || course.escuela === school);
+    const courses = visibleCourses(school);
     const previousValue = selectedCourseId || courseSelect?.value || '';
     fillSelect(courseSelect, courses, school ? 'Seleccionar curso' : 'Elegí una escuela primero', 'id', courseLabel);
     if (previousValue && courses.some((course) => course.id === previousValue)) {
@@ -1445,6 +992,16 @@ function initStudents() {
       if (input.checked) activateStudentMode(input.value);
     });
   });
+
+  root.querySelectorAll('[data-student-mode-trigger]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.getAttribute('data-student-mode-trigger') || 'excel';
+      activateStudentMode(mode);
+      const excelPanel = root.querySelector('[data-student-mode-panel="excel"]');
+      excelPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
   activateStudentMode('manual');
 
   const addSubjectFromInput = async () => {
@@ -1657,9 +1214,6 @@ function initAttendance() {
   const saveBar = root.querySelector('[data-attendance-save-bar]');
   const saveHint = root.querySelector('[data-attendance-save-hint]');
   const saveButton = root.querySelector('[data-attendance-save]');
-  const syncStatus = root.querySelector('[data-sync-status]');
-  const connectionStatus = root.querySelector('[data-connection-status]');
-  const syncButton = root.querySelector('[data-sync-button]');
   const historySchool = root.querySelector('[data-history-filter-school]');
   const historyCourse = root.querySelector('[data-history-filter-course]');
   const historySubject = root.querySelector('[data-history-filter-subject]');
@@ -1722,7 +1276,7 @@ function initAttendance() {
   };
 
   dateInput.value = today();
-  fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
+      fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
   fillSelect(subjectSelect, activeSubjects(), 'Materia');
   applySelectFromUrl(courseSelect, 'curso');
   applySelectFromUrl(subjectSelect, 'materia');
@@ -1731,7 +1285,7 @@ function initAttendance() {
 
   const schools = schoolNamesForSelect();
   fillSelect(historySchool, schools.map((school) => ({ id: school, nombre: school })), 'Todos los colegios');
-  fillSelect(historyCourse, read(KEYS.courses), 'Todos los cursos', 'id', courseLabel);
+  fillSelect(historyCourse, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
   fillSelect(historySubject, activeSubjects(), 'Todas las materias');
 
   const renderHistory = () => renderAttendanceHistory(root);
@@ -1799,29 +1353,6 @@ function initAttendance() {
     }
   });
 
-  window.addEventListener('aula-clara:sync-finished', (event) => {
-    if (syncStatus) syncStatus.textContent = formatSyncStatus(event.detail?.counts);
-  });
-  const updateConnectionStatus = () => {
-    if (!connectionStatus) return;
-    connectionStatus.textContent = navigator.onLine ? 'Online' : 'Offline';
-    connectionStatus.className = `tag ${navigator.onLine ? 'ok' : 'warning'}`;
-  };
-  window.addEventListener('online', updateConnectionStatus);
-  window.addEventListener('offline', updateConnectionStatus);
-  updateConnectionStatus();
-  syncButton?.addEventListener('click', async () => {
-    syncButton.disabled = true;
-    syncButton.textContent = 'Sincronizando...';
-    const result = await syncPendingOperations();
-    syncButton.disabled = false;
-    syncButton.textContent = 'Sincronizar';
-    if (syncStatus) syncStatus.textContent = formatSyncStatus(result.counts);
-  });
-  Promise.all([countPendingOperations(), getOperationStatusCounts()]).then(([, counts]) => {
-    if (syncStatus) syncStatus.textContent = formatSyncStatus(counts);
-  });
-
   function renderAttendance() {
     const students = activeStudents().filter((student) =>
       (!courseSelect.value || student.cursoId === courseSelect.value) &&
@@ -1876,9 +1407,9 @@ function initAttendance() {
 
   renderAttendance();
   onPanelRefresh(() => {
-    fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
+    fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
     fillSelect(subjectSelect, activeSubjects(), 'Materia');
-    fillSelect(historyCourse, read(KEYS.courses), 'Todos los cursos', 'id', courseLabel);
+    fillSelect(historyCourse, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
     fillSelect(historySubject, activeSubjects(), 'Todas las materias');
     renderAttendance();
     if (showingHistory) renderHistory();
@@ -1997,9 +1528,7 @@ function gradeEntryLabel(entry, mode = 'numerica') {
 }
 
 function coursesForGradeFilters(schoolName = '') {
-  const courses = read(KEYS.courses);
-  if (!schoolName) return courses;
-  return courses.filter((course) => String(course.escuela || '').toLowerCase() === schoolName.toLowerCase());
+  return visibleCourses(schoolName);
 }
 
 async function commitGradesDraft(draftGrades, meta) {
@@ -2333,7 +1862,7 @@ function initGrades() {
 
   refreshSchoolOptions();
   refreshCourseOptions();
-  fillSelect(detailCourseFilter, read(KEYS.courses), 'Todos los cursos', 'id', courseLabel);
+  fillSelect(detailCourseFilter, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
   refreshSubjectOptions();
   if (detailPeriodFilter) detailPeriodFilter.value = defaultGradePeriod();
   applySelectFromUrl(courseFilter, 'curso');
@@ -2583,7 +2112,7 @@ function initGrades() {
   onPanelRefresh(() => {
     refreshSchoolOptions();
     refreshCourseOptions(courseFilter?.value || '');
-    fillSelect(detailCourseFilter, read(KEYS.courses), 'Todos los cursos', 'id', courseLabel);
+    fillSelect(detailCourseFilter, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
     refreshSubjectOptions(subjectFilter?.value || '');
     void renderAll();
     if (showingDetail) renderDetail();
@@ -2950,7 +2479,7 @@ function initTrabajosEntregas(root, context = {}) {
     );
   };
 
-  fillSelect(reenviarCurso, read(KEYS.courses), 'Elegir curso', 'id', courseLabel);
+  fillSelect(reenviarCurso, visibleCourses(), 'Elegir curso', 'id', courseLabel);
   fillSelect(reenviarMateria, activeSubjects(), 'Elegir materia');
 
   reenviarCurso?.addEventListener('change', () => {
@@ -3272,7 +2801,8 @@ function initCourses() {
       nombre,
       escuela,
       turno,
-      cicloLectivo: new Date().getFullYear(),
+      cicloLectivo: activeCicloLectivo(),
+      subjectIds: [],
       updatedAt: nowIso(),
     };
     courses.push(payload);
@@ -3286,16 +2816,17 @@ function initCourses() {
 
 function renderCourses(list, highlightCourseId = '') {
   if (!list) return;
-  const courses = read(KEYS.courses);
+  const courses = visibleCourses();
   const students = activeStudents();
   const subjects = activeSubjects();
   if (!courses.length) {
-    replaceContent(list, emptyState('No hay cursos creados', 'Agregá una escuela y completá el formulario para crear el primer curso.'));
+    replaceContent(list, emptyState('No hay cursos en este ciclo', `Creá divisiones para el ciclo ${activeCicloLectivo()} o cloná la estructura de un ciclo anterior.`));
     return;
   }
   replaceContent(list, ...courses.map((course) => {
     const courseStudents = students.filter((student) => student.cursoId === course.id);
-    const defaultSubjectId = subjects[0]?.id || '';
+    const courseSubjects = courseSubjectsForDisplay(course);
+    const defaultSubjectId = courseSubjects[0]?.id || subjects[0]?.id || '';
     const actionContext = { curso: course.id, materia: defaultSubjectId };
     const isHighlighted = highlightCourseId && course.id === highlightCourseId;
     return el('details', {
@@ -3305,7 +2836,7 @@ function renderCourses(list, highlightCourseId = '') {
       el('summary', {},
         el('span', {},
           el('strong', {}, course.nombre),
-          el('small', {}, `${course.escuela} · Turno ${course.turno}`),
+          el('small', {}, `${course.escuela} · Turno ${course.turno} · Ciclo ${resolveCourseCiclo(course)}`),
         ),
         tag(`${courseStudents.length} alumnos`),
       ),
@@ -3320,7 +2851,7 @@ function renderCourses(list, highlightCourseId = '') {
         ),
         el('div', {},
           el('h3', {}, 'Materias'),
-          el('div', { className: 'notes-list' }, ...subjects.map((subject) => tag(subject.nombre))),
+          el('div', { className: 'notes-list' }, ...courseSubjects.map((subject) => tag(subject.nombre))),
         ),
         el('div', { className: 'button-row' },
           el('a', { className: 'btn btn-primary', href: contextUrl('/asistencia', actionContext) }, 'Tomar asistencia'),
@@ -3406,6 +2937,27 @@ function buildTeacherScheduleEvents(monthStart, monthEnd, courseId = '', subject
   return events;
 }
 
+let lastCalendarAlertPrefs = null;
+
+function isSpaViewVisible(root) {
+  const view = root.closest('[data-spa-view]');
+  return !view || !view.classList.contains('spa-view--hidden');
+}
+
+function maybeShowCalendarOptIn(root) {
+  const modal = root.querySelector('[data-calendar-opt-in]');
+  if (!modal || modal.open) return;
+  if (!isSpaViewVisible(root)) return;
+  if (lastCalendarAlertPrefs?.calendar_alerts) return;
+  if (localStorage.getItem(storageKey('aula_clara_calendar_alerts_dismissed'))) return;
+  modal.showModal?.();
+}
+
+function ensureCalendarOptInNotBlocking(root) {
+  const modal = root.querySelector('[data-calendar-opt-in]');
+  if (modal?.open && !isSpaViewVisible(root)) modal.close();
+}
+
 function initCalendar() {
   const root = document.querySelector('[data-calendar]');
   if (!root) return;
@@ -3426,9 +2978,9 @@ function initCalendar() {
   monthInput.value = today().slice(0, 7);
   if (eventDateInput) eventDateInput.value = today();
 
-  fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
+      fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
   fillSelect(subjectSelect, activeSubjects(), 'Todas las materias');
-  fillSelect(eventCourseSelect, read(KEYS.courses), 'Sin curso', 'id', (course) => `${course.nombre} - ${course.turno}`);
+  fillSelect(eventCourseSelect, visibleCourses(), 'Sin curso', 'id', courseLabel);
   fillSelect(eventSubjectSelect, activeSubjects(), 'Sin materia');
 
   applySelectFromUrl(courseSelect, 'curso');
@@ -3496,11 +3048,14 @@ function initCalendar() {
     modal?.close();
   });
 
+  ensureCalendarOptInNotBlocking(root);
+  registerSpaViewRefresh('actividades', () => maybeShowCalendarOptIn(root));
+
   load();
   onPanelRefresh(() => {
-    fillSelect(courseSelect, read(KEYS.courses), 'Todos los cursos', 'id', (course) => `${course.nombre} - ${course.turno}`);
+    fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
     fillSelect(subjectSelect, activeSubjects(), 'Todas las materias');
-    fillSelect(eventCourseSelect, read(KEYS.courses), 'Sin curso', 'id', (course) => `${course.nombre} - ${course.turno}`);
+    fillSelect(eventCourseSelect, visibleCourses(), 'Sin curso', 'id', courseLabel);
     fillSelect(eventSubjectSelect, activeSubjects(), 'Sin materia');
     load();
   });
@@ -3523,11 +3078,78 @@ async function loadCalendar(root, monthValue, courseId = '', subjectId = '') {
   const events = Array.isArray(data.events) ? data.events : [];
   const scheduleEvents = buildTeacherScheduleEvents(start, end, courseId, subjectId);
 
-  if (!data.preferences?.calendar_alerts && !localStorage.getItem(storageKey('aula_clara_calendar_alerts_dismissed'))) {
-    root.querySelector('[data-calendar-opt-in]')?.showModal?.();
-  }
+  lastCalendarAlertPrefs = data.preferences || null;
+  ensureCalendarOptInNotBlocking(root);
+  maybeShowCalendarOptIn(root);
 
   renderCalendar(root, start, [...events, ...scheduleEvents]);
+}
+
+function renderCalendarMobileList(root, monthStart, eventsByDate, showDay) {
+  const listRoot = root.querySelector('[data-calendar-mobile-list]');
+  if (!listRoot) return;
+
+  const year = monthStart.getFullYear();
+  const month = monthStart.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const dayGroups = [];
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(year, month, day);
+    const key = date.toISOString().slice(0, 10);
+    const dayItems = eventsByDate[key] || [];
+    if (dayItems.length) dayGroups.push({ key, date, dayItems });
+  }
+
+  if (!dayGroups.length) {
+    replaceContent(listRoot, emptyState('Sin eventos', 'No hay eventos programados este mes.'));
+    return;
+  }
+
+  replaceContent(listRoot,
+    ...dayGroups.map(({ key, date, dayItems }) => {
+      const tone = getCalendarDayTone(dayItems);
+      const isToday = key === today();
+      return el('article', {
+        className: `calendar-mobile-day ${tone ? `is-${tone}` : ''} ${isToday ? 'is-today' : ''}`.trim(),
+      },
+        el('button', {
+          type: 'button',
+          className: 'calendar-mobile-day-head',
+          dataset: { calendarDay: key },
+        },
+          el('div', { className: 'calendar-mobile-day-title' },
+            el('strong', {}, date.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'short' })),
+            isToday ? el('span', { className: 'tag info' }, 'Hoy') : null,
+          ),
+          el('span', { className: 'calendar-mobile-day-count' }, `${dayItems.length} evento${dayItems.length !== 1 ? 's' : ''}`),
+        ),
+        el('div', { className: 'calendar-mobile-events' },
+          ...dayItems.map((event) => {
+            const meta = getCalendarEventMeta(event.tipo);
+            return el('button', {
+              type: 'button',
+              className: `calendar-mobile-event calendar-mobile-event--${meta.tone}`,
+              dataset: { calendarDay: key },
+            },
+              el('span', { className: 'calendar-event-emoji' }, meta.icon),
+              el('span', { className: 'calendar-mobile-event-body' },
+                el('strong', {}, event.titulo),
+                el('small', {}, [event.colegio, event.curso, event.materia].filter(Boolean).join(' · ')),
+              ),
+            );
+          }),
+        ),
+      );
+    }),
+  );
+
+  listRoot.querySelectorAll('[data-calendar-day]').forEach((button) => {
+    button.addEventListener('click', () => {
+      showDay(button.dataset.calendarDay);
+      root.querySelector('.calendar-day-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 }
 
 function renderCalendar(root, monthStart, events) {
@@ -3607,6 +3229,8 @@ function renderCalendar(root, monthStart, events) {
   grid.querySelectorAll('[data-calendar-day]').forEach((button) => {
     button.addEventListener('click', () => showDay(button.dataset.calendarDay));
   });
+
+  renderCalendarMobileList(root, monthStart, eventsByDate, showDay);
 
   const monthKey = `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}`;
   const initialKey = today().startsWith(monthKey) ? today() : `${monthKey}-01`;
@@ -3698,8 +3322,81 @@ function downloadActivityPdf(html, titulo) {
   })();
 }
 
+function initToolsEntregas() {
+  const toolsRoot = document.querySelector('[data-herramientas]');
+  const contextForm = toolsRoot?.querySelector('[data-trabajo-context-form]');
+  if (!toolsRoot || !contextForm) return;
+
+  const schoolSelect = contextForm.colegio;
+  const shiftSelect = contextForm.turno;
+  const courseSelect = contextForm.cursoId;
+  const subjectSelect = contextForm.materiaId;
+  let cachedActividadesList = [];
+
+  const schools = schoolNamesForSelect();
+  const shifts = [...new Set(visibleCourses().map((course) => course.turno).filter(Boolean))];
+  fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Colegio');
+  fillSelect(shiftSelect, shifts.map((shift) => ({ id: shift, nombre: shift })), 'Turno');
+  fillSelect(courseSelect, visibleCourses(), 'Curso', 'id', courseLabel);
+  fillSelect(subjectSelect, activeSubjects(), 'Materia');
+
+  const syncCourseFields = () => {
+    const course = courseById(courseSelect?.value);
+    if (!course) return;
+    if (schoolSelect) schoolSelect.value = course.escuela || schoolSelect.value;
+    if (shiftSelect) shiftSelect.value = course.turno || shiftSelect.value;
+  };
+
+  const api = initTrabajosEntregas(toolsRoot, {
+    getCourseId: () => courseSelect?.value || '',
+    getMateriaId: () => subjectSelect?.value || '',
+    getColegio: () => schoolSelect?.value || '',
+    getTurno: () => shiftSelect?.value || '',
+    getCourse: () => courseById(courseSelect?.value),
+    getSubject: () => subjectById(subjectSelect?.value),
+    getActividades: () => cachedActividadesList,
+    setActividades: (items) => { cachedActividadesList = items; },
+    onUploaded: () => {},
+  });
+
+  toolsEntregasApi = {
+    ...api,
+    setContext: ({ colegio, turno, cursoId, materiaId } = {}) => {
+      if (colegio && schoolSelect) schoolSelect.value = colegio;
+      if (turno && shiftSelect) shiftSelect.value = turno;
+      if (cursoId && courseSelect) courseSelect.value = cursoId;
+      if (materiaId && subjectSelect) subjectSelect.value = materiaId;
+      syncCourseFields();
+    },
+  };
+
+  schoolSelect?.addEventListener('change', () => {
+    fillSelect(courseSelect, visibleCourses(schoolSelect.value || ''), 'Curso', 'id', courseLabel);
+    syncCourseFields();
+    void toolsEntregasApi.refresh();
+  });
+  courseSelect?.addEventListener('change', () => {
+    syncCourseFields();
+    void toolsEntregasApi.refresh();
+  });
+  subjectSelect?.addEventListener('change', () => { void toolsEntregasApi.refresh(); });
+
+  registerSpaViewRefresh('herramientas', () => {
+    fillSelect(courseSelect, visibleCourses(schoolSelect?.value || ''), 'Curso', 'id', courseLabel);
+    fillSelect(subjectSelect, activeSubjects(), 'Materia');
+    void toolsEntregasApi.refresh();
+  });
+
+  onPanelRefresh(() => {
+    fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Colegio');
+    fillSelect(courseSelect, visibleCourses(schoolSelect?.value || ''), 'Curso', 'id', courseLabel);
+    fillSelect(subjectSelect, activeSubjects(), 'Materia');
+  });
+}
+
 function initActivities() {
   const root = document.querySelector('[data-activities]');
+  const toolsRoot = document.querySelector('[data-herramientas]');
   if (!root) return;
 
   const form = root.querySelector('[data-activity-form]');
@@ -3707,23 +3404,21 @@ function initActivities() {
   const list = root.querySelector('[data-activity-list]');
   const btnDescargarWord = root.querySelector('#btn-descargar-word');
   const btnDescargarPdf = root.querySelector('#btn-descargar-pdf');
-  const aiForm = root.querySelector('[data-activity-ai-form]');
-  const aiFilesInput = root.querySelector('[data-activity-ai-files]');
-  const aiFileFeedback = root.querySelector('[data-activity-ai-file-feedback]');
-  const aiSourceReport = root.querySelector('[data-activity-ai-source-report]');
-  const aiLimitsDialog = root.querySelector('[data-activity-ai-limits-dialog]');
-  const aiLimitsOpen = root.querySelector('[data-activity-ai-limits-open]');
-  const aiStatus = root.querySelector('[data-activity-ai-status]');
-  const aiStatusDetail = root.querySelector('[data-activity-ai-status-detail]');
-  const aiProgress = root.querySelector('[data-activity-ai-progress]');
-  const aiPreview = root.querySelector('[data-activity-ai-preview]');
-  const aiPreviewBody = root.querySelector('[data-activity-ai-preview-body]');
-  const aiSubmit = root.querySelector('[data-activity-ai-submit]');
-  const aiWord = root.querySelector('[data-activity-ai-word]');
-  const aiPdf = root.querySelector('[data-activity-ai-pdf]');
-  const aiApply = root.querySelector('[data-activity-ai-apply]');
-  const modeInputs = root.querySelectorAll('[data-activity-mode-input]');
-  const modePanels = root.querySelectorAll('[data-activity-mode-panel]');
+  const aiForm = toolsRoot?.querySelector('[data-activity-ai-form]');
+  const aiFilesInput = toolsRoot?.querySelector('[data-activity-ai-files]');
+  const aiFileFeedback = toolsRoot?.querySelector('[data-activity-ai-file-feedback]');
+  const aiSourceReport = toolsRoot?.querySelector('[data-activity-ai-source-report]');
+  const aiLimitsDialog = toolsRoot?.querySelector('[data-activity-ai-limits-dialog]');
+  const aiLimitsOpen = toolsRoot?.querySelector('[data-activity-ai-limits-open]');
+  const aiStatus = toolsRoot?.querySelector('[data-activity-ai-status]');
+  const aiStatusDetail = toolsRoot?.querySelector('[data-activity-ai-status-detail]');
+  const aiProgress = toolsRoot?.querySelector('[data-activity-ai-progress]');
+  const aiPreview = toolsRoot?.querySelector('[data-activity-ai-preview]');
+  const aiPreviewBody = toolsRoot?.querySelector('[data-activity-ai-preview-body]');
+  const aiSubmit = toolsRoot?.querySelector('[data-activity-ai-submit]');
+  const aiWord = toolsRoot?.querySelector('[data-activity-ai-word]');
+  const aiPdf = toolsRoot?.querySelector('[data-activity-ai-pdf]');
+  const aiApply = toolsRoot?.querySelector('[data-activity-ai-apply]');
   const workspace = root.querySelector('[data-activity-workspace]');
   const schoolSelect = form.colegio;
   const shiftSelect = form.turno;
@@ -3734,28 +3429,7 @@ function initActivities() {
   let progressTimer = null;
   let cachedActividadesList = [];
 
-  const getActivityMode = () => root.querySelector('[data-activity-mode-input]:checked')?.value || 'manual';
-
-  let trabajosEntregas = { refresh: async () => {}, openForActividad: () => {} };
-
-  const setActivityMode = (mode) => {
-    const value = ['ai', 'cargar'].includes(mode) ? mode : 'manual';
-    modeInputs.forEach((input) => {
-      input.checked = input.value === value;
-    });
-    modePanels.forEach((panel) => {
-      const active = panel.getAttribute('data-activity-mode-panel') === value;
-      panel.classList.toggle('is-hidden', !active);
-    });
-    if (value === 'cargar') void trabajosEntregas.refresh();
-  };
-
-  modeInputs.forEach((input) => {
-    input.addEventListener('change', () => {
-      if (input.checked) setActivityMode(input.value);
-    });
-  });
-  setActivityMode(getActivityMode());
+  const getActivityMode = () => 'manual';
 
   const refreshActividadesContext = async () => {
     const cursoId = courseSelect?.value || '';
@@ -3763,20 +3437,14 @@ function initActivities() {
     if (cursoId && materiaId) {
       cachedActividadesList = await fetchActividadesForContext(cursoId, materiaId);
     }
-    await trabajosEntregas.refresh();
   };
 
-  trabajosEntregas = initTrabajosEntregas(root, {
-    getCourseId: () => courseSelect?.value || '',
-    getMateriaId: () => subjectSelect?.value || '',
-    getColegio: () => schoolSelect?.value || '',
-    getTurno: () => shiftSelect?.value || '',
-    getCourse: () => courseById(courseSelect?.value),
-    getSubject: () => subjectById(subjectSelect?.value),
-    getActividades: () => cachedActividadesList,
-    setActividades: (items) => { cachedActividadesList = items; },
-    onUploaded: () => renderActivitiesList(list, (items) => { cachedActividadesList = items; }),
-  });
+  const goToActivitiesWorkspace = () => {
+    showSpaView('actividades');
+    window.requestAnimationFrame(() => {
+      workspace?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   const formatChars = (value) => new Intl.NumberFormat('es-AR').format(Number(value) || 0);
 
@@ -3901,8 +3569,7 @@ function initActivities() {
       if (brief) brief.value = editorContent.brief || '';
       if (criteria) criteria.value = editorContent.criteria || '';
     }
-    setActivityMode('manual');
-    workspace?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    goToActivitiesWorkspace();
   };
 
   if (aiForm) {
@@ -3984,7 +3651,7 @@ function initActivities() {
   aiApply?.addEventListener('click', () => {
     if (!lastGenerated) return alert('No hay contenido generado para aplicar.');
     applyGeneratedToForm(lastGenerated);
-    alert('Contenido aplicado. Revisá en «Realizar a mano» y guardá la actividad.');
+    alert('Contenido aplicado. Revisá en Actividades y guardá la actividad.');
   });
 
   function obtenerDatosDocumento() {
@@ -4073,10 +3740,10 @@ function initActivities() {
   }
 
   const schools = schoolNamesForSelect();
-  const shifts = [...new Set(read(KEYS.courses).map((course) => course.turno).filter(Boolean))];
+  const shifts = [...new Set(visibleCourses().map((course) => course.turno).filter(Boolean))];
   fillSelect(schoolSelect, schools.map((school) => ({ id: school, nombre: school })), 'Colegio');
   fillSelect(shiftSelect, shifts.map((shift) => ({ id: shift, nombre: shift })), 'Turno');
-  fillSelect(courseSelect, read(KEYS.courses), 'Curso', 'id', (course) => `${course.nombre} - ${course.turno}`);
+  fillSelect(courseSelect, visibleCourses(), 'Curso', 'id', courseLabel);
   fillSelect(subjectSelect, activeSubjects(), 'Materia');
   applySuggestedContextTo({ school: schoolSelect, course: courseSelect, subject: subjectSelect });
   const syncCourseFields = () => {
@@ -4199,10 +3866,10 @@ function initActivities() {
   const enviarMateria = root.querySelector('[data-enviar-materia]');
 
   const schoolsForEnviar = schoolNamesForSelect();
-  const shiftsForEnviar = [...new Set(read(KEYS.courses).map((course) => course.turno).filter(Boolean))];
+  const shiftsForEnviar = [...new Set(visibleCourses().map((course) => course.turno).filter(Boolean))];
   fillSelect(enviarColegio, schoolsForEnviar.map((school) => ({ id: school, nombre: school })), 'Colegio');
   fillSelect(enviarTurno, shiftsForEnviar.map((shift) => ({ id: shift, nombre: shift })), 'Turno');
-  fillSelect(enviarCurso, read(KEYS.courses), 'Curso', 'id', courseLabel);
+  fillSelect(enviarCurso, visibleCourses(), 'Curso', 'id', courseLabel);
   fillSelect(enviarMateria, activeSubjects(), 'Materia');
 
   const syncEnviarCourseFields = () => {
@@ -4248,22 +3915,21 @@ function initActivities() {
 
     const actividad = cachedActividadesList.find((item) => item.id === cargarBtn.dataset.cargarEntregaActividad);
     if (actividad) {
-      if (schoolSelect) schoolSelect.value = actividad.colegio || schoolSelect.value;
-      if (shiftSelect) shiftSelect.value = actividad.turno || shiftSelect.value;
-      if (courseSelect) courseSelect.value = actividad.curso_id || courseSelect.value;
-      if (subjectSelect) subjectSelect.value = actividad.materia_id || subjectSelect.value;
-      syncCourseFields();
-      refreshActividadesContext().then(() => {
-        setActivityMode('cargar');
-        trabajosEntregas.openForActividad(actividad.id);
-        workspace?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toolsEntregasApi.setContext?.({
+        colegio: actividad.colegio,
+        turno: actividad.turno,
+        cursoId: actividad.curso_id,
+        materiaId: actividad.materia_id,
+      });
+      navigateToToolsSection('entregas');
+      void toolsEntregasApi.refresh().then(() => {
+        toolsEntregasApi.openForActividad(actividad.id);
       });
       return;
     }
 
-    setActivityMode('cargar');
-    trabajosEntregas.openForActividad(cargarBtn.dataset.cargarEntregaActividad);
-    workspace?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    navigateToToolsSection('entregas');
+    toolsEntregasApi.openForActividad(cargarBtn.dataset.cargarEntregaActividad);
   });
 
   enviarForm?.addEventListener('submit', async (event) => {
@@ -4404,7 +4070,7 @@ function refreshExportPanelFilters(panel) {
     const selectedCourse = courseSelect.value;
     fillSelect(
       courseSelect,
-      read(KEYS.courses).filter((course) => !schoolSelect?.value || course.escuela === schoolSelect.value),
+      visibleCourses(schoolSelect?.value || ''),
       'Todos los cursos',
       'id',
       courseLabel,
@@ -4478,64 +4144,6 @@ function initExcelExport() {
   });
 }
 
-function initExcelImport() {
-  document.querySelectorAll('[data-excel-import]').forEach((panel) => {
-    const type = panel.dataset.excelImport;
-    const fileInput = panel.querySelector('[data-import-file]');
-    const submitButton = panel.querySelector('[data-import-submit]');
-    const resultEl = panel.querySelector('[data-import-result]');
-    if (!type || !fileInput || !submitButton) return;
-
-    submitButton.addEventListener('click', async () => {
-      const file = fileInput.files?.[0];
-      if (!file) {
-        alert('Seleccioná un archivo Excel (.xlsx).');
-        fileInput.focus();
-        return;
-      }
-
-      submitButton.disabled = true;
-      const previousLabel = submitButton.textContent;
-      submitButton.textContent = 'Importando...';
-      if (resultEl) {
-        resultEl.hidden = true;
-        resultEl.textContent = '';
-      }
-
-      try {
-        const formData = new FormData();
-        formData.append('type', type);
-        formData.append('file', file);
-
-        const response = await fetch('/api/import', {
-          method: 'POST',
-          body: formData,
-          credentials: 'same-origin',
-        });
-
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          renderImportResult(resultEl, result, true);
-          return;
-        }
-
-        if (currentUser?.id) {
-          await hydrateLocalStorageFromServer(currentUser.id);
-        }
-        notifyDataChanged();
-        renderImportResult(resultEl, result, false);
-        fileInput.value = '';
-      } catch (error) {
-        console.error('[aula-clara] excel import failed', error);
-        renderImportResult(resultEl, { error: 'Error de red al importar. Revisá tu conexión e intentá de nuevo.' }, true);
-      } finally {
-        submitButton.disabled = false;
-        submitButton.textContent = previousLabel;
-      }
-    });
-  });
-}
-
 async function bootstrap() {
   document.documentElement.dataset.appBooting = 'true';
   seed();
@@ -4557,6 +4165,13 @@ async function bootstrap() {
 
   initResponsiveTables();
   initDashboard();
+  initOnboarding({
+    getUserId: () => currentUser?.id || null,
+    hasCourse: () => visibleCourses().length > 0,
+    hasStudents: () => activeStudents().length > 0,
+    hasAttendance: () => read(KEYS.attendance).length > 0,
+    onPanelRefresh,
+  });
   initTeacherContext();
   initStudents();
   initAttendance();
@@ -4564,9 +4179,50 @@ async function bootstrap() {
   initCourses();
   initSubjects();
   initCalendar();
+  initToolsEntregas();
   initActivities();
   initExcelExport();
-  initExcelImport();
+  initSchoolCycleUi({
+    readFilters: () => read(KEYS.dashboardFilters),
+    writeFilters: (value) => write(KEYS.dashboardFilters, value),
+    readCourses: () => read(KEYS.courses),
+    writeCourses: (value) => write(KEYS.courses, value),
+    readTeacherContext: () => read(KEYS.teacherContext),
+    writeTeacherContext: (value) => write(KEYS.teacherContext, value),
+    schoolNamesForSelect,
+    queueCourseUpsert: (course) => queue('course', 'upsert', course),
+    uid,
+    nowIso,
+    onChanged: () => notifyDataChanged({ scope: 'ciclo' }),
+  });
+  initToolsView({
+    onImported: async (importType) => {
+      if (currentUser?.id) {
+        await hydrateLocalStorageFromServer(currentUser.id);
+      }
+      if (importType === 'alumnos') {
+        window.dispatchEvent(new CustomEvent('aula-clara:schools-changed'));
+      }
+      notifyDataChanged({ scope: importType });
+      if (importType === 'alumnos') {
+        const root = document.querySelector('[data-students]');
+        const list = root?.querySelector('[data-student-list]');
+        const form = root?.querySelector('[data-student-form]');
+        if (list && form) renderStudents(list, form);
+      }
+    },
+  });
+  document.addEventListener('click', (event) => {
+    const trigger = event.target?.closest?.('[data-tools-focus]');
+    if (!trigger) return;
+    const section = trigger.getAttribute('data-tools-focus');
+    const tab = trigger.getAttribute('data-tools-tab');
+    if (section) {
+      event.preventDefault();
+      navigateToToolsSection(section, tab || undefined);
+    }
+  });
+  initSyncUi({ formatSyncStatus });
   startAutoSync();
   appReady = true;
   delete document.documentElement.dataset.appBooting;
