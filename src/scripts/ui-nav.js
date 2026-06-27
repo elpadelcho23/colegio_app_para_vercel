@@ -1,10 +1,16 @@
 // Extrae la lógica del menú móvil y la hace reutilizable.
+let mobileNavController = null;
+
 export function initMobileNav() {
   const menuToggle = document.querySelector('[data-menu-toggle]');
   const navMenu = document.querySelector('[data-nav-menu]');
   const appShell = document.querySelector('.app-shell');
 
   if (!menuToggle || !navMenu) return;
+
+  mobileNavController?.abort();
+  mobileNavController = new AbortController();
+  const { signal } = mobileNavController;
 
   const setShellHeight = () => {
     const height = appShell?.offsetHeight || 112;
@@ -23,15 +29,15 @@ export function initMobileNav() {
   window.addEventListener('resize', () => {
     setShellHeight();
     if (window.innerWidth >= 769) setMenuState(false);
-  });
+  }, { signal });
 
   menuToggle.addEventListener('click', () => {
     const isOpen = navMenu.getAttribute('data-menu-open') === 'true';
     setMenuState(!isOpen);
-  });
+  }, { signal });
 
-  navMenu.querySelectorAll('a, .nav-form button').forEach((element) => {
-    element.addEventListener('click', () => setMenuState(false));
+  navMenu.querySelectorAll('a, .nav-form button, .nav-tab, [data-spa-nav]').forEach((element) => {
+    element.addEventListener('click', () => setMenuState(false), { signal });
   });
 
   document.addEventListener('click', (e) => {
@@ -41,11 +47,11 @@ export function initMobileNav() {
     if (!isClickInsideMenu && !isClickOnToggle) {
       setMenuState(false);
     }
-  });
+  }, { signal });
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') setMenuState(false);
-  });
+  }, { signal });
 }
 
 export function openMenu() {

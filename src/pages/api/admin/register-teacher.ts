@@ -1,15 +1,8 @@
 import type { APIRoute } from 'astro';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
+import { isStrongPassword } from '../../../server/auth';
 import { createTenant, db } from '../../../server/db';
-
-function isStrongPassword(password: string) {
-  return password.length >= 10 &&
-    /[a-z]/.test(password) &&
-    /[A-Z]/.test(password) &&
-    /\d/.test(password) &&
-    /[^A-Za-z0-9]/.test(password);
-}
 
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();

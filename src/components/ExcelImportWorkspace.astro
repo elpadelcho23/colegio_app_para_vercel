@@ -1,0 +1,271 @@
+---
+import type { ExcelImportType } from '../lib/excel-import-limits';
+import { EXCEL_IMPORT_LIMITS } from '../lib/excel-import-limits';
+import {
+  STUDENT_EXCEL_COLUMNS,
+  STUDENT_EXCEL_EXAMPLE_ROWS,
+  STUDENT_EXCEL_NOTES,
+  STUDENT_EXCEL_SHEET,
+} from '../lib/student-excel-reference';
+
+interface Props {
+  importType: 'alumnos' | 'asistencias';
+  title?: string;
+  description?: string;
+  submitLabel?: string;
+}
+
+const {
+  importType,
+  title = importType === 'alumnos' ? 'Cargar alumnos desde Excel' : 'Cargar asistencias desde Excel',
+  description = importType === 'alumnos'
+    ? 'Creá una plantilla con los nombres de columnas de tu colegio y reutilizala en cada carga.'
+    : 'Definí cómo se lee tu planilla de presentismo una sola vez.',
+  submitLabel = importType === 'alumnos' ? 'Importar alumnos' : 'Importar asistencias',
+} = Astro.props;
+
+const maxFileMb = Math.round(EXCEL_IMPORT_LIMITS.maxFileBytes / (1024 * 1024));
+
+const attendanceColumns = [
+  { label: 'Fecha', required: true },
+  { label: 'Colegio', required: true },
+  { label: 'Curso', required: true },
+  { label: 'Turno', required: true },
+  { label: 'Materia', required: true },
+  { label: 'Alumno', required: true },
+  { label: 'Estado', required: true },
+];
+
+const attendanceNotes = [
+  'Podés usar tu propia planilla: mapeá cada columna y guardala como plantilla.',
+  'Estado: Presente, Ausente, P, A, Falta.',
+  'Fecha en AAAA-MM-DD o formato de Excel.',
+  'Curso, materia y alumno deben existir en el sistema.',
+];
+---
+
+<section
+  class="excel-workspace panel"
+  data-excel-workspace
+  data-import-type={importType}
+  data-max-file-mb={maxFileMb}
+>
+  <div class="section-title">
+    <h3>{title}</h3>
+    <p>{description}</p>
+  </div>
+
+  <ol class="excel-workspace-steps" aria-label="Pasos de importación">
+    <li class="excel-workspace-step is-active" data-excel-step="template">
+      <span class="excel-workspace-step-num">1</span>
+      <span class="excel-workspace-step-label">Plantilla</span>
+    </li>
+    <li class="excel-workspace-step" data-excel-step="file">
+      <span class="excel-workspace-step-num">2</span>
+      <span class="excel-workspace-step-label">Archivo</span>
+    </li>
+    <li class="excel-workspace-step" data-excel-step="mapping">
+      <span class="excel-workspace-step-num">3</span>
+      <span class="excel-workspace-step-label">Mapeo</span>
+    </li>
+    <li class="excel-workspace-step" data-excel-step="confirm">
+      <span class="excel-workspace-step-num">4</span>
+      <span class="excel-workspace-step-label">Importar</span>
+    </li>
+  </ol>
+
+  <div class="excel-toast is-hidden" data-excel-toast role="status" aria-live="polite"></div>
+
+  <div class="excel-template-library" data-excel-template-library>
+    <div class="excel-template-library-head">
+      <div>
+        <strong>Mis plantillas</strong>
+        <p class="muted">Elegí una guardada o creá una nueva indicando los nombres de columna de tu Excel.</p>
+      </div>
+      <div class="excel-template-library-actions">
+        <button type="button" class="btn btn-secondary btn-sm" data-excel-template-new>
+          + Nueva plantilla
+        </button>
+        <a class="btn btn-ghost btn-sm" href={`/api/import/template?type=${importType}`}>Descargar ejemplo</a>
+      </div>
+    </div>
+    <div class="excel-template-cards" data-excel-template-cards role="listbox" aria-label="Plantillas guardadas">
+      <p class="excel-template-empty muted" data-excel-template-empty>
+        Todavía no tenés plantillas. Creá una con el botón de arriba o subí un Excel para detectar columnas automáticamente.
+      </p>
+    </div>
+  </div>
+
+  <section class="excel-template-builder is-hidden panel" data-excel-template-builder>
+    <div class="section-title">
+      <h4>Crear o editar plantilla</h4>
+      <p>Escribí el nombre exacto de cada columna como aparece en tu Excel (fila de encabezados).</p>
+    </div>
+    <div class="form-grid excel-template-builder-form">
+      <label class="full-width">
+        <span>Nombre de la plantilla</span>
+        <input type="text" data-excel-builder-name placeholder="Ej. Planilla colegio X - alumnos" />
+      </label>
+      <label>
+        <span>Fila de encabezados</span>
+        <input type="number" min="1" value="1" data-excel-builder-header-row />
+      </label>
+      <div class="excel-builder-fields full-width" data-excel-builder-fields></div>
+      <div class="button-row full-width">
+        <button type="button" class="btn btn-primary" data-excel-builder-save>Guardar plantilla</button>
+        <button type="button" class="btn btn-ghost" data-excel-builder-cancel>Cancelar</button>
+      </div>
+    </div>
+  </section>
+
+  {importType === 'alumnos' ? (
+    <details class="excel-reference full-width">
+      <summary>Ver estructura de referencia (opcional)</summary>
+      <div class="section-title">
+        <p>Hoja <strong>{STUDENT_EXCEL_SHEET}</strong> · podés usar otra estructura con plantilla personalizada.</p>
+      </div>
+      <div class="table-container excel-reference-table" role="region" aria-label="Ejemplo de hoja Excel de alumnos">
+        <table>
+          <thead>
+            <tr>
+              {STUDENT_EXCEL_COLUMNS.map((column) => (
+                <th>
+                  {column.label}
+                  {column.required
+                    ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
+                    : <span class="excel-ref-tag">opcional</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {STUDENT_EXCEL_EXAMPLE_ROWS.slice(0, 2).map((row) => (
+              <tr>
+                {STUDENT_EXCEL_COLUMNS.map((column) => (
+                  <td>{row[column.label as keyof typeof row] || '—'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ul class="import-requirements excel-reference-notes">
+        {STUDENT_EXCEL_NOTES.slice(0, 4).map((note) => (
+          <li>{note}</li>
+        ))}
+      </ul>
+    </details>
+  ) : (
+    <details class="excel-reference full-width">
+      <summary>Ver columnas sugeridas (opcional)</summary>
+      <div class="table-container excel-reference-table">
+        <table>
+          <thead>
+            <tr>
+              {attendanceColumns.map((column) => (
+                <th>
+                  {column.label}
+                  {column.required
+                    ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
+                    : null}
+                </th>
+              ))}
+            </tr>
+          </thead>
+        </table>
+      </div>
+      <ul class="import-requirements excel-reference-notes">
+        {attendanceNotes.map((note) => (
+          <li>{note}</li>
+        ))}
+      </ul>
+    </details>
+  )}
+
+  <form class="excel-workspace-form form-grid" data-excel-workspace-form>
+    <div class="excel-dropzone full-width" data-excel-dropzone>
+      <input
+        type="file"
+        name="archivo"
+        class="excel-dropzone-input"
+        accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+        data-excel-file
+        required
+      />
+      <div class="excel-dropzone-body">
+        <strong>Arrastrá tu Excel acá</strong>
+        <span>o hacé clic para elegir · .xlsx / .xls · máx. {maxFileMb} MB</span>
+        <span class="excel-dropzone-file muted" data-excel-dropzone-label>Sin archivo seleccionado</span>
+      </div>
+    </div>
+
+    <div class="ai-file-feedback full-width is-hidden" data-excel-feedback aria-live="polite"></div>
+
+    <section class="excel-mapping full-width is-hidden" data-excel-mapping-panel>
+      <div class="excel-mapping-head">
+        <div class="section-title">
+          <h4>Conectar columnas</h4>
+          <p>Relacioná cada dato del sistema con una columna de tu planilla.</p>
+        </div>
+        <div class="excel-mapping-progress" data-excel-mapping-progress aria-live="polite">
+          <span data-excel-mapping-progress-text>0 de 0 obligatorios</span>
+          <div class="excel-mapping-progress-bar"><span data-excel-mapping-progress-fill></span></div>
+        </div>
+      </div>
+
+      <div class="excel-detected-headers is-hidden" data-excel-detected-headers>
+        <span class="excel-detected-label">Columnas detectadas:</span>
+        <div class="excel-header-chips" data-excel-header-chips></div>
+      </div>
+
+      <div class="excel-mapping-toolbar">
+        <label>
+          <span>Fila de encabezados</span>
+          <input type="number" min="1" value="1" data-excel-header-row />
+        </label>
+        <label>
+          <span>Hoja usada</span>
+          <input type="text" readonly data-excel-sheet-name value="—" aria-label="Hoja de Excel detectada" />
+        </label>
+      </div>
+
+      <div class="excel-mapping-table" data-excel-mapping-fields></div>
+
+      <div class="excel-save-template-cta is-hidden" data-excel-save-cta>
+        <p>¿Querés reutilizar este mapeo la próxima vez?</p>
+        <div class="excel-mapping-templates">
+          <input
+            type="text"
+            data-excel-template-name
+            placeholder="Nombre de plantilla (ej. Planilla colegio X)"
+            aria-label="Nombre de plantilla"
+          />
+          <button class="btn btn-secondary" type="button" data-excel-template-save>Guardar plantilla</button>
+        </div>
+      </div>
+
+      <details class="excel-mapping-advanced">
+        <summary>Opciones avanzadas</summary>
+        <div class="button-row">
+          <button class="btn btn-ghost btn-sm" type="button" data-excel-template-edit>Editar plantilla actual</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-excel-template-duplicate>Duplicar</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-excel-template-delete>Eliminar</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="excel-preview-panel full-width is-hidden" data-excel-preview-panel>
+      <div class="section-title">
+        <h4>Vista previa</h4>
+      </div>
+      <div class="import-result" data-excel-preview hidden></div>
+      <div class="table-container excel-preview-table is-hidden" data-excel-preview-table></div>
+    </section>
+
+    <div class="import-result full-width" data-excel-result hidden></div>
+
+    <div class="button-row full-width">
+      <button class="btn btn-primary" type="submit" data-excel-submit disabled>{submitLabel}</button>
+    </div>
+  </form>
+</section>

@@ -25,6 +25,10 @@ export const onRequest = defineMiddleware((context, next) => {
     return context.redirect('/login');
   }
 
+  if (user && publicPageRoutes.has(path)) {
+    return context.redirect('/');
+  }
+
   if (isAdminArea && user?.rol !== 'admin') {
     return Response.json({ error: 'Requiere rol admin' }, { status: 403 });
   }

@@ -47,6 +47,13 @@ function buildParams(url: URL, user: User) {
   };
 }
 
+type ExportType = 'alumnos' | 'asistencias' | 'notas' | 'completo';
+
+function parseExportType(value: string | null): ExportType {
+  if (value === 'alumnos' || value === 'asistencias' || value === 'notas') return value;
+  return 'completo';
+}
+
 function addWorksheet(workbook: ExcelJS.Workbook, name: string, rows: ExportRow[]) {
   const worksheet = workbook.addWorksheet(name);
   const safeRows = sanitizeExportRows(rows);
@@ -106,6 +113,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
   const params = buildParams(url, user);
+  const exportType = parseExportType(url.searchParams.get('type'));
   const coursePermission = docenteCourseClause(user);
   const attendanceTenantFilter = user.rol === 'admin' ? '' : 'AND asistencias.tenant_id = @tenant_id AND asistencias.docente_id = @docente_id';
   const gradeTenantFilter = user.rol === 'admin' ? '' : 'AND notas.tenant_id = @tenant_id AND notas.docente_id = @docente_id';
@@ -164,6 +172,9 @@ export const GET: APIRoute = async ({ locals, url }) => {
         ELSE 'Baja'
       END AS Importancia,
       notas.fecha_entrega AS Entrega,
+      notas.motivo AS Motivo,
+      notas.tipo_evaluacion AS Tipo,
+      notas.periodo AS Periodo,
       usuarios.nombre AS Docente
     FROM notas
     JOIN alumnos ON alumnos.id = notas.alumno_id
@@ -177,6 +188,31 @@ export const GET: APIRoute = async ({ locals, url }) => {
       ${gradeTenantFilter}
       ${coursePermission}
     ORDER BY notas.fecha, cursos.nombre, alumnos.nombre
+  `).all(params) as ExportRow[];
+
+  const alumnosExport = db.prepare(`
+    SELECT
+      cursos.escuela AS Escuela,
+      cursos.nombre AS Curso,
+      cursos.turno AS Turno,
+      alumnos.nombre AS Nombre,
+      COALESCE(alumnos.dni, '') AS DNI,
+      COALESCE(alumnos.tutor, '') AS Tutor,
+      COALESCE((
+        SELECT GROUP_CONCAT(materias.nombre, ', ')
+        FROM alumno_materias
+        JOIN materias ON materias.id = alumno_materias.materia_id AND materias.tenant_id = alumno_materias.tenant_id
+        WHERE alumno_materias.tenant_id = alumnos.tenant_id
+          AND alumno_materias.alumno_id = alumnos.id
+      ), '') AS Materias
+    FROM alumnos
+    JOIN cursos ON cursos.id = alumnos.curso_id
+    WHERE alumnos.activo = 1
+      AND (@colegio IS NULL OR cursos.escuela = @colegio)
+      AND (@curso_id IS NULL OR cursos.id = @curso_id)
+      ${user.rol === 'admin' ? '' : 'AND alumnos.tenant_id = @tenant_id'}
+      ${coursePermission}
+    ORDER BY cursos.escuela, cursos.nombre, alumnos.nombre
   `).all(params) as ExportRow[];
 
   const alumnos = db.prepare(`
@@ -234,12 +270,23 @@ export const GET: APIRoute = async ({ locals, url }) => {
   workbook.created = new Date();
   workbook.modified = new Date();
 
-  addWorksheet(workbook, 'Asistencias', asistencias);
-  addWorksheet(workbook, 'Notas', notas);
-  addWorksheet(workbook, 'Resumen', resumen);
+  if (exportType === 'alumnos') {
+    addWorksheet(workbook, 'Alumnos', alumnosExport);
+  } else if (exportType === 'asistencias') {
+    addWorksheet(workbook, 'Asistencias', asistencias);
+  } else if (exportType === 'notas') {
+    addWorksheet(workbook, 'Notas', notas);
+  } else {
+    addWorksheet(workbook, 'Asistencias', asistencias);
+    addWorksheet(workbook, 'Notas', notas);
+    addWorksheet(workbook, 'Resumen', resumen);
+  }
 
   const buffer = await workbook.xlsx.writeBuffer();
-  const filename = `aula-clara-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  const filename = exportType === 'completo'
+    ? `aula-clara-export-${dateStamp}.xlsx`
+    : `aula-clara-${exportType}-${dateStamp}.xlsx`;
 
   return new Response(buffer, {
     headers: {

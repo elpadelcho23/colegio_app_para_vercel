@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
 import { randomUUID } from 'node:crypto';
-import { isStrongPassword } from '../../../server/auth';
+import { isStrongPassword, respondWithFreshSession } from '../../../server/auth';
 import { createTenant, createUser } from '../../../server/db';
 
-export const POST: APIRoute = async ({ request, redirect }) => {
+export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   const form = await request.formData();
   const nombre = String(form.get('nombre') || '').trim();
-  const email = String(form.get('email') || '').trim();
+  const email = String(form.get('email') || '').trim().toLowerCase();
   const password = String(form.get('password') || '');
   const confirm = String(form.get('confirm') || '');
 
@@ -33,5 +33,5 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect('/register?error=2', 303);
   }
 
-  return redirect('/login?registered=1', 303);
+  return respondWithFreshSession(user.id, cookies, url);
 };

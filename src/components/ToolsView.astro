@@ -1,0 +1,125 @@
+---
+import ActivityAiPanel from './ActivityAiPanel.astro';
+import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
+import TrabajosEntregasPanel from './TrabajosEntregasPanel.astro';
+---
+
+<header class="page-header">
+  <div class="header-content">
+    <p class="eyebrow">Avanzado</p>
+    <h1>Más herramientas</h1>
+    <p>Importación, exportación, IA y sincronización. No necesitás esto para el día a día.</p>
+  </div>
+</header>
+
+<section class="panel tools-section tools-view" data-tools-section="excel">
+  <div class="section-title">
+    <h2>Excel</h2>
+    <p>Importá o exportá planillas cuando tengas muchos datos de una vez.</p>
+  </div>
+
+  <div class="tools-tabs" role="tablist" aria-label="Tipo de importación Excel">
+    <button type="button" class="tools-tab is-active" role="tab" data-tools-tab="alumnos" aria-selected="true" aria-controls="tools-panel-alumnos" id="tools-tab-alumnos">
+      Alumnos
+    </button>
+    <button type="button" class="tools-tab" role="tab" data-tools-tab="asistencias" aria-selected="false" aria-controls="tools-panel-asistencias" id="tools-tab-asistencias">
+      Asistencias
+    </button>
+    <button type="button" class="tools-tab" role="tab" data-tools-tab="notas" aria-selected="false" aria-controls="tools-panel-notas" id="tools-tab-notas">
+      Notas
+    </button>
+  </div>
+
+  <div class="tools-tab-panel" id="tools-panel-alumnos" role="tabpanel" aria-labelledby="tools-tab-alumnos" data-tools-panel="alumnos">
+    <ExcelImportWorkspace importType="alumnos" />
+  </div>
+
+  <div class="tools-tab-panel is-hidden" id="tools-panel-asistencias" role="tabpanel" aria-labelledby="tools-tab-asistencias" data-tools-panel="asistencias" hidden>
+    <ExcelImportWorkspace
+      importType="asistencias"
+      title="Cargar asistencias desde Excel"
+      description="Usá la planilla de tu colegio: mapeá columnas, guardá la plantilla y reutilizala en cada carga."
+      submitLabel="Importar asistencias"
+    />
+
+    <section class="panel export-panel" data-excel-export="asistencias">
+      <div class="section-title">
+        <h3>Exportar asistencias a Excel</h3>
+        <p>Descargá el historial de presentismo. El archivo se puede reimportar arriba.</p>
+      </div>
+      <div class="filters-grid">
+        <select data-export-school aria-label="Escuela">
+          <option value="">Todas las escuelas</option>
+        </select>
+        <select data-export-course aria-label="Curso">
+          <option value="">Todos los cursos</option>
+        </select>
+        <select data-export-subject aria-label="Materia">
+          <option value="">Todas las materias</option>
+        </select>
+        <input type="date" data-export-from aria-label="Desde" />
+        <input type="date" data-export-to aria-label="Hasta" />
+      </div>
+      <button class="btn btn-secondary" type="button" data-export-submit>Exportar asistencias</button>
+    </section>
+  </div>
+
+  <div class="tools-tab-panel is-hidden" id="tools-panel-notas" role="tabpanel" aria-labelledby="tools-tab-notas" data-tools-panel="notas" hidden>
+    <section class="panel import-panel" data-excel-import="notas">
+      <div class="section-title">
+        <h3>Cargar notas desde Excel</h3>
+        <p>Podés importar la hoja <strong>Notas</strong> de un Excel exportado desde esta app.</p>
+      </div>
+      <ul class="import-requirements">
+        <li>Columnas obligatorias: <strong>Fecha</strong>, <strong>Colegio</strong>, <strong>Curso</strong>, <strong>Turno</strong>, <strong>Materia</strong>, <strong>Alumno</strong>, <strong>Evaluacion</strong>, <strong>Calificacion</strong>.</li>
+        <li>Calificación: número del <strong>1 al 10</strong> o texto (S/C, Ausente, etc.).</li>
+        <li>Opcionales: <strong>Importancia</strong> (Alta/Media/Baja), <strong>Entrega</strong>, <strong>Motivo</strong>, <strong>Tipo</strong>, <strong>Periodo</strong>.</li>
+      </ul>
+      <div class="inline-form import-form">
+        <input type="file" accept=".xlsx,.xls" data-import-file aria-label="Archivo Excel de notas" />
+        <a class="btn btn-ghost" href="/api/import/template?type=notas" data-import-template>Descargar plantilla</a>
+        <button class="btn btn-secondary" type="button" data-import-submit>Importar notas</button>
+      </div>
+      <div class="import-result" data-import-result hidden></div>
+    </section>
+
+    <section class="panel export-panel" data-excel-export="notas">
+      <div class="section-title">
+        <h3>Exportar notas a Excel</h3>
+        <p>Descargá calificaciones filtradas por escuela, curso, materia y rango de fechas.</p>
+      </div>
+      <div class="filters-grid">
+        <select data-export-school aria-label="Escuela">
+          <option value="">Todas las escuelas</option>
+        </select>
+        <select data-export-course aria-label="Curso">
+          <option value="">Todos los cursos</option>
+        </select>
+        <select data-export-subject aria-label="Materia">
+          <option value="">Todas las materias</option>
+        </select>
+        <input type="date" data-export-from aria-label="Desde" />
+        <input type="date" data-export-to aria-label="Hasta" />
+      </div>
+      <button class="btn btn-secondary" type="button" data-export-submit>Exportar notas</button>
+    </section>
+  </div>
+</section>
+
+<ActivityAiPanel />
+
+<section class="panel tools-section" data-tools-section="sync" data-sync-tools>
+  <div class="section-title">
+    <h2>Sincronización</h2>
+    <p>Copiá tus datos con el servidor cuando trabajás desde varios dispositivos o sin conexión.</p>
+  </div>
+
+  <div class="sync-line">
+    <span class="tag" data-connection-status>Detectando...</span>
+    <small class="sync-status" data-sync-status>0 pendientes · 0 sincronizadas · 0 con error</small>
+  </div>
+
+  <button class="btn btn-primary" type="button" data-sync-button>Sincronizar ahora</button>
+</section>
+
+<TrabajosEntregasPanel />

@@ -50,6 +50,26 @@ CREATE TABLE IF NOT EXISTS materias (
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS escuelas (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  nombre TEXT NOT NULL,
+  activo INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS docente_escuelas (
+  tenant_id TEXT NOT NULL,
+  docente_id TEXT NOT NULL,
+  escuela_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, docente_id, escuela_id),
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  FOREIGN KEY (docente_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+  FOREIGN KEY (escuela_id) REFERENCES escuelas(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS alumnos (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
@@ -125,6 +145,8 @@ CREATE TABLE IF NOT EXISTS notas (
   peso REAL NOT NULL DEFAULT 100,
   fecha TEXT NOT NULL,
   fecha_entrega TEXT,
+  periodo TEXT,
+  motivo TEXT,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,

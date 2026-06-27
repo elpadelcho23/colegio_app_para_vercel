@@ -1,5 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import AttendanceView from '../components/AttendanceView.astro';
 ---
 
-<Layout title="Asistencia" />
+<Layout title="Asistencia">
+  <main class="page page-stack" data-attendance>
+    <AttendanceView />
+  </main>
+</Layout>

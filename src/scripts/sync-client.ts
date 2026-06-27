@@ -1,3 +1,5 @@
+import { CLIENT_STORAGE_ENTRIES } from '../lib/client-storage-keys';
+import { groupPendingMutations, mergeHydratedStorageValue } from '../lib/hydrate-merge';
 import {
   countPendingOperations,
   getPendingOperations,
@@ -9,6 +11,43 @@ import {
 } from './offline-db';
 
 let syncInProgress = false;
+
+export async function hydrateLocalStorageFromServer(userId: string, options: { notify?: boolean } = {}) {
+  const { notify = true } = options;
+  if (!userId) return false;
+
+  const scoped = (key: string) => `${key}:${userId}`;
+
+  try {
+    const [response, pendingOperations] = await Promise.all([
+      fetch('/api/sync/pull', { credentials: 'same-origin' }),
+      getPendingOperations(),
+    ]);
+    if (!response.ok) return false;
+
+    const data = await response.json();
+    const pendingByEntity = groupPendingMutations(pendingOperations);
+
+    for (const { key: storageKey, pullField, empty } of CLIENT_STORAGE_ENTRIES) {
+      const merged = mergeHydratedStorageValue(
+        storageKey,
+        pullField,
+        empty,
+        data,
+        localStorage.getItem(scoped(storageKey)),
+        pendingByEntity,
+      );
+      localStorage.setItem(scoped(storageKey), JSON.stringify(merged));
+    }
+
+    if (notify) {
+      window.dispatchEvent(new CustomEvent('aula-clara:data-hydrated'));
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function syncPendingOperations() {
   if (syncInProgress || !navigator.onLine) {
