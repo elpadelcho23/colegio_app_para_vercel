@@ -1,0 +1,111 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ExcelImportWorkspace from '../components/ExcelImportWorkspace.astro';
+---
+
+<Layout title="Registro de alumnos">
+  <main class="page page-stack" data-students>
+    <header class="page-header">
+      <div class="header-content">
+        <p class="eyebrow">Alumnos</p>
+        <h1>Registro simple</h1>
+        <p>Cargá alumnos uno a uno o subí una hoja Excel con una plantilla personalizada.</p>
+      </div>
+      <div class="actions-group">
+        <button type="button" class="btn btn-primary btn-block" data-student-mode-trigger="excel">
+          Importar desde Excel
+        </button>
+        <a class="btn btn-secondary btn-block" href="/cursos">Organizar cursos</a>
+      </div>
+    </header>
+
+    <section class="panel student-workspace">
+      <div class="section-title">
+        <h2>Registrar alumnos</h2>
+        <p>Elegí cómo querés cargar el legajo. Podés guardar la estructura de tu Excel como plantilla reutilizable.</p>
+      </div>
+
+      <div class="activity-mode-picker full-width" role="tablist" aria-label="Modo de registro">
+        <label class="template-card activity-mode-card">
+          <input type="radio" name="studentMode" value="manual" checked data-student-mode-input />
+          <span>
+            <strong>Cargar uno a uno</strong>
+            <small>Completá nombre, curso, materias y contacto en el formulario.</small>
+          </span>
+        </label>
+        <label class="template-card activity-mode-card">
+          <input type="radio" name="studentMode" value="excel" data-student-mode-input />
+          <span>
+            <strong>Cargar desde hoja Excel</strong>
+            <small>Usá tu planilla: mapeá columnas y guardá plantillas para la próxima vez.</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="student-mode-panel full-width" data-student-mode-panel="manual">
+        <form class="form-grid" data-student-form>
+          <div class="input-group full-width">
+            <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /></label>
+            <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
+          </div>
+
+          <label class="full-width">
+            <span>Escuela</span>
+            <select name="escuela" data-student-school required></select>
+          </label>
+
+          <label class="full-width">
+            <span>Curso</span>
+            <select name="cursoId" required></select>
+          </label>
+
+          <fieldset class="subject-picker">
+            <legend>Materias del alumno</legend>
+            <div class="subject-search" data-student-subjects></div>
+            <div class="inline-form">
+              <input name="nuevaMateria" data-student-new-subject placeholder="Escribí el nombre de la materia..." aria-label="Nueva materia" />
+              <button class="btn btn-secondary" type="button" data-student-add-subject>Agregar materia</button>
+            </div>
+          </fieldset>
+
+          <label class="full-width">
+            <span>Tutor o contacto</span>
+            <input name="tutor" />
+          </label>
+
+          <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
+        </form>
+      </div>
+
+      <div class="student-mode-panel full-width is-hidden" data-student-mode-panel="excel">
+        <ExcelImportWorkspace importType="alumnos" />
+      </div>
+    </section>
+
+    <section class="responsive-grid">
+      <section class="panel">
+        <div class="section-title">
+          <h2>Alumnos cargados</h2>
+          <p>Listado con curso, materias y promedio actualizado. Estos alumnos aparecen en asistencia y calificaciones.</p>
+        </div>
+        <div class="list" data-student-list></div>
+      </section>
+    </section>
+
+    <section class="panel export-panel" data-excel-export="alumnos">
+      <div class="section-title">
+        <h2>Exportar alumnos a Excel</h2>
+        <p>Descargá el listado con escuela, curso, DNI, tutor y materias.</p>
+      </div>
+      <div class="filters-grid">
+        <select data-export-school aria-label="Escuela">
+          <option value="">Todas las escuelas</option>
+        </select>
+        <select data-export-course aria-label="Curso">
+          <option value="">Todos los cursos</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" type="button" data-export-submit>Exportar alumnos</button>
+    </section>
+  </main>
+</Layout>

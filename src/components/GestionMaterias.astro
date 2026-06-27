@@ -1,0 +1,229 @@
+---
+// src/components/GestionMaterias.astro
+import '../styles/global.css';
+---
+
+<div class="modulo-materias panel">
+    <h2>Sección de Cátedras: "Dar Materia"</h2>
+    
+    <form id="form-materia" class="form-grid">
+        <div class="input-group">
+            <label for="materia-nombre">Nombre de la Materia</label>
+            <input type="text" id="materia-nombre" placeholder="ej: Matemáticas, Programación..." required />
+        </div>
+
+        <div class="input-group">
+            <label for="profesor-nombre">Profesor a cargo</label>
+            <input type="text" id="profesor-nombre" placeholder="Nombre del docente" required />
+        </div>
+        
+        <div class="seleccion-alumnos">
+            <h3>Inscribir Alumnos</h3>
+            <p class="hint">Seleccioná los alumnos que cursarán esta materia:</p>
+            <div id="check-lista-alumnos" class="scroll-lista">
+                <p class="empty-msg">Cargando alumnos disponibles...</p>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Registrar Materia y Alumnos</button>
+    </form>
+
+    <hr />
+
+    <h3>Materias Registradas</h3>
+    <ul id="lista-materias" class="materia-list"></ul>
+</div>
+
+<script>
+    interface Materia {
+        id: string;
+        nombre: string;
+        profesor: string;
+        alumnosIds: number[];
+        fechaCreacion: string;
+    }
+
+    const formMateria = document.getElementById('form-materia') as HTMLFormElement;
+    const contenedorChecks = document.getElementById('check-lista-alumnos') as HTMLDivElement;
+    const listaMateriasUI = document.getElementById('lista-materias') as HTMLUListElement;
+
+    // Inicialización
+    document.addEventListener('DOMContentLoaded', () => {
+        renderizarSelectorAlumnos();
+        mostrarMaterias();
+    });
+
+    function renderizarSelectorAlumnos() {
+        const alumnos = JSON.parse(localStorage.getItem('alumnos') || '[]');
+        
+        if (alumnos.length === 0) {
+            contenedorChecks.innerHTML = '<p class="warn">No hay alumnos registrados. Registralos en la sección de Alumnos primero.</p>';
+            return;
+        }
+
+        contenedorChecks.innerHTML = alumnos.map((al: any) => `
+            <label class="alumno-checkbox">
+                <input type="checkbox" name="alumnos-inscritos" value="${al.id}">
+                <span>${al.nombre} <small>(${al.curso})</small></span>
+            </label>
+        `).join('');
+    }
+
+    if (formMateria) {
+        formMateria.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const nombre = (document.getElementById('materia-nombre') as HTMLInputElement).value;
+            const profesor = (document.getElementById('profesor-nombre') as HTMLInputElement).value;
+            
+            // Obtener IDs de alumnos seleccionados
+            const checkboxes = document.querySelectorAll('input[name="alumnos-inscritos"]:checked');
+            const alumnosSeleccionados = Array.from(checkboxes).map(cb => parseInt((cb as HTMLInputElement).value));
+
+            if (alumnosSeleccionados.length === 0) {
+                alert("Debes seleccionar al menos un alumno para crear la materia.");
+                return;
+            }
+
+            const nuevaMateria: Materia = {
+                id: crypto.randomUUID(),
+                nombre,
+                profesor,
+                alumnosIds: alumnosSeleccionados,
+                fechaCreacion: new Date().toLocaleDateString()
+            };
+
+            // Guardar en localStorage
+            const materias = JSON.parse(localStorage.getItem('materias') || '[]');
+            materias.push(nuevaMateria);
+            localStorage.setItem('materias', JSON.stringify(materias));
+
+            formMateria.reset();
+            mostrarMaterias();
+            alert(`Materia "${nombre}" creada con éxito.`);
+        });
+    }
+
+    function mostrarMaterias() {
+        if (!listaMateriasUI) return;
+        const materias: Materia[] = JSON.parse(localStorage.getItem('materias') || '[]');
+        
+        listaMateriasUI.innerHTML = materias.map(m => `
+            <li class="materia-card">
+                <div class="materia-header">
+                    <strong>${m.nombre}</strong>
+                    <span>Prof: ${m.profesor}</span>
+                </div>
+                <div class="materia-footer">
+                    <small>${m.alumnosIds.length} alumnos inscritos</small>
+                </div>
+            </li>
+        `).reverse().join('');
+    }
+</script>
+
+<style>
+    .modulo-materias {
+        padding: 0;
+    }
+
+    .modulo-materias h2,
+    .modulo-materias h3 {
+        margin-top: 0;
+    }
+
+    .form-grid {
+        gap: var(--space-4);
+    }
+
+    .input-group label {
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 800;
+    }
+
+    .scroll-lista {
+        max-height: 220px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        background: var(--surface-muted);
+        padding: var(--space-3);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        margin-top: var(--space-2);
+    }
+
+    .alumno-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 44px;
+        padding: 0.55rem 0.35rem;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+    }
+
+    .alumno-checkbox:last-child {
+        border-bottom: 0;
+    }
+
+    .alumno-checkbox:hover {
+        background: var(--surface-2);
+    }
+
+    .alumno-checkbox input {
+        width: 1.1rem;
+        min-width: 1.1rem;
+        min-height: 1.1rem;
+    }
+
+    .alumno-checkbox small {
+        color: var(--muted);
+    }
+
+    .materia-list {
+        list-style: none;
+        padding: 0;
+        display: grid;
+        gap: var(--space-3);
+        grid-template-columns: 1fr;
+    }
+
+    .materia-card {
+        background: var(--surface-muted);
+        padding: var(--space-4);
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--ok);
+    }
+
+    .materia-header {
+        display: flex;
+        justify-content: space-between;
+        gap: var(--space-3);
+        margin-bottom: 0.45rem;
+        flex-wrap: wrap;
+    }
+
+    .warn {
+        color: var(--warning);
+        font-size: 0.9rem;
+    }
+
+    .hint {
+        color: var(--muted);
+        font-size: 0.88rem;
+    }
+
+    hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: var(--space-5) 0;
+    }
+
+    @media (min-width: 720px) {
+        .materia-list {
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        }
+    }
+</style>

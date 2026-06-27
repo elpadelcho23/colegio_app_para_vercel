@@ -1,0 +1,86 @@
+---
+import '../styles/global.css';
+const error = Astro.url.searchParams.get('error');
+const registered = Astro.url.searchParams.get('registered');
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#226c5f" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/pwa-icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <title>Login | Aula Clara</title>
+    <script is:inline>
+      document.documentElement.dataset.theme =
+        localStorage.getItem('aula_clara_theme') || 'light';
+
+      (function () {
+        var keys = [
+          'aula_clara_students',
+          'aula_clara_courses',
+          'aula_clara_subjects',
+          'aula_clara_attendance',
+          'aula_clara_grades',
+          'aula_clara_dashboard_filters',
+          'aula_clara_teacher_context',
+          'aula_clara_calendar_alerts_dismissed',
+        ];
+        keys.forEach(function (key) {
+          localStorage.removeItem(key);
+        });
+      })();
+    </script>
+  </head>
+  <body class="auth-body">
+    <main class="auth-container">
+      <section class="auth-card">
+        <header class="auth-header">
+          <p class="eyebrow">Acceso seguro</p>
+          <h1>Aula Clara</h1>
+          <p class="muted">Ingresá con tu cuenta docente o admin.</p>
+        </header>
+
+        {registered && <p class="tag ok auth-alert">Cuenta creada. Ahora podés iniciar sesión.</p>}
+        {error && <p class="tag danger auth-alert">Credenciales inválidas</p>}
+
+        <form method="post" action="/api/auth/login" class="auth-form">
+          <label>
+            <span>Email</span>
+            <input
+              type="email"
+              name="email"
+              placeholder="usuario@ejemplo.com"
+              autocomplete="email"
+              required
+            />
+          </label>
+          <label>
+            <span>Contraseña</span>
+            <input
+              type="password"
+              name="password"
+              placeholder="********"
+              autocomplete="current-password"
+              required
+            />
+          </label>
+          <button class="btn btn-primary btn-block" type="submit">Entrar</button>
+        </form>
+
+        <footer class="auth-footer">
+          <p>¿No tenés cuenta? <a href="/register">Registrate acá</a>.</p>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,808 @@
+---
+// src/components/Notas.astro
+---
+
+<section class="modulo-notas">
+    <div class="notas-header">
+        <div>
+            <h2>Libreta Digital</h2>
+            <p>Notas ponderadas, promedios en tiempo real, alertas y exportacion.</p>
+        </div>
+        <div class="acciones-header">
+            <button id="btn-exportar-notas-excel" class="btn-secundario">Exportar Excel</button>
+            <button id="btn-exportar-notas-pdf" class="btn-secundario">Exportar PDF</button>
+        </div>
+    </div>
+
+    <div class="filtros-notas">
+        <select id="filtro-notas-curso">
+            <option value="">Todos los cursos</option>
+        </select>
+        <select id="filtro-notas-materia">
+            <option value="">Todas las materias</option>
+        </select>
+        <select id="filtro-notas-trimestre">
+            <option value="">Todo el ciclo</option>
+            <option value="1">1er trimestre</option>
+            <option value="2">2do trimestre</option>
+            <option value="3">3er trimestre</option>
+        </select>
+        <select id="filtro-notas-alerta">
+            <option value="">Todos los estados</option>
+            <option value="riesgo">En riesgo</option>
+            <option value="atencion">Atencion</option>
+            <option value="ok">Correcto</option>
+        </select>
+    </div>
+
+    <form id="form-nota-digital" class="panel-carga">
+        <h3>Cargar nota</h3>
+        <div class="form-grid">
+            <select id="nota-alumno" required>
+                <option value="">Alumno</option>
+            </select>
+            <select id="nota-materia" required>
+                <option value="">Materia</option>
+            </select>
+            <input type="text" id="nota-titulo" placeholder="Titulo: TP 1, Integrador, Oral..." required />
+            <select id="nota-tipo">
+                <option value="Trabajo Practico">Trabajo Practico</option>
+                <option value="Examen">Examen</option>
+                <option value="Examen Integrador">Examen Integrador</option>
+                <option value="Participacion">Participacion</option>
+            </select>
+            <input type="number" id="nota-valor" min="1" max="10" step="0.1" placeholder="Nota" required />
+            <input type="number" id="nota-peso" min="1" max="100" value="40" title="Peso de la nota" />
+            <select id="nota-trimestre">
+                <option value="1">1er trimestre</option>
+                <option value="2">2do trimestre</option>
+                <option value="3">3er trimestre</option>
+            </select>
+            <input type="date" id="nota-fecha" />
+        </div>
+        <textarea id="nota-descripcion" rows="2" placeholder="Descripcion u observacion opcional"></textarea>
+        <button type="submit" class="btn-primario">Guardar nota</button>
+    </form>
+
+    <div id="resumen-notas" class="resumen-notas"></div>
+    <div id="tabla-notas" class="tabla-notas"></div>
+
+    <div id="reporte-notas-print" class="reporte-print"></div>
+</section>
+
+<script is:inline>
+(() => {
+    const STORAGE = {
+        alumnos: 'alumnos',
+        materias: 'materias',
+        asistencias: 'asistencias',
+        notas: 'notas_sge',
+        trabajos: 'trabajos_practicos_sge'
+    };
+
+    const NOTA_APROBACION = 6;
+
+    const filtroCurso = document.getElementById('filtro-notas-curso');
+    const filtroMateria = document.getElementById('filtro-notas-materia');
+    const filtroTrimestre = document.getElementById('filtro-notas-trimestre');
+    const filtroAlerta = document.getElementById('filtro-notas-alerta');
+    const formNota = document.getElementById('form-nota-digital');
+    const selectAlumno = document.getElementById('nota-alumno');
+    const selectMateria = document.getElementById('nota-materia');
+    const selectTipo = document.getElementById('nota-tipo');
+    const inputPeso = document.getElementById('nota-peso');
+    const inputFecha = document.getElementById('nota-fecha');
+    const resumenNotas = document.getElementById('resumen-notas');
+    const tablaNotas = document.getElementById('tabla-notas');
+    const reportePrint = document.getElementById('reporte-notas-print');
+
+    document.addEventListener('DOMContentLoaded', iniciarNotas);
+
+    function iniciarNotas() {
+        inputFecha.value = fechaHoy();
+        document.getElementById('nota-trimestre').value = trimestreActual();
+
+        cargarFiltros();
+        renderizarLibreta();
+
+        [filtroCurso, filtroMateria, filtroTrimestre, filtroAlerta].forEach(select => {
+            select.addEventListener('change', () => {
+                cargarSelectAlumnos();
+                renderizarLibreta();
+            });
+        });
+
+        selectTipo.addEventListener('change', () => {
+            inputPeso.value = pesoPorTipo(selectTipo.value);
+        });
+
+        formNota.addEventListener('submit', guardarNota);
+
+        tablaNotas.addEventListener('click', (e) => {
+            const btnEliminar = e.target.closest('[data-eliminar-nota]');
+            if (btnEliminar) eliminarNota(btnEliminar.dataset.eliminarNota);
+        });
+
+        document.getElementById('btn-exportar-notas-excel')?.addEventListener('click', exportarExcel);
+        document.getElementById('btn-exportar-notas-pdf')?.addEventListener('click', exportarPDF);
+    }
+
+    function leer(key, fallback = []) {
+        try {
+            return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+        } catch {
+            return fallback;
+        }
+    }
+
+    function guardar(key, valor) {
+        localStorage.setItem(key, JSON.stringify(valor));
+    }
+
+    function escapeHtml(valor) {
+        return String(valor ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    function fechaHoy() {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    function cursoKey(alumno) {
+        return [alumno.escuela || 'Sin escuela', alumno.turno || 'Sin turno', alumno.curso || 'Sin curso'].join('||');
+    }
+
+    function cursoLabel(key) {
+        const [escuela, turno, curso] = key.split('||');
+        return `${escuela} - ${curso} - ${turno}`;
+    }
+
+    function cargarFiltros() {
+        const alumnos = leer(STORAGE.alumnos);
+        const materias = leer(STORAGE.materias);
+        const cursos = [...new Set(alumnos.map(cursoKey))].sort((a, b) => cursoLabel(a).localeCompare(cursoLabel(b)));
+
+        filtroCurso.innerHTML = '<option value="">Todos los cursos</option>' +
+            cursos.map(key => `<option value="${escapeHtml(key)}">${escapeHtml(cursoLabel(key))}</option>`).join('');
+
+        filtroMateria.innerHTML = '<option value="">Todas las materias</option>' +
+            materias.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.nombre)}</option>`).join('');
+
+        selectMateria.innerHTML = '<option value="">Materia</option>' +
+            materias.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.nombre)}</option>`).join('');
+
+        cargarSelectAlumnos();
+    }
+
+    function cargarSelectAlumnos() {
+        const alumnos = obtenerAlumnosFiltrados(false);
+        selectAlumno.innerHTML = '<option value="">Alumno</option>' +
+            alumnos.map(al => `<option value="${al.id}">${escapeHtml(al.nombre)} - ${escapeHtml(al.curso)}</option>`).join('');
+    }
+
+    function obtenerAlumnosFiltrados(aplicarAlerta = true) {
+        const cursoSeleccionado = filtroCurso.value;
+        const materiaSeleccionada = filtroMateria.value;
+        const alertaSeleccionada = filtroAlerta.value;
+        const alumnos = leer(STORAGE.alumnos);
+
+        let filtrados = alumnos.filter(alumno => !cursoSeleccionado || cursoKey(alumno) === cursoSeleccionado);
+
+        if (materiaSeleccionada) {
+            const materia = leer(STORAGE.materias).find(m => m.id === materiaSeleccionada);
+            filtrados = materia ? filtrados.filter(alumno => materia.alumnosIds?.includes(alumno.id)) : [];
+        }
+
+        if (aplicarAlerta && alertaSeleccionada) {
+            filtrados = filtrados.filter(alumno => obtenerSituacion(alumno).alerta === alertaSeleccionada);
+        }
+
+        return filtrados.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
+    }
+
+    function guardarNota(e) {
+        e.preventDefault();
+
+        const alumnoId = Number(selectAlumno.value);
+        const materiaId = selectMateria.value;
+        const titulo = document.getElementById('nota-titulo').value.trim();
+        const tipo = selectTipo.value;
+        const valor = Number(document.getElementById('nota-valor').value);
+        const peso = Number(inputPeso.value || pesoPorTipo(tipo));
+        const trimestre = document.getElementById('nota-trimestre').value;
+        const fecha = inputFecha.value || fechaHoy();
+        const descripcion = document.getElementById('nota-descripcion').value.trim();
+
+        if (!alumnoId || !materiaId || !titulo || Number.isNaN(valor) || valor < 1 || valor > 10) {
+            alert('Revisa los datos de la nota. La nota debe estar entre 1 y 10.');
+            return;
+        }
+
+        const alumno = leer(STORAGE.alumnos).find(al => al.id === alumnoId);
+        const nota = {
+            id: crypto.randomUUID(),
+            alumnoId,
+            materiaId,
+            cursoKey: alumno ? cursoKey(alumno) : '',
+            titulo,
+            tipo,
+            valor,
+            peso,
+            trimestre,
+            fecha,
+            descripcion
+        };
+
+        const notas = leer(STORAGE.notas);
+        notas.push(nota);
+        guardar(STORAGE.notas, notas);
+        reflejarNotaEnAlumno(nota);
+
+        formNota.reset();
+        inputFecha.value = fechaHoy();
+        inputPeso.value = pesoPorTipo('Trabajo Practico');
+        document.getElementById('nota-trimestre').value = trimestreActual();
+        renderizarLibreta();
+    }
+
+    function reflejarNotaEnAlumno(nota) {
+        const alumnos = leer(STORAGE.alumnos);
+        const alumno = alumnos.find(al => al.id === nota.alumnoId);
+        const materia = leer(STORAGE.materias).find(m => m.id === nota.materiaId);
+        if (!alumno) return;
+
+        alumno.notas ||= [];
+        alumno.notas.push({
+            id: nota.id,
+            materiaId: nota.materiaId,
+            materiaNombre: materia?.nombre || 'General',
+            tipo: nota.tipo,
+            valor: nota.valor,
+            descripcion: nota.descripcion || nota.titulo,
+            fecha: nota.fecha,
+            peso: nota.peso,
+            trimestre: nota.trimestre
+        });
+
+        guardar(STORAGE.alumnos, alumnos);
+    }
+
+    function eliminarNota(id) {
+        const notas = leer(STORAGE.notas).filter(nota => nota.id !== id);
+        const alumnos = leer(STORAGE.alumnos).map(alumno => ({
+            ...alumno,
+            notas: (alumno.notas || []).filter(nota => nota.id !== id)
+        }));
+
+        guardar(STORAGE.notas, notas);
+        guardar(STORAGE.alumnos, alumnos);
+        renderizarLibreta();
+    }
+
+    function renderizarLibreta() {
+        const alumnos = obtenerAlumnosFiltrados(true);
+        const situaciones = alumnos.map(obtenerSituacion);
+
+        renderizarResumen(situaciones);
+
+        if (alumnos.length === 0) {
+            tablaNotas.innerHTML = `
+                <div class="empty">
+                    <h3>Sin datos para estos filtros</h3>
+                    <p>Carga alumnos, materias o notas para ver la libreta digital.</p>
+                </div>
+            `;
+            return;
+        }
+
+        tablaNotas.innerHTML = `
+            <div class="tabla-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Alumno</th>
+                            <th>Promedio</th>
+                            <th>Asistencia</th>
+                            <th>TPs adeudados</th>
+                            <th>Estado</th>
+                            <th>Notas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${situaciones.map(filaSituacion).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function renderizarResumen(situaciones) {
+        const promedios = situaciones.map(s => s.promedio).filter(n => n !== null);
+        const promedioGeneral = promedioDe(promedios);
+        const riesgo = situaciones.filter(s => s.alerta === 'riesgo').length;
+        const atencion = situaciones.filter(s => s.alerta === 'atencion').length;
+        const aprobados = situaciones.filter(s => s.promedio !== null && s.promedio >= NOTA_APROBACION).length;
+
+        resumenNotas.innerHTML = `
+            <div><strong>${situaciones.length}</strong><span>Alumnos</span></div>
+            <div><strong>${promedioGeneral === null ? '-' : promedioGeneral.toFixed(1)}</strong><span>Promedio general</span></div>
+            <div><strong>${aprobados}</strong><span>Aprobando</span></div>
+            <div><strong>${atencion}</strong><span>Atencion</span></div>
+            <div><strong>${riesgo}</strong><span>Riesgo</span></div>
+        `;
+    }
+
+    function filaSituacion(situacion) {
+        return `
+            <tr class="${situacion.alerta}">
+                <td>
+                    <strong>${escapeHtml(situacion.alumno.nombre)}</strong>
+                    <small>${escapeHtml(situacion.alumno.escuela)} - ${escapeHtml(situacion.alumno.curso)} - ${escapeHtml(situacion.alumno.turno)}</small>
+                </td>
+                <td>${situacion.promedio === null ? '-' : situacion.promedio.toFixed(1)}</td>
+                <td>${situacion.asistencia === null ? 'Sin datos' : situacion.asistencia.toFixed(0) + '%'}</td>
+                <td>${situacion.tpsAdeudados}</td>
+                <td><span class="estado ${situacion.alerta}">${textoAlerta(situacion.alerta)}</span></td>
+                <td>
+                    ${situacion.notas.length === 0 ? '<span class="muted">Sin notas</span>' : `
+                        <div class="notas-lista">
+                            ${situacion.notas.map(nota => `
+                                <span class="nota-tag">
+                                    ${escapeHtml(nota.titulo || nota.tipo)}: ${Number(nota.valor).toFixed(1)}
+                                    <button data-eliminar-nota="${escapeHtml(nota.id)}" title="Eliminar nota">x</button>
+                                </span>
+                            `).join('')}
+                        </div>
+                    `}
+                </td>
+            </tr>
+        `;
+    }
+
+    function obtenerSituacion(alumno) {
+        const materiaId = filtroMateria.value;
+        const trimestre = filtroTrimestre.value;
+        const notas = obtenerNotasAlumno(alumno.id)
+            .filter(nota => !materiaId || nota.materiaId === materiaId)
+            .filter(nota => !trimestre || String(nota.trimestre || '') === trimestre);
+
+        const promedio = calcularPromedioPonderado(notas);
+        const asistencia = calcularAsistencia(alumno.id, materiaId);
+        const tpsAdeudados = contarTrabajosAdeudados(alumno.id, materiaId);
+
+        let alerta = 'ok';
+        if ((promedio !== null && promedio < NOTA_APROBACION) || tpsAdeudados > 2 || (asistencia !== null && asistencia < 70)) {
+            alerta = 'riesgo';
+        } else if ((promedio !== null && promedio < 7) || tpsAdeudados > 0 || (asistencia !== null && asistencia < 80)) {
+            alerta = 'atencion';
+        }
+
+        return { alumno, notas, promedio, asistencia, tpsAdeudados, alerta };
+    }
+
+    function obtenerNotasAlumno(alumnoId) {
+        const notasNuevas = leer(STORAGE.notas).filter(nota => nota.alumnoId === alumnoId);
+        const alumno = leer(STORAGE.alumnos).find(al => al.id === alumnoId);
+        const notasLegacy = (alumno?.notas || []).map(nota => ({
+            ...nota,
+            peso: Number(nota.peso || pesoPorTipo(nota.tipo)),
+            titulo: nota.descripcion || nota.tipo || 'Nota'
+        }));
+
+        const idsNuevos = new Set(notasNuevas.map(nota => nota.id));
+        return [...notasNuevas, ...notasLegacy.filter(nota => !idsNuevos.has(nota.id))]
+            .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+    }
+
+    function calcularPromedioPonderado(notas) {
+        const validas = notas.filter(nota => Number.isFinite(Number(nota.valor)));
+        if (validas.length === 0) return null;
+
+        const totalPeso = validas.reduce((acc, nota) => acc + Number(nota.peso || pesoPorTipo(nota.tipo)), 0);
+        if (totalPeso <= 0) return promedioDe(validas.map(nota => Number(nota.valor)));
+
+        return validas.reduce((acc, nota) => {
+            return acc + Number(nota.valor) * Number(nota.peso || pesoPorTipo(nota.tipo));
+        }, 0) / totalPeso;
+    }
+
+    function calcularAsistencia(alumnoId, materiaId) {
+        const asistencias = leer(STORAGE.asistencias).filter(item => {
+            const coincideAlumno = item.alumnoId === alumnoId;
+            const coincideMateria = !materiaId || item.materiaId === materiaId;
+            return coincideAlumno && coincideMateria;
+        });
+        if (asistencias.length === 0) return null;
+
+        const presentes = asistencias.filter(item => {
+            const estado = String(item.estado || '').toLowerCase();
+            return estado === 'presente' || estado === 'p';
+        }).length;
+
+        return (presentes / asistencias.length) * 100;
+    }
+
+    function contarTrabajosAdeudados(alumnoId, materiaId) {
+        const cursoSeleccionado = filtroCurso.value;
+        return leer(STORAGE.trabajos).filter(tp => {
+            const coincideCurso = !cursoSeleccionado || tp.cursoKey === cursoSeleccionado;
+            const coincideMateria = !materiaId || tp.materiaId === materiaId;
+            const estado = tp.estados?.[alumnoId] || 'Asignado';
+            return coincideCurso && coincideMateria && (estado === 'Asignado' || estado === 'Re-entrega');
+        }).length;
+    }
+
+    function promedioDe(numeros) {
+        if (!numeros.length) return null;
+        return numeros.reduce((acc, n) => acc + Number(n), 0) / numeros.length;
+    }
+
+    function pesoPorTipo(tipo = '') {
+        const normalizado = tipo.toLowerCase();
+        if (normalizado.includes('integrador') || normalizado.includes('examen') || normalizado.includes('evaluacion')) return 60;
+        if (normalizado.includes('trabajo') || normalizado.includes('tp')) return 40;
+        return 100;
+    }
+
+    function trimestreActual() {
+        const mes = new Date().getMonth() + 1;
+        if (mes <= 4) return '1';
+        if (mes <= 8) return '2';
+        return '3';
+    }
+
+    function textoAlerta(alerta) {
+        if (alerta === 'riesgo') return 'Riesgo';
+        if (alerta === 'atencion') return 'Atencion';
+        return 'Correcto';
+    }
+
+    function exportarExcel() {
+        const situaciones = obtenerAlumnosFiltrados(true).map(obtenerSituacion);
+        if (situaciones.length === 0) {
+            alert('No hay datos para exportar.');
+            return;
+        }
+
+        const html = `
+            <html>
+            <head><meta charset="utf-8" /></head>
+            <body>
+                <table border="1">
+                    <tr><th colspan="8">Libreta digital</th></tr>
+                    <tr>
+                        <th>Alumno</th><th>Escuela</th><th>Curso</th><th>Turno</th>
+                        <th>Promedio</th><th>Asistencia</th><th>TPs adeudados</th><th>Estado</th>
+                    </tr>
+                    ${situaciones.map(s => `
+                        <tr>
+                            <td>${escapeHtml(s.alumno.nombre)}</td>
+                            <td>${escapeHtml(s.alumno.escuela)}</td>
+                            <td>${escapeHtml(s.alumno.curso)}</td>
+                            <td>${escapeHtml(s.alumno.turno)}</td>
+                            <td>${s.promedio === null ? '-' : s.promedio.toFixed(1)}</td>
+                            <td>${s.asistencia === null ? 'Sin datos' : s.asistencia.toFixed(0) + '%'}</td>
+                            <td>${s.tpsAdeudados}</td>
+                            <td>${textoAlerta(s.alerta)}</td>
+                        </tr>
+                    `).join('')}
+                </table>
+            </body>
+            </html>
+        `;
+
+        descargarArchivo(html, 'libreta-digital.xls', 'application/vnd.ms-excel;charset=utf-8;');
+    }
+
+    function exportarPDF() {
+        const situaciones = obtenerAlumnosFiltrados(true).map(obtenerSituacion);
+        if (situaciones.length === 0) {
+            alert('No hay datos para exportar.');
+            return;
+        }
+
+        reportePrint.innerHTML = `
+            <h1>Libreta digital</h1>
+            <p>Reporte generado el ${escapeHtml(new Date().toLocaleDateString())}</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Alumno</th><th>Curso</th><th>Promedio</th><th>Asistencia</th><th>TPs</th><th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${situaciones.map(s => `
+                        <tr>
+                            <td>${escapeHtml(s.alumno.nombre)}</td>
+                            <td>${escapeHtml(s.alumno.curso)} - ${escapeHtml(s.alumno.turno)}</td>
+                            <td>${s.promedio === null ? '-' : s.promedio.toFixed(1)}</td>
+                            <td>${s.asistencia === null ? 'Sin datos' : s.asistencia.toFixed(0) + '%'}</td>
+                            <td>${s.tpsAdeudados}</td>
+                            <td>${textoAlerta(s.alerta)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+        window.print();
+    }
+
+    function descargarArchivo(contenido, nombre, tipo) {
+        const blob = new Blob([contenido], { type: tipo });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = nombre;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+})();
+</script>
+
+<style>
+    .modulo-notas {
+        background: #1e2025;
+        color: white;
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 1.5rem;
+    }
+
+    .notas-header,
+    .acciones-header,
+    .filtros-notas {
+        display: flex;
+        gap: 0.8rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .notas-header {
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+
+    .notas-header h2 {
+        margin: 0;
+    }
+
+    .notas-header p,
+    .muted {
+        color: #aaa;
+        margin: 0.35rem 0 0;
+    }
+
+    .filtros-notas {
+        background: #13151a;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .filtros-notas select {
+        flex: 1;
+        min-width: 180px;
+    }
+
+    .panel-carga,
+    .tabla-notas,
+    .empty {
+        background: #13151a;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .panel-carga h3 {
+        margin-top: 0;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+
+    input,
+    select,
+    textarea {
+        width: 100%;
+        box-sizing: border-box;
+        background: #1e2025;
+        border: 1px solid #444;
+        color: white;
+        border-radius: 6px;
+        padding: 0.75rem;
+        font: inherit;
+    }
+
+    textarea {
+        margin-bottom: 0.75rem;
+    }
+
+    button {
+        border: none;
+        border-radius: 6px;
+        padding: 0.7rem 1rem;
+        cursor: pointer;
+        font-weight: 700;
+    }
+
+    .btn-primario {
+        background: #4dabf7;
+        color: white;
+    }
+
+    .btn-secundario {
+        background: #2b2e36;
+        color: white;
+        border: 1px solid #444;
+    }
+
+    .resumen-notas {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .resumen-notas div {
+        background: #13151a;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 0.9rem;
+        text-align: center;
+    }
+
+    .resumen-notas strong {
+        display: block;
+        color: #4dabf7;
+        font-size: 1.35rem;
+    }
+
+    .resumen-notas span {
+        color: #aaa;
+        font-size: 0.82rem;
+    }
+
+    .tabla-scroll {
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        min-width: 780px;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        padding: 0.75rem;
+        border-bottom: 1px solid #252832;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    th {
+        color: #aaa;
+        background: #1e2025;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+
+    td small {
+        display: block;
+        color: #888;
+        margin-top: 0.2rem;
+    }
+
+    tr.riesgo {
+        background: rgba(185, 28, 28, 0.18);
+    }
+
+    tr.atencion {
+        background: rgba(245, 158, 11, 0.15);
+    }
+
+    .estado {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.8rem;
+        background: #1f7a3b;
+        color: white;
+    }
+
+    .estado.riesgo {
+        background: #b91c1c;
+    }
+
+    .estado.atencion {
+        background: #d97706;
+    }
+
+    .notas-lista {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+    }
+
+    .nota-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: #2b2e36;
+        border: 1px solid #444;
+        border-radius: 999px;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.82rem;
+    }
+
+    .nota-tag button {
+        background: transparent;
+        color: #fca5a5;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .reporte-print {
+        display: none;
+    }
+
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+
+        #reporte-notas-print,
+        #reporte-notas-print * {
+            visibility: visible;
+        }
+
+        #reporte-notas-print {
+            display: block;
+            position: absolute;
+            inset: 0;
+            color: #111;
+            background: white;
+            padding: 24px;
+        }
+
+        #reporte-notas-print table {
+            min-width: 0;
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #reporte-notas-print th,
+        #reporte-notas-print td {
+            border: 1px solid #999;
+            color: #111;
+        }
+    }
+
+    @media (max-width: 680px) {
+        .notas-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .acciones-header {
+            width: 100%;
+        }
+
+        .acciones-header button {
+            flex: 1;
+        }
+    }
+</style>

@@ -1,0 +1,1321 @@
+---
+// src/components/Cursos.astro
+import '../styles/global.css';
+---
+
+<section class="modulo-cursos panel">
+    <div class="encabezado">
+        <div>
+            <h2>Cursos</h2>
+            <p>Vista por escuela, turno y curso, vinculada con alumnos, materias, notas y asistencias.</p>
+        </div>
+        <button id="btn-refrescar-cursos" class="btn btn-secondary">Actualizar</button>
+    </div>
+
+    <div id="vista-cursos" class="vista-cursos"></div>
+    <div id="vista-detalle-curso" class="vista-detalle-curso oculto"></div>
+
+    <dialog id="modal-ficha-integral" class="modal-ficha">
+        <div class="modal-contenido">
+            <button id="btn-cerrar-ficha" class="btn-cerrar">x</button>
+            <div id="contenido-ficha-integral"></div>
+        </div>
+    </dialog>
+</section>
+
+<script>
+import { fetchCourseView, invalidateCourseViewCache, readPersistedCourseView } from '../scripts/curso-view-cache.ts';
+
+(() => {
+    const STORAGE = {
+        alumnos: 'alumnos',
+        materias: 'materias',
+        asistencias: 'asistencias',
+        notas: 'notas_sge',
+        trabajos: 'trabajos_practicos_sge',
+        diario: 'diario_clase_sge',
+        observaciones: 'observaciones_alumnos_sge',
+        aprobadas: 'materias_aprobadas_sge'
+    };
+
+    const ESTADOS_TP = ['Asignado', 'Entregado', 'Corregido', 'Re-entrega'];
+    const NOTA_APROBACION = 6;
+    const ASISTENCIA_MINIMA = 75;
+
+    let cursoActivoKey = null;
+    let materiaActivaId = null;
+    let cargandoDetalle = false;
+
+    const vistaCursos = document.getElementById('vista-cursos');
+    const vistaDetalle = document.getElementById('vista-detalle-curso');
+    const modalFicha = document.getElementById('modal-ficha-integral');
+    const contenidoFicha = document.getElementById('contenido-ficha-integral');
+
+    document.addEventListener('DOMContentLoaded', iniciarCursos);
+
+    function iniciarCursos() {
+        document.getElementById('btn-refrescar-cursos')?.addEventListener('click', async () => {
+            if (cursoActivoKey && materiaActivaId) {
+                await asegurarDatosMateria(cursoActivoKey, materiaActivaId, { force: true });
+                renderizarDetalleCurso();
+                return;
+            }
+            renderizarCursos();
+        });
+        document.getElementById('btn-cerrar-ficha')?.addEventListener('click', () => modalFicha.close());
+
+        vistaCursos?.addEventListener('click', (e) => {
+            const boton = e.target.closest('[data-abrir-curso]');
+            if (!boton) return;
+            void abrirCurso(boton.dataset.abrirCurso);
+        });
+
+        vistaDetalle?.addEventListener('click', manejarClickDetalle);
+        vistaDetalle?.addEventListener('change', manejarCambioDetalle);
+        vistaDetalle?.addEventListener('submit', manejarSubmitDetalle);
+
+        renderizarCursos();
+    }
+
+    function leer(key, fallback = []) {
+        try {
+            return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+        } catch {
+            return fallback;
+        }
+    }
+
+    function guardar(key, valor) {
+        localStorage.setItem(key, JSON.stringify(valor));
+    }
+
+    function tieneDatosLocales(cursoKey, materiaId) {
+        if (!cursoKey || !materiaId) return false;
+
+        const notas = leer(STORAGE.notas).some((item) =>
+            item.cursoKey === cursoKey && item.materiaId === materiaId
+        );
+        const asistencias = leer(STORAGE.asistencias).some((item) =>
+            item.cursoKey === cursoKey && item.materiaId === materiaId
+        );
+        const trabajos = leer(STORAGE.trabajos).some((item) =>
+            item.cursoKey === cursoKey && item.materiaId === materiaId
+        );
+        const diario = leer(STORAGE.diario).some((item) =>
+            item.cursoKey === cursoKey && item.materiaId === materiaId
+        );
+
+        return notas || asistencias || trabajos || diario;
+    }
+
+    async function hidratarDesdeCacheLocal(cursoKey, materiaId) {
+        const snapshot = await readPersistedCourseView(cursoKey, materiaId);
+        if (snapshot) aplicarSnapshotEnLocal(snapshot, cursoKey, materiaId);
+        return snapshot;
+    }
+
+    async function asegurarDatosMateria(cursoKey, materiaId, { force = false } = {}) {
+        if (!cursoKey || !materiaId) return null;
+
+        const localData = tieneDatosLocales(cursoKey, materiaId);
+
+        if (!force) {
+            const snapshot = await hidratarDesdeCacheLocal(cursoKey, materiaId);
+            if (snapshot || localData) return snapshot;
+        }
+
+        try {
+            const snapshot = await fetchCourseView(cursoKey, materiaId, { force, hasLocalData: localData });
+            if (snapshot) aplicarSnapshotEnLocal(snapshot, cursoKey, materiaId);
+            return snapshot;
+        } catch {
+            return null;
+        }
+    }
+
+    function aplicarSnapshotEnLocal(snapshot, cursoKey, materiaId) {
+        const notas = leer(STORAGE.notas);
+        const asistencias = leer(STORAGE.asistencias);
+        const idsNotasSnapshot = new Set();
+        const idsAsistenciasSnapshot = new Set();
+
+        for (const alumno of snapshot.alumnos || []) {
+            for (const nota of alumno.notas || []) {
+                idsNotasSnapshot.add(nota.id);
+                const registro = {
+                    id: nota.id,
+                    alumnoId: alumno.id,
+                    materiaId,
+                    cursoKey,
+                    titulo: nota.titulo,
+                    tipo: nota.tipoEvaluacion || 'Nota',
+                    valor: nota.valor,
+                    peso: Number(nota.peso || 100),
+                    trimestre: trimestreActual(),
+                    fecha: nota.fecha,
+                    descripcion: nota.titulo,
+                };
+                const idx = notas.findIndex((item) => item.id === nota.id);
+                if (idx >= 0) notas[idx] = { ...notas[idx], ...registro };
+                else notas.push(registro);
+            }
+
+            for (const asistencia of alumno.asistencias || []) {
+                idsAsistenciasSnapshot.add(asistencia.id);
+                const registro = {
+                    id: asistencia.id,
+                    alumnoId: alumno.id,
+                    materiaId,
+                    cursoKey,
+                    fecha: asistencia.fecha,
+                    estado: asistencia.estado,
+                };
+                const idx = asistencias.findIndex((item) => item.id === asistencia.id);
+                if (idx >= 0) asistencias[idx] = { ...asistencias[idx], ...registro };
+                else asistencias.push(registro);
+            }
+        }
+
+        guardar(STORAGE.notas, notas);
+        guardar(STORAGE.asistencias, asistencias);
+    }
+
+    function actualizarEstadoTabs(materiaId) {
+        vistaDetalle?.querySelectorAll('[data-seleccionar-materia]').forEach((boton) => {
+            boton.classList.toggle('activo', boton.dataset.seleccionarMateria === materiaId);
+        });
+    }
+
+    async function cambiarPestanaMateria(materiaId) {
+        if (!materiaId) return;
+
+        materiaActivaId = materiaId;
+        renderizarDetalleCurso();
+        actualizarEstadoTabs(materiaId);
+
+        if (tieneDatosLocales(cursoActivoKey, materiaId)) {
+            void hidratarDesdeCacheLocal(cursoActivoKey, materiaId);
+            return;
+        }
+
+        const snapshot = await readPersistedCourseView(cursoActivoKey, materiaId);
+        if (snapshot) {
+            aplicarSnapshotEnLocal(snapshot, cursoActivoKey, materiaId);
+            renderizarDetalleCurso();
+            return;
+        }
+
+        cargandoDetalle = true;
+        await asegurarDatosMateria(cursoActivoKey, materiaActivaId);
+        cargandoDetalle = false;
+        renderizarDetalleCurso();
+    }
+
+    function renderizarPanelMateriaActiva() {
+        renderizarDetalleCurso();
+    }
+
+    async function invalidarVistaCursoActual() {
+        if (!cursoActivoKey || !materiaActivaId) return;
+        await invalidateCourseViewCache(cursoActivoKey, materiaActivaId);
+    }
+
+    function escapeHtml(valor) {
+        return String(valor ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    function fechaHoy() {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    function cursoKey(alumno) {
+        return [alumno.escuela || 'Sin escuela', alumno.turno || 'Sin turno', alumno.curso || 'Sin curso'].join('||');
+    }
+
+    function cursoDesdeKey(key) {
+        const [escuela, turno, curso] = key.split('||');
+        return { escuela, turno, curso };
+    }
+
+    function obtenerCursos() {
+        const alumnos = leer(STORAGE.alumnos);
+        const cursos = new Map();
+
+        alumnos.forEach((alumno) => {
+            const key = cursoKey(alumno);
+            if (!cursos.has(key)) {
+                cursos.set(key, {
+                    key,
+                    escuela: alumno.escuela || 'Sin escuela',
+                    turno: alumno.turno || 'Sin turno',
+                    curso: alumno.curso || 'Sin curso',
+                    alumnos: []
+                });
+            }
+            cursos.get(key).alumnos.push(alumno);
+        });
+
+        return [...cursos.values()].sort((a, b) =>
+            `${a.escuela} ${a.turno} ${a.curso}`.localeCompare(`${b.escuela} ${b.turno} ${b.curso}`)
+        );
+    }
+
+    function obtenerCursoActivo() {
+        return obtenerCursos().find(curso => curso.key === cursoActivoKey);
+    }
+
+    function obtenerMateriasDelCurso(curso) {
+        const materias = leer(STORAGE.materias);
+        const idsAlumnos = new Set(curso.alumnos.map(al => al.id));
+        return materias.filter(materia =>
+            Array.isArray(materia.alumnosIds) && materia.alumnosIds.some(id => idsAlumnos.has(id))
+        );
+    }
+
+    function renderizarCursos() {
+        const cursos = obtenerCursos();
+
+        if (cursos.length === 0) {
+            vistaCursos.innerHTML = `
+                <div class="empty">
+                    <h3>No hay cursos todavia</h3>
+                    <p>Cuando registres alumnos con escuela, turno y curso, se van a organizar automaticamente aca.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const porEscuela = cursos.reduce((acc, curso) => {
+            acc[curso.escuela] ||= [];
+            acc[curso.escuela].push(curso);
+            return acc;
+        }, {});
+
+        vistaCursos.innerHTML = Object.entries(porEscuela).map(([escuela, cursosEscuela]) => `
+            <section class="bloque-escuela">
+                <div class="titulo-escuela">
+                    <h3>${escapeHtml(escuela)}</h3>
+                    <span>${cursosEscuela.length} cursos</span>
+                </div>
+                <div class="grid-cursos">
+                    ${cursosEscuela.map(curso => tarjetaCurso(curso)).join('')}
+                </div>
+            </section>
+        `).join('');
+
+        vistaCursos.classList.remove('oculto');
+        vistaDetalle.classList.add('oculto');
+    }
+
+    function tarjetaCurso(curso) {
+        const materias = obtenerMateriasDelCurso(curso);
+        const alertas = curso.alumnos
+            .map(alumno => obtenerSituacionAlumno(alumno, materias[0]?.id))
+            .filter(situacion => situacion.alerta === 'riesgo').length;
+
+        return `
+            <article class="curso-card" data-abrir-curso="${escapeHtml(curso.key)}">
+                <div>
+                    <h4>${escapeHtml(curso.curso)}</h4>
+                    <p>Turno ${escapeHtml(curso.turno)}</p>
+                </div>
+                <div class="curso-metricas">
+                    <span>${curso.alumnos.length} alumnos</span>
+                    <span>${materias.length} materias</span>
+                    <span class="${alertas > 0 ? 'riesgo' : ''}">${alertas} alertas</span>
+                </div>
+            </article>
+        `;
+    }
+
+    async function abrirCurso(key) {
+        cursoActivoKey = key;
+        const curso = obtenerCursoActivo();
+        if (!curso) return;
+
+        const materias = obtenerMateriasDelCurso(curso);
+        materiaActivaId = materias[0]?.id || null;
+
+        vistaCursos.classList.add('oculto');
+        vistaDetalle.classList.remove('oculto');
+        renderizarDetalleCurso();
+
+        if (!materiaActivaId) return;
+
+        if (tieneDatosLocales(cursoActivoKey, materiaActivaId)) {
+            void hidratarDesdeCacheLocal(cursoActivoKey, materiaActivaId);
+            return;
+        }
+
+        const snapshot = await readPersistedCourseView(cursoActivoKey, materiaActivaId);
+        if (snapshot) {
+            aplicarSnapshotEnLocal(snapshot, cursoActivoKey, materiaActivaId);
+            renderizarDetalleCurso();
+            return;
+        }
+
+        cargandoDetalle = true;
+        await asegurarDatosMateria(cursoActivoKey, materiaActivaId);
+        cargandoDetalle = false;
+        renderizarDetalleCurso();
+    }
+
+    function renderizarDetalleCurso() {
+        const curso = obtenerCursoActivo();
+        if (!curso) return renderizarCursos();
+
+        const materias = obtenerMateriasDelCurso(curso);
+        const materiaActiva = materias.find(m => m.id === materiaActivaId) || materias[0] || null;
+        if (materiaActiva && materiaActiva.id !== materiaActivaId) materiaActivaId = materiaActiva.id;
+
+        const situaciones = curso.alumnos.map(alumno => obtenerSituacionAlumno(alumno, materiaActivaId));
+        const promedioCurso = promedioDe(situaciones.map(s => s.promedio).filter(n => n !== null));
+        const asistenciaCurso = promedioDe(situaciones.map(s => s.asistencia).filter(n => n !== null));
+        const alertas = situaciones.filter(s => s.alerta === 'riesgo' || s.alerta === 'atencion').length;
+
+        vistaDetalle.innerHTML = `
+            <button class="btn btn-ghost" data-volver-cursos>Volver a cursos</button>
+
+            <div class="detalle-header">
+                <div>
+                    <h2>${escapeHtml(curso.curso)}</h2>
+                    <p>${escapeHtml(curso.escuela)} - Turno ${escapeHtml(curso.turno)}</p>
+                </div>
+                <div class="resumen-grid">
+                    <div><strong>${curso.alumnos.length}</strong><span>Alumnos</span></div>
+                    <div><strong>${materias.length}</strong><span>Materias</span></div>
+                    <div><strong>${promedioCurso === null ? '-' : promedioCurso.toFixed(1)}</strong><span>Promedio</span></div>
+                    <div><strong>${asistenciaCurso === null ? '-' : asistenciaCurso.toFixed(0) + '%'}</strong><span>Asistencia</span></div>
+                    <div><strong>${alertas}</strong><span>Alertas</span></div>
+                </div>
+            </div>
+
+            ${materias.length === 0 ? `
+                <div class="empty">
+                    <h3>Este curso todavia no tiene materias</h3>
+                    <p>Inscribi alumnos en materias desde el modulo Materias para ver el seguimiento escolar.</p>
+                </div>
+            ` : `
+                <div class="tabs-materias">
+                    ${materias.map(materia => `
+                        <button class="${materia.id === materiaActivaId ? 'activo' : ''}" data-seleccionar-materia="${escapeHtml(materia.id)}">
+                            ${escapeHtml(materia.nombre)}
+                        </button>
+                    `).join('')}
+                </div>
+
+                ${renderizarMateria(curso, materiaActiva)}
+            `}
+        `;
+    }
+
+    function renderizarMateria(curso, materia) {
+        const tps = obtenerTrabajos(curso.key, materia.id);
+        const diario = obtenerDiario(curso.key, materia.id);
+        const situaciones = curso.alumnos.map(alumno => obtenerSituacionAlumno(alumno, materia.id));
+
+        return `
+            <section class="panel-materia">
+                <div class="panel-titulo">
+                    <div>
+                        <h3>${escapeHtml(materia.nombre)}</h3>
+                        <p>Profesor: ${escapeHtml(materia.profesor || 'Sin profesor asignado')}</p>
+                    </div>
+                    <button class="btn btn-secondary" data-exportar-curso>Exportar Excel</button>
+                </div>
+
+                <div class="dos-columnas">
+                    <form id="form-tp" class="mini-panel">
+                        <h4>Trabajo practico / evaluacion</h4>
+                        <input type="text" id="tp-titulo" placeholder="Titulo del trabajo o examen" required />
+                        <div class="fila-form">
+                            <select id="tp-tipo">
+                                <option value="Trabajo Practico">Trabajo Practico</option>
+                                <option value="Examen">Examen</option>
+                                <option value="Examen Integrador">Examen Integrador</option>
+                            </select>
+                            <input type="number" id="tp-peso" min="1" max="100" value="40" title="Peso en el promedio" />
+                        </div>
+                        <input type="date" id="tp-fecha-entrega" />
+                        <button class="btn btn-primary btn-block" type="submit">Agregar seguimiento</button>
+                    </form>
+
+                    <form id="form-diario" class="mini-panel">
+                        <h4>Diario de clase</h4>
+                        <input type="date" id="diario-fecha" value="${fechaHoy()}" />
+                        <input type="text" id="diario-tema" placeholder="Tema dado hoy" required />
+                        <textarea id="diario-observaciones" rows="3" placeholder="Observaciones breves"></textarea>
+                        <button class="btn btn-primary btn-block" type="submit">Guardar clase</button>
+                    </form>
+                </div>
+
+                <div class="mini-panel">
+                    <h4>Trabajos cargados</h4>
+                    ${tps.length === 0 ? '<p class="muted">No hay trabajos cargados para esta materia.</p>' : `
+                        <div class="trabajos-lista">
+                            ${tps.map(tp => `
+                                <div class="trabajo-item">
+                                    <strong>${escapeHtml(tp.titulo)}</strong>
+                                    <span>${escapeHtml(tp.tipo)} - peso ${Number(tp.peso || 0)}%</span>
+                                    <small>Entrega: ${escapeHtml(tp.fechaEntrega || 'Sin fecha')}</small>
+                                    <button data-eliminar-tp="${escapeHtml(tp.id)}">Eliminar</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+
+                <div class="tabla-panel">
+                    <div class="tabla-header">
+                        <h4>Situacion escolar por alumno</h4>
+                        <span>Alertas: rojo = riesgo, amarillo = atencion</span>
+                    </div>
+                    <div class="tabla-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Alumno</th>
+                                    <th>Promedio</th>
+                                    <th>Asistencia</th>
+                                    <th>TPs adeudados</th>
+                                    <th>Ultimo trabajo</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${situaciones.map(s => filaAlumno(s, tps)).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mini-panel">
+                    <h4>Ultimas clases</h4>
+                    ${diario.length === 0 ? '<p class="muted">Todavia no hay clases registradas.</p>' : diario.slice(0, 5).map(item => `
+                        <div class="diario-item">
+                            <strong>${escapeHtml(item.fecha)}</strong>
+                            <span>${escapeHtml(item.tema)}</span>
+                            <p>${escapeHtml(item.observaciones || '')}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </section>
+        `;
+    }
+
+    function filaAlumno(situacion, tps) {
+        const ultimoTp = tps[0];
+        const aprobado = estaMateriaAprobada(situacion.alumno.id, materiaActivaId, cursoActivoKey);
+        const puedeAprobar = situacion.promedio !== null &&
+            situacion.promedio >= NOTA_APROBACION &&
+            (situacion.asistencia === null || situacion.asistencia >= ASISTENCIA_MINIMA) &&
+            situacion.tpsAdeudados <= 2;
+
+        return `
+            <tr class="${situacion.alerta}">
+                <td>
+                    <strong>${escapeHtml(situacion.alumno.nombre)}</strong>
+                    <small>${escapeHtml(situacion.alumno.curso)} - ${escapeHtml(situacion.alumno.turno)}</small>
+                </td>
+                <td>${situacion.promedio === null ? '-' : situacion.promedio.toFixed(1)}</td>
+                <td>${situacion.asistencia === null ? 'Sin datos' : situacion.asistencia.toFixed(0) + '%'}</td>
+                <td>${situacion.tpsAdeudados}</td>
+                <td>
+                    ${ultimoTp ? `
+                        <select data-tp-estado data-tp-id="${escapeHtml(ultimoTp.id)}" data-alumno-id="${situacion.alumno.id}">
+                            ${ESTADOS_TP.map(estado => `
+                                <option value="${estado}" ${obtenerEstadoTrabajo(ultimoTp, situacion.alumno.id) === estado ? 'selected' : ''}>${estado}</option>
+                            `).join('')}
+                        </select>
+                        <input class="nota-mini" type="number" min="1" max="10" step="0.1" value="${obtenerNotaTrabajo(ultimoTp, situacion.alumno.id) || ''}" placeholder="Nota" data-tp-nota data-tp-id="${escapeHtml(ultimoTp.id)}" data-alumno-id="${situacion.alumno.id}" />
+                    ` : '<span class="muted">Sin TP</span>'}
+                </td>
+                <td class="acciones-tabla">
+                    ${ultimoTp ? `<button data-guardar-tp="${escapeHtml(ultimoTp.id)}" data-alumno-id="${situacion.alumno.id}">Guardar</button>` : ''}
+                    <button data-ver-ficha="${situacion.alumno.id}">Ficha</button>
+                    <button data-aprobar-materia="${situacion.alumno.id}" ${aprobado || !puedeAprobar ? 'disabled' : ''}>
+                        ${aprobado ? 'Aprobada' : 'Aprobar'}
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    function manejarClickDetalle(e) {
+        const volver = e.target.closest('[data-volver-cursos]');
+        if (volver) {
+            cursoActivoKey = null;
+            materiaActivaId = null;
+            renderizarCursos();
+            return;
+        }
+
+        const tab = e.target.closest('[data-seleccionar-materia]');
+        if (tab) {
+            void cambiarPestanaMateria(tab.dataset.seleccionarMateria);
+            return;
+        }
+
+        const btnGuardar = e.target.closest('[data-guardar-tp]');
+        if (btnGuardar) {
+            guardarTrabajoAlumno(btnGuardar.dataset.guardarTp, Number(btnGuardar.dataset.alumnoId));
+            return;
+        }
+
+        const btnFicha = e.target.closest('[data-ver-ficha]');
+        if (btnFicha) {
+            abrirFichaIntegral(Number(btnFicha.dataset.verFicha));
+            return;
+        }
+
+        const btnAprobar = e.target.closest('[data-aprobar-materia]');
+        if (btnAprobar) {
+            aprobarMateria(Number(btnAprobar.dataset.aprobarMateria));
+            return;
+        }
+
+        const btnEliminarTp = e.target.closest('[data-eliminar-tp]');
+        if (btnEliminarTp) {
+            eliminarTrabajo(btnEliminarTp.dataset.eliminarTp);
+            return;
+        }
+
+        const btnExportar = e.target.closest('[data-exportar-curso]');
+        if (btnExportar) exportarCursoExcel();
+    }
+
+    function manejarCambioDetalle(e) {
+        const tipo = e.target.closest('#tp-tipo');
+        if (!tipo) return;
+        const peso = document.getElementById('tp-peso');
+        if (tipo.value === 'Examen Integrador') peso.value = '60';
+        if (tipo.value === 'Trabajo Practico') peso.value = '40';
+        if (tipo.value === 'Examen') peso.value = '60';
+    }
+
+    function manejarSubmitDetalle(e) {
+        if (e.target.id === 'form-tp') {
+            e.preventDefault();
+            crearTrabajo();
+        }
+
+        if (e.target.id === 'form-diario') {
+            e.preventDefault();
+            guardarDiario();
+        }
+    }
+
+    async function crearTrabajo() {
+        const titulo = document.getElementById('tp-titulo').value.trim();
+        const tipo = document.getElementById('tp-tipo').value;
+        const peso = Number(document.getElementById('tp-peso').value || 40);
+        const fechaEntrega = document.getElementById('tp-fecha-entrega').value;
+        if (!titulo) return;
+
+        const trabajos = leer(STORAGE.trabajos);
+        trabajos.push({
+            id: crypto.randomUUID(),
+            cursoKey: cursoActivoKey,
+            materiaId: materiaActivaId,
+            titulo,
+            tipo,
+            peso,
+            fechaAsignacion: fechaHoy(),
+            fechaEntrega,
+            estados: {},
+            notas: {}
+        });
+        guardar(STORAGE.trabajos, trabajos);
+        await invalidarVistaCursoActual();
+        renderizarDetalleCurso();
+    }
+
+    async function eliminarTrabajo(tpId) {
+        const trabajos = leer(STORAGE.trabajos).filter(tp => tp.id !== tpId);
+        const notas = leer(STORAGE.notas).filter(nota => nota.origenTrabajoId !== tpId);
+        guardar(STORAGE.trabajos, trabajos);
+        guardar(STORAGE.notas, notas);
+        await invalidarVistaCursoActual();
+        renderizarDetalleCurso();
+    }
+
+    async function guardarTrabajoAlumno(tpId, alumnoId) {
+        const selectorEstado = vistaDetalle.querySelector(`[data-tp-estado][data-tp-id="${cssEscape(tpId)}"][data-alumno-id="${alumnoId}"]`);
+        const inputNota = vistaDetalle.querySelector(`[data-tp-nota][data-tp-id="${cssEscape(tpId)}"][data-alumno-id="${alumnoId}"]`);
+        const estado = selectorEstado?.value || 'Asignado';
+        const notaValor = inputNota?.value ? Number(inputNota.value) : null;
+
+        const trabajos = leer(STORAGE.trabajos);
+        const tp = trabajos.find(item => item.id === tpId);
+        if (!tp) return;
+
+        tp.estados ||= {};
+        tp.notas ||= {};
+        tp.estados[alumnoId] = estado;
+
+        if (notaValor !== null && !Number.isNaN(notaValor)) {
+            tp.notas[alumnoId] = notaValor;
+            sincronizarNotaDeTrabajo(tp, alumnoId, notaValor);
+        } else {
+            delete tp.notas[alumnoId];
+        }
+
+        guardar(STORAGE.trabajos, trabajos);
+        await invalidarVistaCursoActual();
+        renderizarDetalleCurso();
+    }
+
+    function sincronizarNotaDeTrabajo(tp, alumnoId, valor) {
+        const notas = leer(STORAGE.notas);
+        const id = `tp-${tp.id}-${alumnoId}`;
+        const existente = notas.findIndex(nota => nota.id === id);
+        const nota = {
+            id,
+            alumnoId,
+            materiaId: tp.materiaId,
+            cursoKey: tp.cursoKey,
+            titulo: tp.titulo,
+            tipo: tp.tipo,
+            valor,
+            peso: Number(tp.peso || pesoPorTipo(tp.tipo)),
+            trimestre: trimestreActual(),
+            fecha: fechaHoy(),
+            descripcion: 'Nota generada desde seguimiento de curso',
+            origenTrabajoId: tp.id
+        };
+
+        if (existente >= 0) notas[existente] = nota;
+        else notas.push(nota);
+        guardar(STORAGE.notas, notas);
+        reflejarNotaEnAlumno(nota);
+    }
+
+    function reflejarNotaEnAlumno(nota) {
+        const alumnos = leer(STORAGE.alumnos);
+        const alumno = alumnos.find(item => item.id === nota.alumnoId);
+        const materia = leer(STORAGE.materias).find(item => item.id === nota.materiaId);
+        if (!alumno) return;
+
+        alumno.notas ||= [];
+        const idx = alumno.notas.findIndex(item => item.id === nota.id);
+        const notaAlumno = {
+            id: nota.id,
+            materiaId: nota.materiaId,
+            materiaNombre: materia?.nombre || 'General',
+            tipo: nota.tipo,
+            valor: nota.valor,
+            descripcion: nota.descripcion || nota.titulo,
+            fecha: nota.fecha,
+            peso: nota.peso,
+            trimestre: nota.trimestre
+        };
+
+        if (idx >= 0) alumno.notas[idx] = notaAlumno;
+        else alumno.notas.push(notaAlumno);
+        guardar(STORAGE.alumnos, alumnos);
+    }
+
+    async function guardarDiario() {
+        const fecha = document.getElementById('diario-fecha').value || fechaHoy();
+        const tema = document.getElementById('diario-tema').value.trim();
+        const observaciones = document.getElementById('diario-observaciones').value.trim();
+        if (!tema) return;
+
+        const diario = leer(STORAGE.diario);
+        diario.unshift({
+            id: crypto.randomUUID(),
+            cursoKey: cursoActivoKey,
+            materiaId: materiaActivaId,
+            fecha,
+            tema,
+            observaciones
+        });
+        guardar(STORAGE.diario, diario);
+        await invalidarVistaCursoActual();
+        renderizarDetalleCurso();
+    }
+
+    async function aprobarMateria(alumnoId) {
+        const situacion = obtenerSituacionAlumno(obtenerCursoActivo().alumnos.find(al => al.id === alumnoId), materiaActivaId);
+        const aprobadas = leer(STORAGE.aprobadas);
+        aprobadas.push({
+            id: crypto.randomUUID(),
+            alumnoId,
+            materiaId: materiaActivaId,
+            cursoKey: cursoActivoKey,
+            promedio: situacion.promedio,
+            asistencia: situacion.asistencia,
+            fecha: fechaHoy()
+        });
+        guardar(STORAGE.aprobadas, aprobadas);
+        await invalidarVistaCursoActual();
+        renderizarDetalleCurso();
+    }
+
+    function estaMateriaAprobada(alumnoId, materiaId, key) {
+        return leer(STORAGE.aprobadas).some(item =>
+            item.alumnoId === alumnoId && item.materiaId === materiaId && item.cursoKey === key
+        );
+    }
+
+    function obtenerSituacionAlumno(alumno, materiaId) {
+        const notas = obtenerNotasAlumnoMateria(alumno.id, materiaId);
+        const promedio = calcularPromedioPonderado(notas);
+        const asistencia = calcularAsistencia(alumno.id, materiaId);
+        const tpsAdeudados = contarTrabajosAdeudados(alumno.id, cursoActivoKey, materiaId);
+
+        let alerta = 'ok';
+        if ((promedio !== null && promedio < NOTA_APROBACION) || tpsAdeudados > 2 || (asistencia !== null && asistencia < 70)) {
+            alerta = 'riesgo';
+        } else if ((promedio !== null && promedio < 7) || tpsAdeudados > 0 || (asistencia !== null && asistencia < 80)) {
+            alerta = 'atencion';
+        }
+
+        return { alumno, notas, promedio, asistencia, tpsAdeudados, alerta };
+    }
+
+    function obtenerNotasAlumnoMateria(alumnoId, materiaId) {
+        const notasNuevas = leer(STORAGE.notas).filter(nota =>
+            nota.alumnoId === alumnoId && (!materiaId || nota.materiaId === materiaId)
+        );
+
+        const alumno = leer(STORAGE.alumnos).find(item => item.id === alumnoId);
+        const notasLegacy = (alumno?.notas || [])
+            .filter(nota => !materiaId || nota.materiaId === materiaId)
+            .map(nota => ({
+                ...nota,
+                peso: Number(nota.peso || pesoPorTipo(nota.tipo)),
+                titulo: nota.descripcion || nota.tipo || 'Nota'
+            }));
+
+        const idsNuevos = new Set(notasNuevas.map(nota => nota.id));
+        return [...notasNuevas, ...notasLegacy.filter(nota => !idsNuevos.has(nota.id))];
+    }
+
+    function calcularPromedioPonderado(notas) {
+        const validas = notas.filter(nota => Number.isFinite(Number(nota.valor)));
+        if (validas.length === 0) return null;
+        const totalPeso = validas.reduce((acc, nota) => acc + Number(nota.peso || pesoPorTipo(nota.tipo)), 0);
+        if (totalPeso <= 0) return promedioDe(validas.map(nota => Number(nota.valor)));
+        return validas.reduce((acc, nota) => acc + Number(nota.valor) * Number(nota.peso || pesoPorTipo(nota.tipo)), 0) / totalPeso;
+    }
+
+    function calcularAsistencia(alumnoId, materiaId) {
+        const asistencias = leer(STORAGE.asistencias).filter(item =>
+            item.alumnoId === alumnoId && (!materiaId || item.materiaId === materiaId)
+        );
+        if (asistencias.length === 0) return null;
+
+        const presentes = asistencias.filter(item => {
+            const estado = String(item.estado || '').toLowerCase();
+            return estado === 'presente' || estado === 'p';
+        }).length;
+
+        return (presentes / asistencias.length) * 100;
+    }
+
+    function contarTrabajosAdeudados(alumnoId, key, materiaId) {
+        return obtenerTrabajos(key, materiaId).filter(tp => {
+            const estado = obtenerEstadoTrabajo(tp, alumnoId);
+            return estado === 'Asignado' || estado === 'Re-entrega';
+        }).length;
+    }
+
+    function obtenerTrabajos(key, materiaId) {
+        return leer(STORAGE.trabajos)
+            .filter(tp => tp.cursoKey === key && tp.materiaId === materiaId)
+            .sort((a, b) => String(b.fechaAsignacion).localeCompare(String(a.fechaAsignacion)));
+    }
+
+    function obtenerDiario(key, materiaId) {
+        return leer(STORAGE.diario)
+            .filter(item => item.cursoKey === key && item.materiaId === materiaId)
+            .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+    }
+
+    function obtenerEstadoTrabajo(tp, alumnoId) {
+        return tp.estados?.[alumnoId] || 'Asignado';
+    }
+
+    function obtenerNotaTrabajo(tp, alumnoId) {
+        return tp.notas?.[alumnoId] || '';
+    }
+
+    function promedioDe(numeros) {
+        if (!numeros.length) return null;
+        return numeros.reduce((acc, num) => acc + Number(num), 0) / numeros.length;
+    }
+
+    function pesoPorTipo(tipo = '') {
+        const normalizado = tipo.toLowerCase();
+        if (normalizado.includes('integrador') || normalizado.includes('examen') || normalizado.includes('evaluacion')) return 60;
+        if (normalizado.includes('trabajo') || normalizado.includes('tp')) return 40;
+        return 100;
+    }
+
+    function trimestreActual() {
+        const mes = new Date().getMonth() + 1;
+        if (mes <= 4) return '1';
+        if (mes <= 8) return '2';
+        return '3';
+    }
+
+    function cssEscape(valor) {
+        if (window.CSS?.escape) return CSS.escape(valor);
+        return String(valor).replaceAll('"', '\\"');
+    }
+
+    function abrirFichaIntegral(alumnoId) {
+        const curso = obtenerCursoActivo();
+        const alumno = curso?.alumnos.find(item => item.id === alumnoId);
+        const materia = leer(STORAGE.materias).find(item => item.id === materiaActivaId);
+        if (!alumno || !materia) return;
+
+        const situacion = obtenerSituacionAlumno(alumno, materiaActivaId);
+        const observaciones = leer(STORAGE.observaciones)
+            .filter(obs => obs.alumnoId === alumnoId && obs.materiaId === materiaActivaId)
+            .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+
+        contenidoFicha.innerHTML = `
+            <div class="ficha-header">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${alumno.id}" alt="Foto de ${escapeHtml(alumno.nombre)}" />
+                <div>
+                    <h2>${escapeHtml(alumno.nombre)}</h2>
+                    <p>${escapeHtml(alumno.escuela)} - ${escapeHtml(alumno.curso)} - Turno ${escapeHtml(alumno.turno)}</p>
+                    <strong>${escapeHtml(materia.nombre)}</strong>
+                </div>
+            </div>
+
+            <div class="resumen-grid ficha-grid">
+                <div><strong>${situacion.promedio === null ? '-' : situacion.promedio.toFixed(1)}</strong><span>Promedio</span></div>
+                <div><strong>${situacion.asistencia === null ? '-' : situacion.asistencia.toFixed(0) + '%'}</strong><span>Asistencia</span></div>
+                <div><strong>${situacion.tpsAdeudados}</strong><span>TPs adeudados</span></div>
+            </div>
+
+            <h3>Progreso de notas</h3>
+            <div class="grafico-barras">
+                ${situacion.notas.length === 0 ? '<p class="muted">Sin notas cargadas.</p>' : situacion.notas.map(nota => `
+                    <div class="barra-row">
+                        <span>${escapeHtml(nota.titulo || nota.tipo || 'Nota')}</span>
+                        <div class="barra"><i style="width:${Math.max(0, Math.min(100, Number(nota.valor) * 10))}%"></i></div>
+                        <strong>${Number(nota.valor).toFixed(1)}</strong>
+                    </div>
+                `).join('')}
+            </div>
+
+            <form id="form-observacion-ficha" class="observacion-form">
+                <h3>Observaciones</h3>
+                <textarea id="texto-observacion-ficha" rows="3" placeholder="Ej: Se retiro antes por turno medico"></textarea>
+                <button type="submit" class="btn btn-primary btn-block">Agregar observacion</button>
+            </form>
+
+            <div class="observaciones-lista">
+                ${observaciones.length === 0 ? '<p class="muted">Sin observaciones.</p>' : observaciones.map(obs => `
+                    <article>
+                        <strong>${escapeHtml(obs.fecha)}</strong>
+                        <p>${escapeHtml(obs.texto)}</p>
+                    </article>
+                `).join('')}
+            </div>
+        `;
+
+        contenidoFicha.querySelector('#form-observacion-ficha')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const texto = contenidoFicha.querySelector('#texto-observacion-ficha').value.trim();
+            if (!texto) return;
+
+            const registros = leer(STORAGE.observaciones);
+            registros.unshift({
+                id: crypto.randomUUID(),
+                alumnoId,
+                materiaId: materiaActivaId,
+                cursoKey: cursoActivoKey,
+                fecha: fechaHoy(),
+                texto
+            });
+            guardar(STORAGE.observaciones, registros);
+            abrirFichaIntegral(alumnoId);
+        });
+
+        modalFicha.showModal();
+    }
+
+    function exportarCursoExcel() {
+        const curso = obtenerCursoActivo();
+        const materia = leer(STORAGE.materias).find(item => item.id === materiaActivaId);
+        if (!curso || !materia) return;
+
+        const filas = curso.alumnos.map(alumno => {
+            const situacion = obtenerSituacionAlumno(alumno, materiaActivaId);
+            return {
+                alumno: alumno.nombre,
+                curso: alumno.curso,
+                turno: alumno.turno,
+                promedio: situacion.promedio === null ? '-' : situacion.promedio.toFixed(1),
+                asistencia: situacion.asistencia === null ? 'Sin datos' : situacion.asistencia.toFixed(0) + '%',
+                tps: situacion.tpsAdeudados,
+                alerta: situacion.alerta
+            };
+        });
+
+        const html = `
+            <html>
+            <head><meta charset="utf-8" /></head>
+            <body>
+                <table border="1">
+                    <tr><th colspan="7">${escapeHtml(curso.curso)} - ${escapeHtml(materia.nombre)}</th></tr>
+                    <tr>
+                        <th>Alumno</th><th>Curso</th><th>Turno</th><th>Promedio</th>
+                        <th>Asistencia</th><th>TPs adeudados</th><th>Alerta</th>
+                    </tr>
+                    ${filas.map(fila => `
+                        <tr>
+                            <td>${escapeHtml(fila.alumno)}</td>
+                            <td>${escapeHtml(fila.curso)}</td>
+                            <td>${escapeHtml(fila.turno)}</td>
+                            <td>${escapeHtml(fila.promedio)}</td>
+                            <td>${escapeHtml(fila.asistencia)}</td>
+                            <td>${escapeHtml(fila.tps)}</td>
+                            <td>${escapeHtml(fila.alerta)}</td>
+                        </tr>
+                    `).join('')}
+                </table>
+            </body>
+            </html>
+        `;
+
+        descargarArchivo(html, `curso-${curso.curso}-${materia.nombre}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
+    }
+
+    function descargarArchivo(contenido, nombre, tipo) {
+        const blob = new Blob([contenido], { type: tipo });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = nombre.replace(/[\\/:*?"<>|]+/g, '-');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+})();
+</script>
+
+<style>
+    .modulo-cursos {
+        padding: 0;
+    }
+
+    .encabezado,
+    .detalle-header,
+    .panel-titulo,
+    .tabla-header,
+    .titulo-escuela {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--space-4);
+        flex-wrap: wrap;
+    }
+
+    .encabezado h2,
+    .detalle-header h2,
+    .panel-materia h3 {
+        margin: 0;
+    }
+
+    .vista-cursos,
+    .vista-detalle-curso {
+        margin-top: var(--space-5);
+    }
+
+    .oculto {
+        display: none;
+    }
+
+    .bloque-escuela {
+        border-top: 1px solid var(--line);
+        padding-top: var(--space-4);
+        margin-top: var(--space-4);
+    }
+
+    .titulo-escuela span {
+        color: var(--muted);
+        font-size: 0.9rem;
+    }
+
+    .grid-cursos {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: var(--space-3);
+    }
+
+    .curso-card {
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--brand);
+        border-radius: var(--radius);
+        padding: var(--space-4);
+        cursor: pointer;
+        transition: transform var(--transition-fast), border-color var(--transition-fast);
+    }
+
+    .curso-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--brand);
+    }
+
+    .curso-card h4 {
+        margin: 0;
+        font-size: 1.15rem;
+    }
+
+    .curso-card p {
+        color: var(--muted);
+        margin: 0.3rem 0 0.75rem;
+    }
+
+    .curso-metricas {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+    }
+
+    .curso-metricas span,
+    .tabs-materias button {
+        background: var(--surface-2);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 0.35rem 0.65rem;
+        font-size: 0.82rem;
+        cursor: pointer;
+    }
+
+    .curso-metricas .riesgo {
+        background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+        border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+        color: var(--danger);
+    }
+
+    .resumen-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+        gap: var(--space-3);
+    }
+
+    .resumen-grid div {
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--space-3);
+        text-align: center;
+    }
+
+    .resumen-grid strong {
+        display: block;
+        color: var(--brand);
+        font-size: 1.2rem;
+    }
+
+    .resumen-grid span {
+        color: var(--muted);
+        font-size: 0.8rem;
+    }
+
+    .tabs-materias {
+        display: flex;
+        gap: var(--space-2);
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        margin: var(--space-4) 0;
+        padding-bottom: 0.25rem;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tabs-materias button.activo {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #fff;
+    }
+
+    .panel-materia,
+    .mini-panel,
+    .tabla-panel,
+    .empty {
+        background: var(--surface-muted);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--space-4);
+    }
+
+    .dos-columnas {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: var(--space-4);
+        margin: var(--space-4) 0;
+    }
+
+    .fila-form {
+        display: grid;
+        grid-template-columns: 1fr 90px;
+        gap: var(--space-2);
+    }
+
+    .tabla-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    tr.riesgo {
+        background: color-mix(in srgb, var(--danger) 14%, transparent);
+    }
+
+    tr.atencion {
+        background: color-mix(in srgb, var(--warning) 12%, transparent);
+    }
+
+    .nota-mini {
+        width: 82px;
+        display: inline-block;
+        margin-top: 0.4rem;
+    }
+
+    .acciones-tabla {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+    }
+
+    .acciones-tabla button {
+        min-height: 40px;
+        padding: 0.45rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        cursor: pointer;
+    }
+
+    .acciones-tabla button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .trabajos-lista,
+    .grafico-barras,
+    .observaciones-lista {
+        display: grid;
+        gap: var(--space-3);
+    }
+
+    .trabajo-item,
+    .diario-item,
+    .observaciones-lista article {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: var(--space-3);
+    }
+
+    .modal-ficha {
+        width: min(760px, calc(100% - 32px));
+        border: 0;
+        padding: 0;
+        color: var(--ink);
+        background: transparent;
+    }
+
+    .modal-ficha::backdrop {
+        background: rgba(11, 18, 15, 0.48);
+    }
+
+    .modal-contenido {
+        position: relative;
+        max-height: 85vh;
+        overflow: auto;
+        padding: var(--space-5);
+        border: 1px solid var(--line);
+        border-radius: calc(var(--radius) + 2px);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+    }
+
+    .btn-cerrar {
+        position: absolute;
+        top: var(--space-3);
+        right: var(--space-3);
+        min-height: 36px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
+        color: var(--muted);
+        cursor: pointer;
+    }
+
+    .ficha-header {
+        display: flex;
+        gap: var(--space-4);
+        align-items: center;
+        margin-bottom: var(--space-4);
+        flex-wrap: wrap;
+    }
+
+    .ficha-header img {
+        width: 92px;
+        height: 92px;
+        border-radius: 50%;
+        background: var(--surface-2);
+        border: 3px solid var(--brand);
+    }
+
+    .ficha-grid {
+        grid-template-columns: repeat(3, 1fr);
+        margin-bottom: var(--space-4);
+    }
+
+    .barra-row {
+        display: grid;
+        grid-template-columns: minmax(110px, 1fr) 2fr 48px;
+        gap: var(--space-3);
+        align-items: center;
+    }
+
+    .barra {
+        height: 12px;
+        background: var(--surface-2);
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .barra i {
+        display: block;
+        height: 100%;
+        background: var(--brand);
+    }
+
+    @media (max-width: 680px) {
+        .encabezado,
+        .detalle-header,
+        .panel-titulo,
+        .tabla-header,
+        .titulo-escuela,
+        .ficha-header {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .resumen-grid,
+        .ficha-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .barra-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

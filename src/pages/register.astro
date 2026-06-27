@@ -1,0 +1,85 @@
+---
+import '../styles/global.css';
+const error = Astro.url.searchParams.get('error');
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#226c5f" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <title>Registro | Aula Clara</title>
+    <script is:inline>
+      document.documentElement.dataset.theme =
+        localStorage.getItem('aula_clara_theme') || 'light';
+
+      (function () {
+        var keys = [
+          'aula_clara_students',
+          'aula_clara_courses',
+          'aula_clara_subjects',
+          'aula_clara_attendance',
+          'aula_clara_grades',
+          'aula_clara_dashboard_filters',
+          'aula_clara_teacher_context',
+          'aula_clara_calendar_alerts_dismissed',
+        ];
+        keys.forEach(function (key) {
+          localStorage.removeItem(key);
+        });
+      })();
+    </script>
+  </head>
+  <body class="auth-body">
+    <main class="auth-container">
+      <section class="auth-card">
+        <header class="auth-header">
+          <p class="eyebrow">Registro de cuenta</p>
+          <h1>Aula Clara</h1>
+          <p class="muted">Registrá tu cuenta docente para comenzar a organizar tus cursos.</p>
+        </header>
+
+        {error === '1' && <p class="tag danger auth-alert">Completá todos los campos correctamente y usá una contraseña segura (mínimo 10 caracteres, mayúsculas, minúsculas, número y símbolo).</p>}
+        {error === '2' && <p class="tag danger auth-alert">Ya existe una cuenta con ese email.</p>}
+        {error === '3' && (
+          <p class="tag danger auth-alert">
+            La contraseña debe tener al menos 10 caracteres, una mayúscula, una minúscula, un número y un símbolo.
+          </p>
+        )}
+
+        <form method="post" action="/api/auth/register" class="auth-form">
+          <label>
+            <span>Nombre completo</span>
+            <input type="text" name="nombre" autocomplete="name" required />
+          </label>
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" autocomplete="email" required />
+          </label>
+          <label>
+            <span>Contraseña</span>
+            <input type="password" name="password" autocomplete="new-password" minlength="10" required />
+            <small>Use al menos 10 caracteres, mayúsculas, minúsculas, número y símbolo.</small>
+          </label>
+          <label>
+            <span>Confirmar contraseña</span>
+            <input type="password" name="confirm" autocomplete="new-password" minlength="10" required />
+          </label>
+
+          <button class="btn btn-primary btn-block" type="submit">Registrar cuenta</button>
+        </form>
+
+        <footer class="auth-footer">
+          <p>¿Ya tenés cuenta? <a href="/login">Iniciá sesión</a></p>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>

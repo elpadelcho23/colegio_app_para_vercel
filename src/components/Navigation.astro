@@ -1,0 +1,299 @@
+﻿---
+const { currentPath = '/', spaEnabled = false } = Astro.props;
+const user = Astro.locals.user;
+
+const spaLinks = [
+  { view: 'panel', href: '/', label: 'Panel', shortLabel: 'Panel' },
+  { view: 'registro', href: '/registro', label: 'Alumnos', shortLabel: 'Alumnos' },
+  { view: 'cursos', href: '/cursos', label: 'Cursos', shortLabel: 'Cursos' },
+  { view: 'asistencia', href: '/asistencia', label: 'Asistencia', shortLabel: 'Asist.' },
+  { view: 'notas', href: '/notas', label: 'Calificaciones', shortLabel: 'Notas' },
+  { view: 'actividades', href: '/actividades', label: 'Actividades', shortLabel: 'Agenda' },
+] as const;
+
+const staticLinks = [
+  ...(user?.rol === 'admin' ? [{ href: '/admin/usuarios', label: 'Admin' }] : []),
+];
+
+const isActive = (href: string) => {
+  if (href === '/') return currentPath === '/';
+  return currentPath.startsWith(href);
+};
+---
+
+<header class="app-shell">
+  <div class="institution-strip">
+    <div>
+      <strong>Escuela Técnica 1</strong>
+      <span class="institution-strip-secondary">Seguimiento escolar simple para docentes</span>
+    </div>
+    {user && (
+      <button
+        type="button"
+        class="sync-indicator is-hidden"
+        data-sync-indicator
+        aria-label="Estado de sincronización"
+        title="Sincronización"
+      >
+        <span class="sync-indicator-dot" aria-hidden="true"></span>
+      </button>
+    )}
+    {user && (
+      <label class="global-cycle-picker global-cycle-picker--strip">
+        <span>Ciclo</span>
+        <select data-global-cycle aria-label="Ciclo lectivo activo"></select>
+      </label>
+    )}
+    {user && (
+      <span class="institution-strip-user">
+        <span class="institution-strip-user-name">{user.nombre}</span>
+        <span class="institution-strip-user-role"> - {user.rol}</span>
+      </span>
+    )}
+  </div>
+  <nav class="topbar" aria-label="Navegación principal">
+    {spaEnabled ? (
+      <button class="brand brand-button" type="button" data-spa-nav="panel" aria-label="Ir al panel principal">
+        <span class="brand-mark">AC</span>
+        <span>
+          <strong>Aula Clara</strong>
+          <small>Gestión docente</small>
+        </span>
+      </button>
+    ) : (
+      <a class="brand" href="/" aria-label="Ir al panel principal">
+        <span class="brand-mark">AC</span>
+        <span>
+          <strong>Aula Clara</strong>
+          <small>Gestión docente</small>
+        </span>
+      </a>
+    )}
+
+    <button
+      class="menu-toggle"
+      type="button"
+      aria-label="Abrir menú"
+      aria-controls="main-navigation-menu"
+      aria-expanded="false"
+      data-menu-toggle
+    >
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <div class="nav-links" id="main-navigation-menu" data-nav-menu role="menu">
+      <p class="nav-section-label">Menú</p>
+      {user && (
+        <div class="nav-cycle-picker">
+          <label class="global-cycle-picker">
+            <span>Ciclo lectivo</span>
+            <select data-global-cycle aria-label="Ciclo lectivo activo"></select>
+          </label>
+        </div>
+      )}
+      {spaEnabled ? (
+        <>
+          {spaLinks.map((link) => (
+            <button
+              type="button"
+              class="nav-tab"
+              data-spa-nav={link.view}
+              role="menuitem"
+            >
+              {link.label}
+            </button>
+          ))}
+          <p class="nav-section-label nav-section-label--secondary">Avanzado</p>
+          <button
+            type="button"
+            class="nav-tab nav-tab--secondary"
+            data-spa-nav="herramientas"
+            role="menuitem"
+          >
+            Más herramientas
+          </button>
+        </>
+      ) : (
+        <>
+          {spaLinks.map((link) => (
+            <a
+              href={link.href}
+              class:list={[{ active: isActive(link.href) }]}
+              aria-current={isActive(link.href) ? 'page' : undefined}
+              role="menuitem"
+            >
+              {link.label}
+            </a>
+          ))}
+          <p class="nav-section-label nav-section-label--secondary">Avanzado</p>
+          <a
+            href="/herramientas"
+            class:list={[{ active: isActive('/herramientas') }]}
+            aria-current={isActive('/herramientas') ? 'page' : undefined}
+            role="menuitem"
+          >
+            Más herramientas
+          </a>
+        </>
+      )}
+      {staticLinks.map((link) => (
+        <a
+          href={link.href}
+          class:list={[{ active: isActive(link.href) }]}
+          aria-current={isActive(link.href) ? 'page' : undefined}
+          role="menuitem"
+        >
+          {link.label}
+        </a>
+      ))}
+      {user ? (
+        <form method="post" action="/api/auth/logout" class="nav-form">
+          <button type="submit">Salir</button>
+        </form>
+      ) : (
+        <a href="/login" class:list={[{ active: currentPath === '/login' }]}>Login</a>
+      )}
+      <button class="theme-toggle" type="button" data-theme-toggle>Modo oscuro</button>
+    </div>
+  </nav>
+</header>
+
+{spaEnabled && user && (
+  <nav class="mobile-bottom-nav" aria-label="Acceso rápido" data-mobile-bottom-nav>
+    {spaLinks.map((link) => (
+      <button
+        type="button"
+        class="mobile-bottom-nav-item"
+        data-spa-nav={link.view}
+        aria-label={link.label}
+      >
+        <span class="mobile-bottom-nav-label">{link.shortLabel}</span>
+      </button>
+    ))}
+  </nav>
+)}
+
+<style>
+  .brand-button {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+  }
+
+  .nav-tab {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .nav-tab.active,
+  .nav-tab[aria-current='page'] {
+    background: color-mix(in srgb, var(--brand) 14%, var(--surface));
+    color: var(--brand);
+    font-weight: 700;
+  }
+
+  .nav-section-label--secondary {
+    margin-top: 0.65rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted, #5f6b66);
+  }
+
+  .nav-tab--secondary {
+    color: var(--muted, #5f6b66);
+    font-size: 0.95rem;
+  }
+
+  .sync-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--line, #d9e1dc);
+    border-radius: 999px;
+    background: var(--surface, #fff);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .sync-indicator-dot {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    background: var(--ok, #1f7a4d);
+  }
+
+  .sync-indicator[data-sync-state='pending'] .sync-indicator-dot {
+    background: #c98a12;
+  }
+
+  .sync-indicator[data-sync-state='error'] .sync-indicator-dot {
+    background: var(--danger, #b42318);
+  }
+
+  .sync-indicator[data-sync-state='offline'] .sync-indicator-dot {
+    background: #6b7280;
+  }
+
+  .global-cycle-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    color: var(--muted, #5f6b66);
+  }
+
+  .global-cycle-picker select {
+    min-width: 6.5rem;
+    min-height: var(--tap);
+    padding: 0.45rem 0.55rem;
+    border-radius: 0.45rem;
+    border: 1px solid var(--line, #d9e1dc);
+    background: var(--surface, #fff);
+    font: inherit;
+    color: inherit;
+  }
+
+  .nav-cycle-picker {
+    display: none;
+  }
+
+  .nav-cycle-picker .global-cycle-picker {
+    display: grid;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0 0.85rem;
+  }
+
+  .nav-cycle-picker .global-cycle-picker select {
+    width: 100%;
+  }
+
+  @media (max-width: 1023px) {
+    .global-cycle-picker--strip {
+      display: none;
+    }
+
+    .nav-cycle-picker {
+      display: block;
+      padding-bottom: 0.55rem;
+      margin-bottom: 0.35rem;
+      border-bottom: 1px solid var(--line, #d9e1dc);
+    }
+  }
+</style>
