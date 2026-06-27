@@ -1,0 +1,8 @@
+[2m22:06:36[22m [34m[@astrojs/node][39m Enabling sessions with filesystem storage
+[vite] connected.
+[2m22:06:39[22m [34m[types][39m Generated [2m3ms[22m
+[33m[1m22:06:39[22m [WARN] [content][39m Content config not loaded
+[42m[1m astro [22m[49m [32mv6.1.9[39m [2mready in[22m 2815 [2mms[22m
+[2m┃[22m Local    [36mhttp://localhost:51235/[39m
+[2m22:06:39[22m [32mwatching for file changes...[39m
+[2m22:06:42[22m [33m[403][39m [33mPOST[39m /api/auth/login [2m81ms[22m
