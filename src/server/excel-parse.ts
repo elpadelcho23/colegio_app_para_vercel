@@ -2,17 +2,22 @@ import type ExcelJS from 'exceljs';
 import {
   buildColumnMapFromHeaders,
   buildAttendanceColumnMapFromHeaders,
-  matchStudentField,
+  buildGradeColumnMapFromHeaders,
   mergeStudentNombre,
   missingStudentFields,
   normalizeAttendanceEstado,
   normalizeDniValue,
   normalizeTurnoValue,
   parseSpreadsheetDate,
+  reinforceAttendanceMapWithSamples,
+  reinforceGradeMapWithSamples,
+  reinforceStudentMapWithSamples,
   scoreAttendanceHeaderRow,
+  scoreGradeHeaderRow,
   scoreStudentHeaderRow,
   splitMateriasValue,
   type AttendanceMappingField,
+  type GradeMappingField,
   type StudentField,
   type StudentMappingField,
 } from '../lib/excel-column-map';
@@ -23,6 +28,13 @@ import {
   type AttendanceExcelMapping,
   validateAttendanceExcelMapping,
 } from '../lib/attendance-excel-mapping';
+import {
+  gradeColumnMapToMapping,
+  gradeFieldLabel,
+  gradeMappingToColumnMap,
+  type GradeExcelMapping,
+  validateGradeExcelMapping,
+} from '../lib/grade-excel-mapping';
 import {
   columnMapToMapping,
   mappingToColumnMap,
@@ -102,7 +114,15 @@ function detectHeaderRow(worksheet: ExcelJS.Worksheet, maxScanRows = 15) {
     const score = scoreStudentHeaderRow(headers);
     if (score <= bestScore) continue;
 
-    const columnMap = buildColumnMapFromHeaders(headers);
+    let columnMap = buildColumnMapFromHeaders(headers);
+    const sampleRows: Array<Array<string | number | null>> = [];
+    for (let offset = 1; offset <= 5; offset += 1) {
+      const sample = readRowValues(worksheet, rowNumber + offset, maxColumns);
+      if (sample.some((value) => value !== null && value !== '')) sampleRows.push(sample);
+    }
+    if (sampleRows.length) {
+      columnMap = reinforceStudentMapWithSamples(headers, columnMap, sampleRows);
+    }
 
     bestRow = rowNumber;
     bestScore = score;
@@ -317,6 +337,7 @@ export interface ParsedAttendanceRow {
   turno: string | null;
   materia: string;
   nombre: string;
+  dni: string | null;
   estado: 'presente' | 'ausente' | null;
   errors: string[];
 }
@@ -351,10 +372,20 @@ function detectAttendanceHeaderRow(worksheet: ExcelJS.Worksheet, maxScanRows = 1
     const score = scoreAttendanceHeaderRow(headers);
     if (score <= bestScore) continue;
 
+    let columnMap = buildAttendanceColumnMapFromHeaders(headers);
+    const sampleRows: Array<Array<string | number | null>> = [];
+    for (let offset = 1; offset <= 5; offset += 1) {
+      const sample = readRowValues(worksheet, rowNumber + offset, maxColumns);
+      if (sample.some((value) => value !== null && value !== '')) sampleRows.push(sample);
+    }
+    if (sampleRows.length) {
+      columnMap = reinforceAttendanceMapWithSamples(headers, columnMap, sampleRows);
+    }
+
     bestRow = rowNumber;
     bestScore = score;
     bestHeaders = headers;
-    bestMap = buildAttendanceColumnMapFromHeaders(headers);
+    bestMap = columnMap;
   }
 
   return { headerRow: bestRow, columnMap: bestMap, detectedHeaders: bestHeaders, score: bestScore };
@@ -396,6 +427,7 @@ function parseAttendanceDataRow(
   const turno = normalizeTurnoValue(turnoRaw);
   const materia = String(getAttendanceMappedValue(values, columnMap, 'materia') ?? '').trim();
   const nombre = String(getAttendanceMappedValue(values, columnMap, 'nombre') ?? '').trim();
+  const dni = normalizeDniValue(getAttendanceMappedValue(values, columnMap, 'dni'));
   const estadoRaw = getAttendanceMappedValue(values, columnMap, 'estado');
   const estado = normalizeAttendanceEstado(estadoRaw);
   const errors: string[] = [];
@@ -428,7 +460,7 @@ function parseAttendanceDataRow(
     );
   }
 
-  return { rowNumber, fecha, escuela, curso, turno, materia, nombre, estado, errors };
+  return { rowNumber, fecha, escuela, curso, turno, materia, nombre, dni, estado, errors };
 }
 
 function hasMinimumAttendanceMapping(columnMap: Partial<Record<AttendanceMappingField, number>>) {
@@ -526,6 +558,266 @@ export function buildAttendanceSheetError(parsed: ParsedAttendanceSheet | null) 
   }
   if (parsed.validRows.length === 0) {
     return 'Ninguna fila pudo interpretarse. Revisá el mapeo, fechas, turnos y estados (Presente/Ausente).';
+  }
+  return null;
+}
+
+// --- Notas ---
+
+export interface ParsedGradeRow {
+  rowNumber: number;
+  fecha: string | null;
+  escuela: string;
+  curso: string;
+  turno: string | null;
+  materia: string;
+  nombre: string;
+  dni: string | null;
+  evaluacion: string;
+  calificacion: string | number | null;
+  importancia: string | number | null;
+  entrega: string | null;
+  motivo: string | null;
+  tipo: string | null;
+  periodo: string | null;
+  errors: string[];
+}
+
+export interface ParsedGradeSheet {
+  sheetName: string;
+  headerRow: number;
+  columnMap: Partial<Record<GradeMappingField, number>>;
+  detectedHeaders: string[];
+  rows: ParsedGradeRow[];
+  validRows: ParsedGradeRow[];
+  invalidRows: ParsedGradeRow[];
+  mappingErrors: string[];
+  requiresMapping: boolean;
+}
+
+export interface ParseGradeWorksheetOptions {
+  preferredSheetNames?: string[];
+  mapping?: GradeExcelMapping | null;
+}
+
+function detectGradeHeaderRow(worksheet: ExcelJS.Worksheet, maxScanRows = 15) {
+  const maxColumns = Math.max(worksheet.columnCount || 0, worksheet.actualColumnCount || 0, 14);
+  let bestRow = 1;
+  let bestScore = 0;
+  let bestHeaders: string[] = [];
+  let bestMap: Partial<Record<GradeMappingField, number>> = {};
+
+  for (let rowNumber = 1; rowNumber <= Math.min(maxScanRows, worksheet.rowCount || maxScanRows); rowNumber += 1) {
+    const values = readRowValues(worksheet, rowNumber, maxColumns);
+    const headers = values.map((value) => String(value ?? '').trim());
+    const score = scoreGradeHeaderRow(headers);
+    if (score <= bestScore) continue;
+
+    let columnMap = buildGradeColumnMapFromHeaders(headers);
+    const sampleRows: Array<Array<string | number | null>> = [];
+    for (let offset = 1; offset <= 5; offset += 1) {
+      const sample = readRowValues(worksheet, rowNumber + offset, maxColumns);
+      if (sample.some((value) => value !== null && value !== '')) sampleRows.push(sample);
+    }
+    if (sampleRows.length) {
+      columnMap = reinforceGradeMapWithSamples(headers, columnMap, sampleRows);
+    }
+
+    bestRow = rowNumber;
+    bestScore = score;
+    bestHeaders = headers;
+    bestMap = columnMap;
+  }
+
+  return { headerRow: bestRow, columnMap: bestMap, detectedHeaders: bestHeaders, score: bestScore };
+}
+
+function getGradeMappedValue(
+  values: ParsedCellValue[],
+  columnMap: Partial<Record<GradeMappingField, number>>,
+  field: GradeMappingField,
+) {
+  const index = columnMap[field];
+  if (index == null) return null;
+  return values[index] ?? null;
+}
+
+function gradeColumnLabel(
+  columnMap: Partial<Record<GradeMappingField, number>>,
+  field: GradeMappingField,
+  detectedHeaders: string[],
+) {
+  const index = columnMap[field];
+  if (index == null) return null;
+  return detectedHeaders[index] || `columna ${index + 1}`;
+}
+
+function parseGradeDataRow(
+  rowNumber: number,
+  values: ParsedCellValue[],
+  columnMap: Partial<Record<GradeMappingField, number>>,
+  detectedHeaders: string[],
+): ParsedGradeRow | null {
+  const hasValue = values.some((value) => value !== null && value !== '');
+  if (!hasValue) return null;
+
+  const fecha = parseSpreadsheetDate(getGradeMappedValue(values, columnMap, 'fecha'));
+  const escuela = String(getGradeMappedValue(values, columnMap, 'escuela') ?? '').trim();
+  const curso = String(getGradeMappedValue(values, columnMap, 'curso') ?? '').trim();
+  const turnoRaw = getGradeMappedValue(values, columnMap, 'turno');
+  const turno = normalizeTurnoValue(turnoRaw);
+  const materia = String(getGradeMappedValue(values, columnMap, 'materia') ?? '').trim();
+  const nombre = String(getGradeMappedValue(values, columnMap, 'nombre') ?? '').trim();
+  const dni = normalizeDniValue(getGradeMappedValue(values, columnMap, 'dni'));
+  const evaluacion = String(getGradeMappedValue(values, columnMap, 'evaluacion') ?? '').trim();
+  const calificacion = getGradeMappedValue(values, columnMap, 'calificacion');
+  const importancia = getGradeMappedValue(values, columnMap, 'importancia');
+  const entrega = parseSpreadsheetDate(getGradeMappedValue(values, columnMap, 'entrega'));
+  const motivo = String(getGradeMappedValue(values, columnMap, 'motivo') ?? '').trim() || null;
+  const tipo = String(getGradeMappedValue(values, columnMap, 'tipo') ?? '').trim() || null;
+  const periodo = String(getGradeMappedValue(values, columnMap, 'periodo') ?? '').trim() || null;
+  const errors: string[] = [];
+
+  const required: Array<[GradeMappingField, string | number | null]> = [
+    ['fecha', fecha],
+    ['escuela', escuela],
+    ['curso', curso],
+    ['turno', turno],
+    ['materia', materia],
+    ['nombre', nombre],
+    ['evaluacion', evaluacion],
+    ['calificacion', calificacion],
+  ];
+
+  for (const [field, value] of required) {
+    if (value !== null && value !== '') continue;
+    const mappedColumn = gradeColumnLabel(columnMap, field, detectedHeaders);
+    if (field === 'turno' && String(turnoRaw ?? '').trim()) {
+      errors.push(`Turno no reconocido (fila ${rowNumber}): "${String(turnoRaw).trim()}". Usá Mañana, Tarde o Noche.`);
+      continue;
+    }
+    errors.push(
+      mappedColumn
+        ? `Falta ${gradeFieldLabel(field)} en columna "${mappedColumn}" (fila ${rowNumber}).`
+        : `Falta ${gradeFieldLabel(field)}: no hay columna asignada (fila ${rowNumber}).`,
+    );
+  }
+
+  return {
+    rowNumber,
+    fecha,
+    escuela,
+    curso,
+    turno,
+    materia,
+    nombre,
+    dni,
+    evaluacion,
+    calificacion,
+    importancia,
+    entrega,
+    motivo,
+    tipo,
+    periodo,
+    errors,
+  };
+}
+
+function hasMinimumGradeMapping(columnMap: Partial<Record<GradeMappingField, number>>) {
+  return validateGradeExcelMapping(gradeColumnMapToMapping(1, columnMap)).length === 0;
+}
+
+export function pickGradeWorksheet(
+  workbook: ExcelJS.Workbook,
+  preferredNames: string[] = ['Notas', 'notas', 'Calificaciones', 'calificaciones'],
+) {
+  for (const name of preferredNames) {
+    const sheet = workbook.getWorksheet(name);
+    if (sheet) return sheet;
+  }
+
+  let bestSheet = workbook.worksheets[0] || null;
+  let bestScore = 0;
+  for (const sheet of workbook.worksheets) {
+    const detection = detectGradeHeaderRow(sheet, 10);
+    if (detection.score > bestScore) {
+      bestScore = detection.score;
+      bestSheet = sheet;
+    }
+  }
+  return bestSheet;
+}
+
+export function parseGradeWorksheet(
+  workbook: ExcelJS.Workbook,
+  options: ParseGradeWorksheetOptions = {},
+): ParsedGradeSheet | null {
+  const preferredNames = options.preferredSheetNames || ['Notas', 'notas', 'Calificaciones', 'calificaciones'];
+  const worksheet = pickGradeWorksheet(workbook, preferredNames);
+  if (!worksheet) return null;
+
+  const maxColumns = Math.max(worksheet.columnCount || 0, worksheet.actualColumnCount || 0, 14);
+  const detection = detectGradeHeaderRow(worksheet, 15);
+  const headerRow = options.mapping?.headerRow || detection.headerRow;
+  const detectedHeaders = readRowValues(worksheet, headerRow, maxColumns).map((value) => String(value ?? '').trim());
+  const columnMap = options.mapping
+    ? gradeMappingToColumnMap(options.mapping)
+    : detection.headerRow === headerRow
+      ? detection.columnMap
+      : buildGradeColumnMapFromHeaders(detectedHeaders);
+
+  const mapping = gradeColumnMapToMapping(headerRow, columnMap);
+  const mappingErrors = validateGradeExcelMapping(mapping);
+  const headerScore = scoreGradeHeaderRow(detectedHeaders);
+  const requiresMapping = mappingErrors.length > 0 || headerScore < 50;
+
+  if (!options.mapping && headerScore < 50) {
+    return {
+      sheetName: worksheet.name,
+      headerRow,
+      columnMap,
+      detectedHeaders,
+      rows: [],
+      validRows: [],
+      invalidRows: [],
+      mappingErrors,
+      requiresMapping: true,
+    };
+  }
+
+  const rows: ParsedGradeRow[] = [];
+  for (let rowNumber = headerRow + 1; rowNumber <= (worksheet.rowCount || 0); rowNumber += 1) {
+    const values = readRowValues(worksheet, rowNumber, maxColumns);
+    const parsed = parseGradeDataRow(rowNumber, values, columnMap, detectedHeaders);
+    if (parsed) rows.push(parsed);
+  }
+
+  const validRows = rows.filter((row) => row.errors.length === 0 && row.turno && row.fecha && row.calificacion != null && row.calificacion !== '');
+  const invalidRows = rows.filter((row) => row.errors.length > 0 || !row.turno || !row.fecha || row.calificacion == null || row.calificacion === '');
+
+  return {
+    sheetName: worksheet.name,
+    headerRow,
+    columnMap,
+    detectedHeaders,
+    rows,
+    validRows,
+    invalidRows,
+    mappingErrors,
+    requiresMapping: requiresMapping || (!hasMinimumGradeMapping(columnMap) && validRows.length === 0),
+  };
+}
+
+export function buildGradeSheetError(parsed: ParsedGradeSheet | null) {
+  if (!parsed) return 'El archivo no contiene hojas de cálculo.';
+  if (parsed.mappingErrors.length && parsed.validRows.length === 0) {
+    return `${parsed.mappingErrors[0]} Revisá el mapeo de columnas.`;
+  }
+  if (parsed.rows.length === 0 && scoreGradeHeaderRow(parsed.detectedHeaders) < 50) {
+    return 'No se encontró una fila de encabezados válida. Ajustá la fila de encabezados y el mapeo manual.';
+  }
+  if (parsed.validRows.length === 0) {
+    return 'Ninguna fila pudo interpretarse. Revisá el mapeo, fechas, turnos y calificaciones.';
   }
   return null;
 }

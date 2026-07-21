@@ -30,3 +30,9 @@ export const PULL_FIELD_BY_KEY: Record<string, string> = Object.fromEntries(
 export function onboardingDismissedKey(userId: string) {
   return `aula_clara_onboarding_dismissed:${userId}`;
 }
+
+/** localStorage: tour corto post-setup (done | skipped). */
+export function productTourKey(userId: string) {
+  return `aula_clara_product_tour:${userId}`;
+}
+

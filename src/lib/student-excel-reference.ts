@@ -7,7 +7,7 @@ export const STUDENT_EXCEL_COLUMNS = [
   { label: 'Nombre', required: true, hint: 'Nombre y apellido' },
   { label: 'DNI', required: false, hint: 'Opcional' },
   { label: 'Tutor', required: false, hint: 'Contacto del tutor' },
-  { label: 'Materias', required: false, hint: 'Separadas por coma' },
+  { label: 'Materias', required: false, hint: 'Separadas por coma (también podés mapear como Materia)' },
 ] as const;
 
 export const STUDENT_EXCEL_EXAMPLE_ROWS = [

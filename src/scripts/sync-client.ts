@@ -19,11 +19,16 @@ export async function hydrateLocalStorageFromServer(userId: string, options: { n
   const scoped = (key: string) => `${key}:${userId}`;
 
   try {
-    const [response, pendingOperations] = await Promise.all([
-      fetch('/api/sync/pull', { credentials: 'same-origin' }),
-      getPendingOperations(),
-    ]);
+    const response = await fetch('/api/sync/pull', { credentials: 'same-origin' });
     if (!response.ok) return false;
+
+    let pendingOperations: Awaited<ReturnType<typeof getPendingOperations>> = [];
+    try {
+      pendingOperations = await getPendingOperations();
+    } catch {
+      // IndexedDB puede fallar tras wipe de invitado; igual hidratamos desde el servidor.
+      pendingOperations = [];
+    }
 
     const data = await response.json();
     const pendingByEntity = groupPendingMutations(pendingOperations);

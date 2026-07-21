@@ -102,3 +102,68 @@ export async function extractTextFromUploads(files: File[]): Promise<ExtractionR
     filesProcessed,
   };
 }
+
+export async function extractTextFromBuffer(
+  buffer: Buffer,
+  filename: string,
+  mimeType = '',
+): Promise<string> {
+  const ext = extensionOf(filename);
+  if (!ALLOWED_EXTENSIONS.has(ext) && !ALLOWED_MIME.has(mimeType)) {
+    throw new Error(`Formato no soportado para corrección digital: ${filename}. Usá PDF, DOCX o TXT.`);
+  }
+
+  if (ext === 'txt' || mimeType === 'text/plain') {
+    return buffer.toString('utf-8').trim();
+  }
+  if (ext === 'docx' || mimeType.includes('wordprocessingml')) {
+    return extractDocx(buffer);
+  }
+  if (ext === 'pdf' || mimeType === 'application/pdf') {
+    return extractPdf(buffer);
+  }
+
+  throw new Error(`No se pudo leer el archivo ${filename}.`);
+}
+
+export async function extractTextFromStoredFiles(
+  files: Array<{ buffer: Buffer; filename: string; mimeType?: string }>,
+): Promise<ExtractionResult> {
+  if (!files.length) {
+    throw new Error('No hay archivos digitales (PDF, DOCX o TXT) para corregir.');
+  }
+
+  const chunks: string[] = [];
+  let totalChars = 0;
+  let extractionTruncated = false;
+  let filesProcessed = 0;
+
+  for (const file of files) {
+    const text = await extractTextFromBuffer(file.buffer, file.filename, file.mimeType || '');
+    filesProcessed += 1;
+    if (!text) continue;
+
+    const header = `--- ${file.filename} ---\n`;
+    const piece = `${header}${text}`;
+    if (totalChars + piece.length > ACTIVITY_AI_LIMITS.maxExtractChars) {
+      const remaining = ACTIVITY_AI_LIMITS.maxExtractChars - totalChars;
+      if (remaining > 200) chunks.push(piece.slice(0, remaining));
+      extractionTruncated = true;
+      break;
+    }
+    chunks.push(piece);
+    totalChars += piece.length;
+  }
+
+  const merged = chunks.join('\n\n').trim();
+  if (!merged) {
+    throw new Error('No se extrajo texto legible. El MVP digital no corrige fotos escaneadas sin texto.');
+  }
+
+  return {
+    text: merged,
+    extractedChars: merged.length,
+    extractionTruncated,
+    filesProcessed,
+  };
+}

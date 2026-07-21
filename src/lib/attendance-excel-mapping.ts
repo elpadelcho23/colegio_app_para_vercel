@@ -24,6 +24,7 @@ export const ATTENDANCE_MAPPABLE_FIELDS: Array<{
   { field: 'turno', label: 'Turno', required: true },
   { field: 'materia', label: 'Materia', required: true },
   { field: 'nombre', label: 'Alumno', required: true },
+  { field: 'dni', label: 'DNI', required: false, hint: 'Opcional: mejora el match del alumno' },
   { field: 'estado', label: 'Estado', required: true, hint: 'Presente, Ausente, P o A' },
 ];
 
@@ -34,6 +35,7 @@ const FIELD_LABELS: Record<AttendanceMappingField, string> = {
   turno: 'Turno',
   materia: 'Materia',
   nombre: 'Alumno',
+  dni: 'DNI',
   estado: 'Estado',
 };
 

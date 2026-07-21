@@ -21,7 +21,7 @@ const MAPPABLE_FIELDS = {
     { field: 'nombre', label: 'Nombre', required: false, hint: 'Obligatorio si no usás Apellido', aliases: ['nombre', 'nombres', 'alumno', 'estudiante'] },
     { field: 'dni', label: 'DNI', required: false, aliases: ['dni', 'documento', 'legajo'] },
     { field: 'tutor', label: 'Tutor / contacto', required: false, aliases: ['tutor', 'contacto', 'responsable'] },
-    { field: 'materias', label: 'Materias', required: false, aliases: ['materias', 'materia', 'asignaturas'] },
+    { field: 'materias', label: 'Materia', required: false, hint: 'Una o varias separadas por coma', aliases: ['materias', 'materia', 'asignaturas'] },
   ],
   asistencias: [
     { field: 'fecha', label: 'Fecha', required: true, hint: 'AAAA-MM-DD o fecha de Excel', aliases: ['fecha', 'dia'] },
@@ -30,7 +30,24 @@ const MAPPABLE_FIELDS = {
     { field: 'turno', label: 'Turno', required: true, aliases: ['turno', 'jornada'] },
     { field: 'materia', label: 'Materia', required: true, aliases: ['materia', 'asignatura'] },
     { field: 'nombre', label: 'Alumno', required: true, aliases: ['alumno', 'nombre', 'estudiante'] },
+    { field: 'dni', label: 'DNI', required: false, hint: 'Opcional: mejora el match', aliases: ['dni', 'documento'] },
     { field: 'estado', label: 'Estado', required: true, hint: 'Presente, Ausente, P o A', aliases: ['estado', 'asistencia', 'presentismo'] },
+  ],
+  notas: [
+    { field: 'fecha', label: 'Fecha', required: true, hint: 'AAAA-MM-DD o fecha de Excel', aliases: ['fecha'] },
+    { field: 'escuela', label: 'Escuela / Colegio', required: true, aliases: ['escuela', 'colegio'] },
+    { field: 'curso', label: 'Curso', required: true, aliases: ['curso', 'division'] },
+    { field: 'turno', label: 'Turno', required: true, aliases: ['turno', 'jornada'] },
+    { field: 'materia', label: 'Materia', required: true, aliases: ['materia', 'asignatura'] },
+    { field: 'nombre', label: 'Alumno', required: true, aliases: ['alumno', 'nombre', 'estudiante'] },
+    { field: 'dni', label: 'DNI', required: false, hint: 'Opcional: mejora el match', aliases: ['dni', 'documento'] },
+    { field: 'evaluacion', label: 'Evaluación', required: true, aliases: ['evaluacion', 'titulo', 'tp'] },
+    { field: 'calificacion', label: 'Calificación', required: true, hint: '1–10 o texto', aliases: ['calificacion', 'nota'] },
+    { field: 'importancia', label: 'Importancia / peso', required: false, aliases: ['importancia', 'peso'] },
+    { field: 'entrega', label: 'Fecha de entrega', required: false, aliases: ['entrega'] },
+    { field: 'motivo', label: 'Motivo', required: false, aliases: ['motivo'] },
+    { field: 'tipo', label: 'Tipo', required: false, aliases: ['tipo'] },
+    { field: 'periodo', label: 'Período', required: false, aliases: ['periodo', 'cuatrimestre'] },
   ],
 };
 
@@ -54,7 +71,7 @@ function readTemplateStore() {
   const legacy = localStorage.getItem(storageKey(LEGACY_STUDENT_TEMPLATES_KEY));
   if (legacy) {
     try {
-      const migrated = { alumnos: JSON.parse(legacy), asistencias: [] };
+      const migrated = { alumnos: JSON.parse(legacy), asistencias: [], notas: [] };
       localStorage.setItem(storageKey(TEMPLATE_STORE_KEY), JSON.stringify(migrated));
       return migrated;
     } catch {
@@ -62,7 +79,7 @@ function readTemplateStore() {
     }
   }
 
-  return { alumnos: [], asistencias: [] };
+  return { alumnos: [], asistencias: [], notas: [] };
 }
 
 function writeTemplateStore(store) {
@@ -127,12 +144,13 @@ function renderImportResult(el, result, isError) {
 }
 
 function setWorkspaceStep(workspace, step) {
-  const order = ['template', 'file', 'mapping', 'confirm'];
-  const currentIndex = order.indexOf(step);
+  const order = ['file', 'columns'];
+  const activeStep = (step === 'file' || step === 'template') ? 'file' : 'columns';
+  const currentIndex = order.indexOf(activeStep);
   workspace.querySelectorAll('[data-excel-step]').forEach((item) => {
     const itemStep = item.getAttribute('data-excel-step');
     const itemIndex = order.indexOf(itemStep || '');
-    item.classList.toggle('is-active', itemStep === step);
+    item.classList.toggle('is-active', itemStep === activeStep);
     item.classList.toggle('is-done', itemIndex >= 0 && itemIndex < currentIndex);
   });
 }
@@ -173,6 +191,8 @@ function initExcelImportWorkspace(workspace, options = {}) {
   const templateEmpty = workspace.querySelector('[data-excel-template-empty]');
   const saveCta = workspace.querySelector('[data-excel-save-cta]');
   const toastEl = workspace.querySelector('[data-excel-toast]');
+  const aiMapBtn = workspace.querySelector('[data-excel-ai-map]');
+  const aiMapHint = workspace.querySelector('[data-excel-ai-map-hint]');
   const builderPanel = workspace.querySelector('[data-excel-template-builder]');
   const builderFields = workspace.querySelector('[data-excel-builder-fields]');
   const builderNameInput = workspace.querySelector('[data-excel-builder-name]');
@@ -186,6 +206,90 @@ function initExcelImportWorkspace(workspace, options = {}) {
   let editingTemplateId = '';
   let previewRequestId = 0;
   let toastTimer = null;
+
+  const applyAiMapping = async ({ auto = false } = {}) => {
+    if (!currentPreview?.detectedHeaders?.length) {
+      if (!auto) showToast('Subí un Excel primero para detectar columnas.', 'warning');
+      return null;
+    }
+
+    const previousLabel = aiMapBtn?.textContent;
+    if (aiMapBtn) {
+      aiMapBtn.disabled = true;
+      aiMapBtn.textContent = 'Reconociendo…';
+    }
+    if (aiMapHint) {
+      aiMapHint.hidden = false;
+      aiMapHint.textContent = auto
+        ? 'El mapeo automático no alcanzó: consultando IA…'
+        : 'Consultando IA para reconocer columnas…';
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('type', importType);
+      formData.append('headers', JSON.stringify(currentPreview.detectedHeaders || []));
+      formData.append('headerRow', String(currentPreview.headerRow || headerRowInput?.value || 1));
+      const sampleRows = (currentPreview.previewRows || currentPreview.rows || [])
+        .slice(0, 4)
+        .map((row) => {
+          if (Array.isArray(row)) return row;
+          // preview table shape may be objects with cells
+          if (row?.cells) return row.cells;
+          return (currentPreview.availableColumns || []).map((column) => row?.[column.field] ?? row?.[column.index] ?? '');
+        });
+      formData.append('sampleRows', JSON.stringify(sampleRows));
+
+      const response = await fetch('/api/import/ai-map', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'No se pudo reconocer con IA.');
+      }
+
+      const columns = payload.columns || {};
+      const mapping = {
+        headerRow: Number(payload.headerRow || currentPreview.headerRow || 1),
+        columns: Object.fromEntries(
+          Object.entries(columns).map(([field, index]) => [field, index == null || index === '' ? null : Number(index)]),
+        ),
+      };
+
+      if (headerRowInput) headerRowInput.value = String(mapping.headerRow);
+      const check = validateExcelFile(fileInput, feedbackEl, maxFileMb);
+      if (!check.ok) throw new Error(check.error || 'Archivo inválido.');
+
+      const preview = await previewExcelFile(check.file, mapping, appliedTemplateName || 'IA');
+      const confidence = Math.round((Number(payload.confidence) || 0) * 100);
+      showToast(
+        payload.notes
+          ? `IA (${confidence}%): ${payload.notes}`
+          : `Mapeo sugerido por IA (${confidence}% confianza).`,
+        confidence >= 60 ? 'ok' : 'warning',
+      );
+      if (aiMapHint) {
+        aiMapHint.hidden = false;
+        aiMapHint.textContent = 'Revisá el mapeo sugerido y guardalo como plantilla si te sirve.';
+      }
+      return preview;
+    } catch (error) {
+      console.error('[aula-clara] excel ai-map failed', error);
+      showToast(error instanceof Error ? error.message : 'Error al reconocer con IA.', 'error');
+      if (aiMapHint) {
+        aiMapHint.hidden = false;
+        aiMapHint.textContent = 'La IA no pudo mapear. Completá las columnas a mano o guardá una plantilla.';
+      }
+      return null;
+    } finally {
+      if (aiMapBtn) {
+        aiMapBtn.disabled = false;
+        aiMapBtn.textContent = previousLabel || 'Reconocer con IA';
+      }
+    }
+  };
 
   const showToast = (message, type = 'ok') => {
     if (!toastEl) return;
@@ -353,40 +457,70 @@ function initExcelImportWorkspace(workspace, options = {}) {
     const mapping = preview?.mapping?.columns || collectMapping().columns;
     const mappableFields = preview?.mappableFields || fields;
 
+    const indexToField = {};
+    Object.entries(mapping || {}).forEach(([field, index]) => {
+      if (index == null || index === '') return;
+      indexToField[Number(index)] = field;
+    });
+
+    const typeOptionsHtml = (selectedField) => {
+      const options = ['<option value="">— Sin asignar —</option>'];
+      mappableFields.forEach((field) => {
+        const selected = selectedField === field.field ? ' selected' : '';
+        const tag = field.required ? ' · obligatorio' : '';
+        options.push(
+          `<option value="${field.field}"${selected}>${escapeHtml(field.label)}${tag}</option>`,
+        );
+      });
+      return options.join('');
+    };
+
+    if (!columns.length) {
+      mappingFields.innerHTML = `
+        <div class="excel-mapping-table-head">
+          <span>Columna en tu Excel</span>
+          <span>Tipo de dato</span>
+          <span>Estado</span>
+        </div>
+        <p class="muted">Subí un Excel para ver las columnas y asignarles un tipo (incluye Materia).</p>
+      `;
+      return;
+    }
+
     mappingFields.innerHTML = `
       <div class="excel-mapping-table-head">
-        <span>Dato del sistema</span>
         <span>Columna en tu Excel</span>
+        <span>Tipo de dato</span>
         <span>Estado</span>
       </div>
-    ` + mappableFields.map((field) => {
-      const options = ['<option value="">— Sin asignar —</option>'];
-      columns.forEach((column) => {
-        const selected = Number(mapping[field.field]) === column.index ? ' selected' : '';
-        const label = column.label || `Columna ${column.index + 1}`;
-        options.push(`<option value="${column.index}"${selected}>${escapeHtml(label)}</option>`);
-      });
-      const mapped = mapping[field.field] != null && mapping[field.field] !== '';
-      const tag = field.required ? 'obligatorio' : 'opcional';
-      const status = mapped ? '✓ Conectado' : (field.required ? 'Falta' : '—');
-      const statusClass = mapped ? 'is-mapped' : (field.required ? 'is-missing' : 'is-optional');
+    ` + columns.map((column) => {
+      const assigned = indexToField[column.index] || '';
+      const mapped = Boolean(assigned);
+      const status = mapped ? '✓ Conectado' : '—';
+      const statusClass = mapped ? 'is-mapped' : 'is-optional';
+      const label = column.label || `Columna ${column.index + 1}`;
       return `
-        <div class="excel-mapping-row ${statusClass}" data-excel-map-row="${field.field}">
+        <div class="excel-mapping-row ${statusClass}" data-excel-map-row="${column.index}">
           <div class="excel-mapping-row-label">
-            <strong>${field.label}</strong>
-            <span class="excel-ref-tag">${tag}</span>
-            ${field.hint ? `<small>${field.hint}</small>` : ''}
+            <strong>${escapeHtml(label)}</strong>
+            <small>Columna ${column.index + 1}</small>
           </div>
-          <select data-excel-map-field="${field.field}" aria-label="Columna para ${field.label}">
-            ${options.join('')}
+          <select data-excel-map-column="${column.index}" aria-label="Tipo de dato para ${escapeHtml(label)}">
+            ${typeOptionsHtml(assigned)}
           </select>
           <span class="excel-mapping-status">${status}</span>
         </div>
       `;
     }).join('');
 
-    mappingFields.querySelectorAll('[data-excel-map-field]').forEach((select) => {
+    mappingFields.querySelectorAll('[data-excel-map-column]').forEach((select) => {
       select.addEventListener('change', () => {
+        const chosen = select.value;
+        if (chosen) {
+          mappingFields.querySelectorAll('[data-excel-map-column]').forEach((other) => {
+            if (other !== select && other.value === chosen) other.value = '';
+          });
+        }
         updateMappingProgress();
         debouncedPreviewRefresh();
       });
@@ -410,10 +544,13 @@ function initExcelImportWorkspace(workspace, options = {}) {
   const collectMapping = () => {
     const headerRow = Math.max(1, Number(headerRowInput?.value || currentPreview?.headerRow || 1));
     const columns = {};
-    mappingFields?.querySelectorAll('[data-excel-map-field]').forEach((select) => {
-      const field = select.getAttribute('data-excel-map-field');
+    fields.forEach((field) => {
+      columns[field.field] = null;
+    });
+    mappingFields?.querySelectorAll('[data-excel-map-column]').forEach((select) => {
+      const field = select.value;
       if (!field) return;
-      columns[field] = select.value === '' ? null : Number(select.value);
+      columns[field] = Number(select.getAttribute('data-excel-map-column'));
     });
     return { headerRow, columns };
   };
@@ -430,14 +567,32 @@ function initExcelImportWorkspace(workspace, options = {}) {
     }
     mappingProgress?.classList.toggle('is-complete', progress.complete);
 
+    const requiredMissing = new Set(
+      fields
+        .filter((field) => field.required && (mapping.columns[field.field] == null || mapping.columns[field.field] === ''))
+        .map((field) => field.field),
+    );
+    if (importType === 'alumnos' && !mapping.columns.nombre && !mapping.columns.apellido) {
+      requiredMissing.add('nombre');
+      requiredMissing.add('apellido');
+    }
+
     mappingFields?.querySelectorAll('[data-excel-map-row]').forEach((row) => {
-      const field = row.getAttribute('data-excel-map-row');
-      const select = row.querySelector('[data-excel-map-field]');
+      const select = row.querySelector('[data-excel-map-column]');
       const status = row.querySelector('.excel-mapping-status');
-      const mapped = select?.value !== '';
+      const field = select?.value || '';
+      const mapped = Boolean(field);
+      const isMissingType = field && requiredMissing.has(field);
       row.classList.toggle('is-mapped', mapped);
-      row.classList.toggle('is-missing', !mapped && fields.find((item) => item.field === field)?.required);
-      if (status) status.textContent = mapped ? '✓ Conectado' : (fields.find((item) => item.field === field)?.required ? 'Falta' : '—');
+      row.classList.toggle('is-missing', !mapped && false);
+      row.classList.toggle('is-optional', !mapped);
+      if (status) {
+        if (mapped) status.textContent = `✓ ${fields.find((item) => item.field === field)?.label || field}`;
+        else status.textContent = '—';
+      }
+      if (isMissingType) {
+        // keep mapped style; overall progress shows what's missing
+      }
     });
 
     const shouldPromptSave = progress.complete && !selectedTemplateId && !appliedTemplateName;
@@ -480,7 +635,7 @@ function initExcelImportWorkspace(workspace, options = {}) {
     if (importType === 'asistencias') {
       previewTable.innerHTML = `
         <table>
-          <thead><tr><th>Alumno</th><th>Fecha</th><th>Estado</th><th>Curso</th></tr></thead>
+          <thead><tr><th>Alumno</th><th>Fecha</th><th>Estado</th><th>Curso</th><th>Materia</th></tr></thead>
           <tbody>
             ${rows.map((row) => `
               <tr>
@@ -488,6 +643,24 @@ function initExcelImportWorkspace(workspace, options = {}) {
                 <td>${escapeHtml(row.fecha)}</td>
                 <td>${escapeHtml(row.estado)}</td>
                 <td>${escapeHtml(row.curso)} ${escapeHtml(row.turno || '')}</td>
+                <td>${escapeHtml(row.materia || '—')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } else if (importType === 'notas') {
+      previewTable.innerHTML = `
+        <table>
+          <thead><tr><th>Alumno</th><th>Evaluación</th><th>Nota</th><th>Materia</th><th>Fecha</th></tr></thead>
+          <tbody>
+            ${rows.map((row) => `
+              <tr>
+                <td>${escapeHtml(row.nombre)}</td>
+                <td>${escapeHtml(row.evaluacion)}</td>
+                <td>${escapeHtml(row.calificacion)}</td>
+                <td>${escapeHtml(row.materia || '—')}</td>
+                <td>${escapeHtml(row.fecha)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -496,13 +669,14 @@ function initExcelImportWorkspace(workspace, options = {}) {
     } else {
       previewTable.innerHTML = `
         <table>
-          <thead><tr><th>Nombre</th><th>Curso</th><th>Turno</th><th>DNI</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Curso</th><th>Turno</th><th>Materia</th><th>DNI</th></tr></thead>
           <tbody>
             ${rows.map((row) => `
               <tr>
                 <td>${escapeHtml(row.nombre)}</td>
                 <td>${escapeHtml(row.curso)}</td>
                 <td>${escapeHtml(row.turno)}</td>
+                <td>${escapeHtml(row.materias || '—')}</td>
                 <td>${escapeHtml(row.dni || '—')}</td>
               </tr>
             `).join('')}
@@ -648,9 +822,14 @@ function initExcelImportWorkspace(workspace, options = {}) {
         submitBtn.textContent = 'Analizando...';
       }
       const preview = await previewExcelFile(check.file);
+      let finalPreview = preview;
       if (check.file && preview) {
-        await tryApplyMatchingTemplate(check.file, preview);
+        finalPreview = await tryApplyMatchingTemplate(check.file, preview);
       }
+      if (finalPreview?.requiresMapping || finalPreview) {
+        setWorkspaceStep(workspace, 'columns');
+      }
+      // IA solo a pedido (botón opcional), no en automático.
     } catch (error) {
       console.error('[aula-clara] excel preview failed', error);
       renderPreview({ canImport: false, errors: [{ row: 0, message: 'No se pudo analizar la planilla.' }] });
@@ -660,6 +839,8 @@ function initExcelImportWorkspace(workspace, options = {}) {
   };
 
   fileInput?.addEventListener('change', () => { void handleFileSelected(); });
+
+  aiMapBtn?.addEventListener('click', () => { void applyAiMapping({ auto: false }); });
 
   dropzone?.addEventListener('dragover', (event) => {
     event.preventDefault();
@@ -832,6 +1013,10 @@ function initExcelImportWorkspace(workspace, options = {}) {
       formData.append('type', importType);
       formData.append('file', check.file);
       formData.append('mapping', JSON.stringify(mapping));
+      const ciclo = Number(options.getCicloLectivo?.());
+      if (Number.isFinite(ciclo) && ciclo > 0) {
+        formData.append('cicloLectivo', String(ciclo));
+      }
 
       const response = await fetch('/api/import', {
         method: 'POST',

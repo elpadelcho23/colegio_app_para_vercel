@@ -72,6 +72,13 @@ export async function resetOfflineDatabaseOnce() {
   }
 }
 
+/** Borrado completo de IndexedDB offline (modo invitado / logout). */
+export async function clearOfflineDatabase() {
+  if (typeof indexedDB === 'undefined') return;
+  await deleteOfflineDatabase();
+  dbPromise = null;
+}
+
 function parseDocenteIdFromAttendanceId(id: string) {
   const parts = id.split(':');
   if (parts[0] !== 'attendance' || parts.length < 5) return '';

@@ -1,14 +1,17 @@
 import { registerSpaViewRefresh, showSpaView } from './spa-router.ts';
 import { initExcelImportWorkspaces } from './excel-import-ui.js';
+import { showAppToast } from './app-feedback.js';
 
-export function initToolsView({ onImported } = {}) {
+export function initToolsView({ onImported, getCicloLectivo } = {}) {
   const root = document.querySelector('[data-herramientas]');
   if (!root) return;
 
+  initToolsHubTabs(root);
   initToolsTabs(root);
   initSimpleExcelImport(root, onImported);
   initExcelImportWorkspaces({
-    onImported: (importType) => onImported?.(importType),
+    onImported: (importType, result) => onImported?.(importType, result),
+    getCicloLectivo,
   });
   registerSpaViewRefresh('herramientas', () => {
     const tab = root.querySelector('.tools-tab.is-active')?.getAttribute('data-tools-tab');
@@ -22,12 +25,44 @@ export function scrollToToolsSection(section) {
 }
 
 export function navigateToToolsSection(section, tab) {
-  showSpaView('herramientas');
-  if (tab) {
-    const root = document.querySelector('[data-herramientas]');
-    if (root) activateToolsTab(root, tab);
+  if (section === 'ai' || section === 'entregas' || section === 'corregir' || section === 'contenido') {
+    showSpaView('actividades');
+    window.dispatchEvent(new CustomEvent('aula-clara:open-activity-flow', {
+      detail: { tab: section === 'ai' ? 'contenido' : section },
+    }));
+    return;
   }
+  showSpaView('herramientas');
+  const root = document.querySelector('[data-herramientas]');
+  if (section === 'sync' || section === 'plan' || section === 'kit' || section === 'cuenta') {
+    activateToolsHubTab(root, 'cuenta');
+  } else {
+    activateToolsHubTab(root, 'excel');
+  }
+  if (tab && root) activateToolsTab(root, tab);
   window.requestAnimationFrame(() => scrollToToolsSection(section));
+}
+
+function initToolsHubTabs(root) {
+  root.querySelectorAll('[data-tools-hub-tab]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      activateToolsHubTab(root, tab.getAttribute('data-tools-hub-tab') || 'excel');
+    });
+  });
+}
+
+function activateToolsHubTab(root, tabId) {
+  if (!root) return;
+  root.querySelectorAll('[data-tools-hub-tab]').forEach((tab) => {
+    const active = tab.getAttribute('data-tools-hub-tab') === tabId;
+    tab.classList.toggle('is-active', active);
+    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  root.querySelectorAll('[data-tools-hub-panel]').forEach((panel) => {
+    const active = panel.getAttribute('data-tools-hub-panel') === tabId;
+    panel.classList.toggle('is-hidden', !active);
+    panel.hidden = !active;
+  });
 }
 
 function initToolsTabs(root) {
@@ -68,7 +103,7 @@ export function initSimpleExcelImport(root, onImported) {
     submit.addEventListener('click', async () => {
       const file = fileInput.files?.[0];
       if (!file) {
-        alert('Seleccioná un archivo Excel.');
+        showAppToast('Seleccioná un archivo Excel.', 'warning');
         fileInput.focus();
         return;
       }

@@ -25,7 +25,7 @@ export const STUDENT_MAPPABLE_FIELDS: Array<{
   { field: 'nombre', label: 'Nombre', required: false, hint: 'Obligatorio si no usás Apellido' },
   { field: 'dni', label: 'DNI', required: false },
   { field: 'tutor', label: 'Tutor / contacto', required: false },
-  { field: 'materias', label: 'Materias', required: false },
+  { field: 'materias', label: 'Materia', required: false, hint: 'Una o varias separadas por coma' },
 ];
 
 const FIELD_LABELS: Record<StudentMappingField, string> = {
@@ -36,7 +36,7 @@ const FIELD_LABELS: Record<StudentMappingField, string> = {
   apellido: 'Apellido',
   dni: 'DNI',
   tutor: 'Tutor',
-  materias: 'Materias',
+  materias: 'Materia',
 };
 
 export function studentFieldLabel(field: StudentMappingField) {

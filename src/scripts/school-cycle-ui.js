@@ -4,6 +4,7 @@ import {
   formatCicloLabel,
   listAvailableCycles,
 } from '../lib/school-cycle.ts';
+import { showAppToast } from './app-feedback.js';
 
 export function initSchoolCycleUi(deps) {
   const {
@@ -101,11 +102,11 @@ export function initSchoolCycleUi(deps) {
       const includeSchedules = panel.querySelector('[data-cycle-clone-schedules]')?.checked !== false;
 
       if (!Number.isFinite(sourceCiclo) || !Number.isFinite(targetCiclo)) {
-        alert('Completá los ciclos origen y destino.');
+        showAppToast('Completá los ciclos origen y destino.', 'warning');
         return;
       }
       if (sourceCiclo === targetCiclo) {
-        alert('El ciclo destino debe ser distinto al origen.');
+        showAppToast('El ciclo destino debe ser distinto al origen.', 'warning');
         return;
       }
 
@@ -117,7 +118,7 @@ export function initSchoolCycleUi(deps) {
       }).length;
 
       if (!previewCount) {
-        alert('No hay cursos en el ciclo origen para la escuela seleccionada.');
+        showAppToast('No hay cursos en el ciclo origen para la escuela seleccionada.', 'warning');
         return;
       }
 
@@ -177,7 +178,7 @@ export function initSchoolCycleUi(deps) {
           cloneResult.className = 'import-result import-result-error';
           cloneResult.textContent = error instanceof Error ? error.message : 'No se pudo clonar el ciclo.';
         } else {
-          alert(error instanceof Error ? error.message : 'No se pudo clonar el ciclo.');
+          showAppToast(error instanceof Error ? error.message : 'No se pudo clonar el ciclo.', 'error');
         }
       } finally {
         cloneSubmit.disabled = false;

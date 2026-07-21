@@ -1,21 +1,51 @@
 ---
-import ActivityAiPanel from './ActivityAiPanel.astro';
 import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
-import TrabajosEntregasPanel from './TrabajosEntregasPanel.astro';
 ---
 
 <header class="page-header">
   <div class="header-content">
     <p class="eyebrow">Avanzado</p>
-    <h1>Más herramientas</h1>
-    <p>Importación, exportación, IA y sincronización. No necesitás esto para el día a día.</p>
+    <h1>Excel y cuenta</h1>
+    <p>Importá planillas o revisá sincronización y plan. Corregir está en Actividades.</p>
   </div>
 </header>
 
-<section class="panel tools-section tools-view" data-tools-section="excel">
+<div class="tools-hub-tabs" role="tablist" aria-label="Secciones de herramientas" data-tools-hub-tabs>
+  <button
+    type="button"
+    class="tools-hub-tab is-active"
+    role="tab"
+    data-tools-hub-tab="excel"
+    aria-selected="true"
+    aria-controls="tools-hub-excel"
+    id="tools-hub-tab-excel"
+  >
+    Importar Excel
+  </button>
+  <button
+    type="button"
+    class="tools-hub-tab"
+    role="tab"
+    data-tools-hub-tab="cuenta"
+    aria-selected="false"
+    aria-controls="tools-hub-cuenta"
+    id="tools-hub-tab-cuenta"
+  >
+    Cuenta / sincronización
+  </button>
+</div>
+
+<section
+  class="tools-hub-panel"
+  id="tools-hub-excel"
+  role="tabpanel"
+  aria-labelledby="tools-hub-tab-excel"
+  data-tools-hub-panel="excel"
+  data-tools-section="excel"
+>
   <div class="section-title">
-    <h2>Excel</h2>
-    <p>Importá o exportá planillas cuando tengas muchos datos de una vez.</p>
+    <h2>Importar Excel</h2>
+    <p>Subí el archivo y confirmá las columnas.</p>
   </div>
 
   <div class="tools-tabs" role="tablist" aria-label="Tipo de importación Excel">
@@ -31,21 +61,25 @@ import TrabajosEntregasPanel from './TrabajosEntregasPanel.astro';
   </div>
 
   <div class="tools-tab-panel" id="tools-panel-alumnos" role="tabpanel" aria-labelledby="tools-tab-alumnos" data-tools-panel="alumnos">
-    <ExcelImportWorkspace importType="alumnos" />
+    <ExcelImportWorkspace
+      importType="alumnos"
+      title="Cargar alumnos"
+      description="Subí el Excel y confirmá qué columna es cada dato."
+    />
   </div>
 
   <div class="tools-tab-panel is-hidden" id="tools-panel-asistencias" role="tabpanel" aria-labelledby="tools-tab-asistencias" data-tools-panel="asistencias" hidden>
     <ExcelImportWorkspace
       importType="asistencias"
-      title="Cargar asistencias desde Excel"
-      description="Usá la planilla de tu colegio: mapeá columnas, guardá la plantilla y reutilizala en cada carga."
+      title="Cargar asistencias"
+      description="Subí la planilla de presentismo y confirmá las columnas."
       submitLabel="Importar asistencias"
     />
 
     <section class="panel export-panel" data-excel-export="asistencias">
       <div class="section-title">
-        <h3>Exportar asistencias a Excel</h3>
-        <p>Descargá el historial de presentismo. El archivo se puede reimportar arriba.</p>
+        <h3>Exportar asistencias</h3>
+        <p>Descargá el historial filtrado.</p>
       </div>
       <div class="filters-grid">
         <select data-export-school aria-label="Escuela">
@@ -65,28 +99,17 @@ import TrabajosEntregasPanel from './TrabajosEntregasPanel.astro';
   </div>
 
   <div class="tools-tab-panel is-hidden" id="tools-panel-notas" role="tabpanel" aria-labelledby="tools-tab-notas" data-tools-panel="notas" hidden>
-    <section class="panel import-panel" data-excel-import="notas">
-      <div class="section-title">
-        <h3>Cargar notas desde Excel</h3>
-        <p>Podés importar la hoja <strong>Notas</strong> de un Excel exportado desde esta app.</p>
-      </div>
-      <ul class="import-requirements">
-        <li>Columnas obligatorias: <strong>Fecha</strong>, <strong>Colegio</strong>, <strong>Curso</strong>, <strong>Turno</strong>, <strong>Materia</strong>, <strong>Alumno</strong>, <strong>Evaluacion</strong>, <strong>Calificacion</strong>.</li>
-        <li>Calificación: número del <strong>1 al 10</strong> o texto (S/C, Ausente, etc.).</li>
-        <li>Opcionales: <strong>Importancia</strong> (Alta/Media/Baja), <strong>Entrega</strong>, <strong>Motivo</strong>, <strong>Tipo</strong>, <strong>Periodo</strong>.</li>
-      </ul>
-      <div class="inline-form import-form">
-        <input type="file" accept=".xlsx,.xls" data-import-file aria-label="Archivo Excel de notas" />
-        <a class="btn btn-ghost" href="/api/import/template?type=notas" data-import-template>Descargar plantilla</a>
-        <button class="btn btn-secondary" type="button" data-import-submit>Importar notas</button>
-      </div>
-      <div class="import-result" data-import-result hidden></div>
-    </section>
+    <ExcelImportWorkspace
+      importType="notas"
+      title="Cargar notas"
+      description="Subí la planilla de calificaciones y confirmá las columnas."
+      submitLabel="Importar notas"
+    />
 
     <section class="panel export-panel" data-excel-export="notas">
       <div class="section-title">
-        <h3>Exportar notas a Excel</h3>
-        <p>Descargá calificaciones filtradas por escuela, curso, materia y rango de fechas.</p>
+        <h3>Exportar notas</h3>
+        <p>Descargá calificaciones filtradas.</p>
       </div>
       <div class="filters-grid">
         <select data-export-school aria-label="Escuela">
@@ -106,20 +129,89 @@ import TrabajosEntregasPanel from './TrabajosEntregasPanel.astro';
   </div>
 </section>
 
-<ActivityAiPanel />
+<section
+  class="tools-hub-panel is-hidden"
+  id="tools-hub-cuenta"
+  role="tabpanel"
+  aria-labelledby="tools-hub-tab-cuenta"
+  data-tools-hub-panel="cuenta"
+  hidden
+>
+  <section class="panel tools-section" data-tools-section="sync" data-sync-tools>
+    <div class="section-title">
+      <h2>Sincronización</h2>
+      <p>Los cambios se guardan solos. Tocá si ves pendientes.</p>
+    </div>
 
-<section class="panel tools-section" data-tools-section="sync" data-sync-tools>
-  <div class="section-title">
-    <h2>Sincronización</h2>
-    <p>Copiá tus datos con el servidor cuando trabajás desde varios dispositivos o sin conexión.</p>
-  </div>
+    <div class="sync-line">
+      <span class="tag" data-connection-status>Detectando...</span>
+      <small class="sync-status" data-sync-status>Todo guardado en la nube</small>
+    </div>
 
-  <div class="sync-line">
-    <span class="tag" data-connection-status>Detectando...</span>
-    <small class="sync-status" data-sync-status>0 pendientes · 0 sincronizadas · 0 con error</small>
-  </div>
+    <button class="btn btn-primary" type="button" data-sync-button>Sincronizar ahora</button>
+  </section>
 
-  <button class="btn btn-primary" type="button" data-sync-button>Sincronizar ahora</button>
+  <section class="panel tools-section" data-tools-section="plan" data-billing-plan>
+    <div class="section-title">
+      <h2>Plan</h2>
+      <p>Asistencia y notas son gratis. Pro suma kit y recuperación con IA.</p>
+    </div>
+    <div class="metric-grid" data-plan-summary></div>
+    <div class="button-row">
+      <button type="button" class="btn btn-secondary" data-plan-set="free">Plan gratis</button>
+      <button type="button" class="btn btn-secondary" data-plan-set="trial">Prueba 30 días</button>
+      <button type="button" class="btn btn-primary" data-plan-set="pro">Plan Pro (demo)</button>
+    </div>
+  </section>
+
+  <section class="panel tools-section" data-tools-section="kit" data-teacher-kit>
+    <div class="section-title">
+      <h2>Kit docente <span class="tag" data-kit-pro-badge>Pro</span></h2>
+      <p>Estatuto, planificación y salidas.</p>
+    </div>
+
+    <div class="kit-locked is-hidden" data-kit-locked>
+      <p class="muted">Disponible en plan Pro o durante la prueba.</p>
+      <button type="button" class="btn btn-secondary" data-open-plan>Ver planes</button>
+    </div>
+
+    <div class="responsive-grid" data-kit-content>
+      <article class="panel kit-card">
+        <h3>Estatuto docente</h3>
+        <p>Enlaces de normativa de uso frecuente.</p>
+        <ul class="kit-links">
+          <li><a href="https://normas.gba.gob.ar/" target="_blank" rel="noopener">Normativa PBA</a></li>
+          <li><a href="https://abc.gob.ar/" target="_blank" rel="noopener">ABC / DGCyE</a></li>
+        </ul>
+        <input type="search" data-kit-estatuto-search placeholder="Buscar…" aria-label="Buscar en kit estatuto" />
+        <ul class="kit-search-results" data-kit-estatuto-results>
+          <li>Licencias ordinarias y extraordinarias</li>
+          <li>Licencia por maternidad / adopción</li>
+          <li>Licencia sin goce de haberes</li>
+          <li>Artículo / resolución citada por dirección</li>
+        </ul>
+      </article>
+
+      <article class="panel kit-card">
+        <h3>Planificación</h3>
+        <p>Plantilla base de unidad.</p>
+        <button type="button" class="btn btn-secondary" data-download-planificacion>Descargar plantilla</button>
+      </article>
+
+      <article class="panel kit-card">
+        <h3>Salidas educativas</h3>
+        <p>Solicitud y recordatorio para el calendario.</p>
+        <button type="button" class="btn btn-secondary" data-download-salida>Descargar solicitud</button>
+        <button type="button" class="btn btn-ghost" data-spa-nav="actividades">Ir a Actividades</button>
+      </article>
+
+      <article class="panel kit-card" data-curriculum-card>
+        <h3>Diseño curricular</h3>
+        <p>Ayuda liviana por materia para recuperatorios.</p>
+        <select data-curriculum-subject aria-label="Materia curricular"></select>
+        <pre class="curriculum-preview" data-curriculum-preview>Elegí una materia.</pre>
+        <button type="button" class="btn btn-primary" data-recovery-ai-goto data-spa-nav="actividades" data-activity-flow-open="contenido">Generar recuperación con IA</button>
+      </article>
+    </div>
+  </section>
 </section>
-
-<TrabajosEntregasPanel />

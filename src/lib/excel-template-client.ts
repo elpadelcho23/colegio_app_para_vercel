@@ -102,7 +102,7 @@ export function findBestExcelTemplate(templates: ExcelTemplateRecord[], headers:
 }
 
 export function validateMappingClient(
-  importType: 'alumnos' | 'asistencias',
+  importType: 'alumnos' | 'asistencias' | 'notas',
   mapping: { columns?: Record<string, number | null> },
   fields: MappableField[],
 ) {
@@ -125,7 +125,7 @@ export function validateMappingClient(
 }
 
 export function computeMappingProgress(
-  importType: 'alumnos' | 'asistencias',
+  importType: 'alumnos' | 'asistencias' | 'notas',
   mapping: { columns?: Record<string, number | null> },
   fields: MappableField[],
 ) {
@@ -158,8 +158,10 @@ export function computeMappingProgress(
   };
 }
 
-export function suggestTemplateName(fileName = '', importType: 'alumnos' | 'asistencias' = 'alumnos') {
+export function suggestTemplateName(fileName = '', importType: 'alumnos' | 'asistencias' | 'notas' = 'alumnos') {
   const base = String(fileName).replace(/\.(xlsx|xls)$/i, '').trim();
   if (base) return `Planilla ${base}`;
-  return importType === 'alumnos' ? 'Plantilla alumnos' : 'Plantilla asistencias';
+  if (importType === 'asistencias') return 'Plantilla asistencias';
+  if (importType === 'notas') return 'Plantilla notas';
+  return 'Plantilla alumnos';
 }

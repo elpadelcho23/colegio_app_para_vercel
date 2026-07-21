@@ -61,8 +61,25 @@ const initialView = spaEnabled
         <slot />
       )}
     </div>
+    <div
+      class="app-toast is-hidden"
+      data-app-toast
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      hidden
+    ></div>
     <script define:vars={{ user, initialView, spaEnabled }}>
-      window.__AULA_CLARA_USER__ = user;
+      window.__AULA_CLARA_USER__ = user
+        ? {
+            id: user.id,
+            tenant_id: user.tenant_id,
+            nombre: user.nombre,
+            email: user.email,
+            rol: user.rol,
+            isGuest: Boolean(user.is_guest),
+          }
+        : null;
       window.__AULA_CLARA_SPA__ = { enabled: spaEnabled, initialView };
     </script>
     <script>

@@ -239,3 +239,11 @@ CREATE INDEX IF NOT EXISTS idx_asistencias_tenant_docente_fecha ON asistencias(t
 CREATE INDEX IF NOT EXISTS idx_notas_tenant_docente_fecha ON notas(tenant_id, docente_id, fecha);
 CREATE INDEX IF NOT EXISTS idx_calendario_tenant_fecha ON calendario_eventos(tenant_id, fecha_inicio);
 CREATE INDEX IF NOT EXISTS idx_actividades_tenant_contexto ON actividades(tenant_id, colegio, turno, curso_id, materia_id);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  tenant_id TEXT PRIMARY KEY,
+  plan TEXT NOT NULL DEFAULT 'trial' CHECK (plan IN ('free', 'trial', 'pro')),
+  trial_ends_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);

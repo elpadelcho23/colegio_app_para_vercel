@@ -12,14 +12,14 @@ const { spaMode = false } = Astro.props;
   <div class="header-content">
     <p class="eyebrow">Control diario</p>
     <h1>Toma de asistencia</h1>
-    <p>Filtrá por fecha, curso y materia para marcar presentes o ausentes.</p>
+    <p>Pasá lista del curso elegido arriba.</p>
   </div>
   <div class="actions-group">
-    <button class="btn btn-primary btn-block" type="button" data-attendance-view-toggle>Ver asistencias</button>
+    <button class="btn btn-secondary btn-block" type="button" data-attendance-view-toggle>Ver asistencias</button>
     {spaMode ? (
-      <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block">Ver notas</button>
+      <button type="button" data-spa-nav="notas" class="btn btn-ghost btn-block">Ver notas</button>
     ) : (
-      <a class="btn btn-secondary btn-block" href="/notas">Ver notas</a>
+      <a class="btn btn-ghost btn-block" href="/notas">Ver notas</a>
     )}
   </div>
 </header>
@@ -28,14 +28,17 @@ const { spaMode = false } = Astro.props;
   <div class="filters-grid">
     <input type="date" data-attendance-date aria-label="Fecha" />
     <select data-filter-course aria-label="Curso"></select>
-    <select data-filter-subject aria-label="Materia"></select>
+    <div class="filter-field">
+      <select data-filter-subject aria-label="Materia"></select>
+      <small class="field-error" data-attendance-subject-error hidden></small>
+    </div>
   </div>
 
   <section class="summary-strip" data-attendance-summary></section>
 
   <div class="section-title">
     <h2>Alumnos</h2>
-    <p>Marcá presente o ausente y confirmá con el botón de guardar.</p>
+    <p>Presente o ausente, y después Guardar.</p>
   </div>
   <div class="list" data-attendance-list></div>
 
@@ -52,12 +55,12 @@ const { spaMode = false } = Astro.props;
 <section class="panel is-hidden" data-attendance-history-view>
   <div class="section-title">
     <h2>Registro de asistencias</h2>
-    <p>Historial ordenado por colegio, curso, fecha y materia. Mínimo 75% para acreditar.</p>
+    <p>Historial filtrado. Acredita con ≥75%.</p>
   </div>
 
   <div class="filters-grid">
-    <select data-history-filter-school aria-label="Colegio">
-      <option value="">Todos los colegios</option>
+    <select data-history-filter-school aria-label="Escuela">
+      <option value="">Todas las escuelas</option>
     </select>
     <select data-history-filter-course aria-label="Curso">
       <option value="">Todos los cursos</option>
@@ -81,14 +84,28 @@ const { spaMode = false } = Astro.props;
     <p>Porcentaje de asistencia y estado de acreditación según los filtros.</p>
   </div>
   <div class="table-container" data-attendance-history-averages></div>
+
+  <div class="section-title">
+    <h3>Planilla del mes</h3>
+    <p>Vista alumno × día. Ajustá el umbral de acreditación si tu escuela usa otro porcentaje.</p>
+  </div>
+  <div class="filters-grid" data-attendance-matrix-filters>
+    <input type="month" data-attendance-matrix-month aria-label="Mes" />
+    <label class="threshold-field">
+      <span>Umbral % para acreditar</span>
+      <input type="number" min="50" max="100" step="1" data-attendance-threshold aria-label="Umbral de asistencia" />
+    </label>
+    <button type="button" class="btn btn-secondary" data-attendance-matrix-export>Exportar planilla CSV</button>
+  </div>
+  <div class="table-container attendance-matrix-wrap" data-attendance-matrix></div>
 </section>
 
 <p class="tools-nav-link-wrap">
   {spaMode ? (
     <button type="button" class="tools-nav-link" data-tools-focus="excel" data-tools-tab="asistencias">
-      ¿Tenés planilla Excel? Importá o exportá asistencias en Más herramientas →
+      ¿Tenés planilla Excel? Importá o exportá en Excel y cuenta →
     </button>
   ) : (
-    <a class="tools-nav-link" href="/herramientas">¿Tenés planilla Excel? Importá o exportá asistencias en Más herramientas →</a>
+    <a class="tools-nav-link" href="/herramientas">¿Tenés planilla Excel? Importá o exportá en Excel y cuenta →</a>
   )}
 </p>

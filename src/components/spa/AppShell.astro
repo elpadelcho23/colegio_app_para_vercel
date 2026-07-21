@@ -1,9 +1,11 @@
 ﻿---
 import AttendanceView from '../AttendanceView.astro';
+import ActivityAiPanel from '../ActivityAiPanel.astro';
 import ExcelImportWorkspace from '../ExcelImportWorkspace.astro';
 import GradesView from '../GradesView.astro';
 import SchoolCyclePanel from '../SchoolCyclePanel.astro';
 import ToolsView from '../ToolsView.astro';
+import TrabajosEntregasPanel from '../TrabajosEntregasPanel.astro';
 
 interface Props {
   initialView?: string;
@@ -37,41 +39,56 @@ const { initialView = 'panel' } = Astro.props;
       Completar configuración
     </button>
 
-    <section class="hero-card" data-panel-hero>
-      <p class="eyebrow">Hoy</p>
-      <h1>Panel del día</h1>
-
-      <div class="context-banner" data-context-banner>
-        <strong>Contexto sugerido</strong>
-        <p data-context-summary>Configurá tu horario para sugerencias.</p>
+    <section class="panel product-tour-invite is-hidden" data-product-tour-invite hidden>
+      <div class="section-title">
+        <h2>¿Un minuto?</h2>
+        <p>Te mostramos Asistencia y Notas. Es opcional.</p>
       </div>
-
-      <div class="hero-actions">
-        <button type="button" data-spa-nav="asistencia" class="btn btn-primary btn-block" >Tomar asistencia</button>
-        <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block" >Cargar calificaciones</button>
-        <button type="button" data-spa-nav="actividades" class="btn btn-secondary btn-block" >Ver actividades</button>
+      <div class="button-row">
+        <button type="button" class="btn btn-primary" data-product-tour-start>Ver tour</button>
+        <button type="button" class="btn btn-ghost" data-product-tour-skip>Ahora no</button>
       </div>
     </section>
 
-    <section class="panel">
-      <div class="section-title">
-        <h2>Resumen del día</h2>
-        <p>Filtros rápidos para ver asistencia, cursos y alertas del contexto actual.</p>
+    <section class="hero-card" data-panel-hero>
+      <p class="eyebrow">Hoy</p>
+      <h1 data-panel-today-title>Hoy: elegí curso arriba</h1>
+      <p class="hero-help">Tareas del curso actual del encabezado.</p>
+
+      <div class="hero-actions hero-actions--triple">
+        <button type="button" data-spa-nav="asistencia" class="btn btn-primary hero-cta">Asistencia</button>
+        <button type="button" data-spa-nav="notas" class="btn btn-secondary hero-cta">Notas</button>
+        <button type="button" data-spa-nav="actividades" class="btn btn-secondary hero-cta">Actividades de hoy</button>
       </div>
-      <div class="filters-grid" data-dashboard-filters>
-        <select name="escuela" aria-label="Escuela"></select>
-        <select name="curso" aria-label="Curso"></select>
-        <select name="materia" aria-label="Materia"></select>
+    </section>
+
+    <section class="panel panel-day-summary">
+      <div class="section-title">
+        <h2>Resumen</h2>
+        <p>Números del curso elegido arriba.</p>
       </div>
       <div class="metric-grid" data-dashboard></div>
       <div data-alerts></div>
+      <div class="button-row summary-actions">
+        <button type="button" class="btn btn-secondary" data-print-course-notes>Imprimir notas del curso</button>
+      </div>
     </section>
 
-    <section class="panel" data-teacher-context>
+    <section class="panel" data-seguimiento>
       <div class="section-title">
-        <h2>Mi horario</h2>
-        <p>Bloques habituales para sugerir curso y materia al iniciar cada tarea.</p>
+        <h2>Seguimiento</h2>
+        <p>Quién no acredita asistencia o debe trabajos.</p>
       </div>
+      <div class="list" data-seguimiento-list></div>
+    </section>
+
+    <details class="panel panel-collapsible" data-teacher-context>
+      <summary class="panel-collapsible-summary">
+        <span class="section-title">
+          <h2>Mi horario</h2>
+          <p>Bloques habituales para sugerir el curso del día.</p>
+        </span>
+      </summary>
       <form class="form-grid" data-context-form>
         <fieldset class="day-picker">
           <legend>Días</legend>
@@ -82,6 +99,7 @@ const { initialView = 'panel' } = Astro.props;
             <label><input type="checkbox" name="dias" value="4" /> Jue</label>
             <label><input type="checkbox" name="dias" value="5" /> Vie</label>
           </div>
+          <small class="field-error" data-context-days-error hidden></small>
         </fieldset>
 
         <div class="input-group full-width">
@@ -96,7 +114,7 @@ const { initialView = 'panel' } = Astro.props;
         <button class="btn btn-primary" type="submit">Guardar bloque</button>
       </form>
       <div class="list" data-context-list></div>
-    </section>
+    </details>
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="registro" data-spa-title="Registro de alumnos" data-students>
@@ -140,18 +158,20 @@ const { initialView = 'panel' } = Astro.props;
             </div>
 
             <div class="input-group full-width">
-              <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /></label>
+              <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /><small class="field-error" hidden></small></label>
               <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
             </div>
 
             <label class="full-width">
               <span>Escuela</span>
               <select name="escuela" data-student-school required></select>
+              <small class="field-error" hidden></small>
             </label>
 
             <label class="full-width">
               <span>Curso</span>
               <select name="cursoId" required></select>
+              <small class="field-error" hidden></small>
             </label>
 
             <fieldset class="subject-picker">
@@ -187,7 +207,7 @@ const { initialView = 'panel' } = Astro.props;
 
       <p class="tools-nav-link-wrap">
         <button type="button" class="tools-nav-link" data-tools-focus="excel" data-tools-tab="alumnos">
-          ¿Muchos alumnos? Importá desde Excel en Más herramientas →
+          ¿Muchos alumnos? Importá desde Excel y cuenta →
         </button>
       </p>
     </section>
@@ -225,11 +245,13 @@ const { initialView = 'panel' } = Astro.props;
           <select name="escuela" data-course-school required>
             <option value="">Seleccionar escuela</option>
           </select>
+          <small class="field-error" hidden></small>
         </label>
 
         <label class="full-width">
           <span>Curso</span>
           <input name="nombre" placeholder="Ej: 6to 1ra" required />
+          <small class="field-error" hidden></small>
         </label>
 
         <label class="full-width">
@@ -240,6 +262,7 @@ const { initialView = 'panel' } = Astro.props;
             <option>Tarde</option>
             <option>Noche</option>
           </select>
+          <small class="field-error" hidden></small>
         </label>
 
         <button class="btn btn-primary btn-block" type="submit">Crear curso</button>
@@ -281,74 +304,92 @@ const { initialView = 'panel' } = Astro.props;
     <GradesView spaMode />
   </section>
 
-  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="actividades" data-spa-title="Actividades" data-activities data-calendar>
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="actividades" data-spa-title="Actividades" data-activities data-calendar data-inherit-global-context>
 <header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Agenda docente</p>
-        <h1>Actividades y calendario</h1>
-        <p>Avisos de evaluación, TP y fechas importantes en una sola pantalla.</p>
+        <h1>Actividades</h1>
+        <p>Creá, recibí entregas y corregí del curso de arriba.</p>
       </div>
-      <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block" >Ir a calificaciones</button>
+      <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block">Ir a calificaciones</button>
     </header>
 
-    <section class="responsive-grid is-balanced">
-      <section class="panel activity-workspace" data-activity-workspace>
-        <div class="section-title">
-          <h2>Realizar actividades</h2>
-          <p>Creá evaluaciones y TP. Completá colegio, curso y materia antes de guardar o generar con IA.</p>
-        </div>
+    <p class="activity-context-hint" data-activity-context-hint>Elegí curso y materia en “Curso actual” arriba.</p>
 
-        <form class="form-grid" data-activity-form>
-          <div class="input-group full-width">
-            <label><span>Colegio</span><select name="colegio" required></select></label>
-            <label><span>Turno</span><select name="turno" required></select></label>
-            <label><span>Curso</span><select name="cursoId" required></select></label>
-            <label><span>Materia</span><select name="materiaId" required></select></label>
+    <div class="activity-flow-tabs" role="tablist" aria-label="Flujo de actividades" data-activity-flow-tabs>
+      <button type="button" class="activity-flow-tab is-active" role="tab" data-activity-flow-tab="contenido" aria-selected="true" aria-controls="activity-flow-contenido" id="activity-tab-contenido">
+        Contenido
+      </button>
+      <button type="button" class="activity-flow-tab" role="tab" data-activity-flow-tab="entregas" aria-selected="false" aria-controls="activity-flow-entregas" id="activity-tab-entregas">
+        Entregas
+      </button>
+      <button type="button" class="activity-flow-tab" role="tab" data-activity-flow-tab="corregir" aria-selected="false" aria-controls="activity-flow-corregir" id="activity-tab-corregir">
+        Corregir
+      </button>
+    </div>
+
+    <section class="activity-flow-panel" id="activity-flow-contenido" role="tabpanel" aria-labelledby="activity-tab-contenido" data-activity-flow-panel="contenido">
+      <section class="responsive-grid is-balanced">
+        <section class="panel activity-workspace" data-activity-workspace>
+          <div class="section-title">
+            <h2>Crear actividad</h2>
+            <p>Evaluación o TP a mano; IA más abajo.</p>
           </div>
 
-          <label class="full-width">
-            <span>Título</span>
-            <input name="titulo" placeholder="Ej: Evaluación integradora" required />
-          </label>
-
-          <div class="input-group full-width">
-            <label><span>Publicación</span><input type="date" name="fechaPublicacion" /></label>
-            <label><span>Entrega</span><input type="date" name="fechaVencimiento" /></label>
-          </div>
-
-          <div class="activity-mode-panel full-width" data-activity-mode-panel="manual">
-            <div class="activity-template-picker full-width" role="radiogroup">
-              <label class="template-card"><input type="radio" name="tipo" value="evaluacion" checked /> <strong>Evaluación</strong></label>
-              <label class="template-card"><input type="radio" name="tipo" value="tp" /> <strong>TP</strong></label>
+          <form class="form-grid" data-activity-form>
+            <div class="input-group full-width activity-local-context">
+              <label><span>Escuela</span><select name="colegio" required></select><small class="field-error" hidden></small></label>
+              <label><span>Turno</span><select name="turno" required></select><small class="field-error" hidden></small></label>
+              <label><span>Curso</span><select name="cursoId" required></select><small class="field-error" hidden></small></label>
+              <label><span>Materia</span><select name="materiaId" required></select><small class="field-error" hidden></small></label>
             </div>
 
-            <section class="activity-editor full-width" data-activity-editor></section>
+            <label class="full-width">
+              <span>Título</span>
+              <input name="titulo" placeholder="Ej: Evaluación integradora" required />
+              <small class="field-error" hidden></small>
+            </label>
 
-            <div class="button-row full-width">
-              <button class="btn btn-secondary" type="button" id="btn-descargar-word">Word</button>
-              <button class="btn btn-secondary" type="button" id="btn-descargar-pdf">PDF</button>
-              <button class="btn btn-primary" type="submit">Guardar actividad</button>
+            <div class="input-group full-width">
+              <label><span>Publicación</span><input type="date" name="fechaPublicacion" /></label>
+              <label><span>Entrega</span><input type="date" name="fechaVencimiento" /></label>
             </div>
+
+            <div class="activity-mode-panel full-width" data-activity-mode-panel="manual">
+              <div class="activity-template-picker full-width" role="radiogroup">
+                <label class="template-card"><input type="radio" name="tipo" value="evaluacion" checked /> <strong>Evaluación</strong></label>
+                <label class="template-card"><input type="radio" name="tipo" value="tp" /> <strong>TP</strong></label>
+              </div>
+
+              <section class="activity-editor full-width" data-activity-editor></section>
+
+              <div class="button-row full-width">
+                <button class="btn btn-secondary" type="button" id="btn-descargar-word">Word</button>
+                <button class="btn btn-secondary" type="button" id="btn-descargar-pdf">PDF</button>
+                <button class="btn btn-primary" type="submit">Guardar actividad</button>
+              </div>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="section-title">
+            <h2>Actividades preparadas</h2>
+            <p>Enviá un TP o examen ya cargado a otro curso o turno.</p>
           </div>
-        </form>
-
-        <p class="tools-nav-link-wrap">
-          <button type="button" class="tools-nav-link" data-tools-focus="ai">
-            Generar con IA → Más herramientas
-          </button>
-          <button type="button" class="tools-nav-link" data-tools-focus="entregas">
-            Gestionar entregas de alumnos → Más herramientas
-          </button>
-        </p>
+          <div class="list" data-activity-list></div>
+        </section>
       </section>
 
-      <section class="panel">
-        <div class="section-title">
-          <h2>Actividades preparadas</h2>
-          <p>Enviá un TP, examen o actividad ya cargada a otro curso o turno.</p>
-        </div>
-        <div class="list" data-activity-list></div>
-      </section>
+      <ActivityAiPanel />
+    </section>
+
+    <section class="activity-flow-panel is-hidden" id="activity-flow-entregas" role="tabpanel" aria-labelledby="activity-tab-entregas" data-activity-flow-panel="entregas" data-entregas-root hidden>
+      <TrabajosEntregasPanel mode="entregas" />
+    </section>
+
+    <section class="activity-flow-panel is-hidden" id="activity-flow-corregir" role="tabpanel" aria-labelledby="activity-tab-corregir" data-activity-flow-panel="corregir" data-corregir-root hidden>
+      <TrabajosEntregasPanel mode="corregir" />
     </section>
 
     <section class="calendar-wrapper">
@@ -386,7 +427,7 @@ const { initialView = 'panel' } = Astro.props;
         <input type="hidden" name="actividadId" />
 
         <div class="input-group full-width">
-          <label><span>Colegio</span><select name="colegio" data-enviar-colegio required></select></label>
+          <label><span>Escuela</span><select name="colegio" data-enviar-colegio required></select></label>
           <label><span>Turno</span><select name="turno" data-enviar-turno required></select></label>
         </div>
 
@@ -432,7 +473,7 @@ const { initialView = 'panel' } = Astro.props;
     </dialog>
   </section>
 
-  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="herramientas" data-spa-title="Más herramientas" data-herramientas>
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="herramientas" data-spa-title="Excel y cuenta" data-herramientas>
     <ToolsView />
   </section>
 </div>

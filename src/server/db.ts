@@ -23,6 +23,7 @@ export interface User {
   nombre: string;
   email: string;
   rol: 'admin' | 'docente';
+  is_guest?: boolean;
 }
 
 export function createTenant(nombre: string, id = `tenant-${randomBytes(8).toString('hex')}`) {
@@ -41,11 +42,89 @@ export function createUser(user: Omit<User, 'id' | 'tenant_id'> & { password: st
   const id = `docente-${randomBytes(8).toString('hex')}`;
   const tenantId = user.tenant_id || createTenant(`Cuenta de ${user.nombre.trim() || email}`);
   db.prepare(`
-    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
+    VALUES (?, ?, ?, ?, ?, ?, 0)
   `).run(id, tenantId, user.nombre.trim(), email, bcrypt.hashSync(user.password, 12), user.rol);
 
-  return { id, tenant_id: tenantId, nombre: user.nombre.trim(), email, rol: user.rol } as User;
+  return { id, tenant_id: tenantId, nombre: user.nombre.trim(), email, rol: user.rol, is_guest: false } as User;
+}
+
+/** Cuenta efímera aislada: tenant propio, sin persistencia entre visitas. */
+export function createGuestUser(): User {
+  const suffix = randomBytes(8).toString('hex');
+  const id = `guest-${suffix}`;
+  const email = `guest-${suffix}@guest.local`;
+  const tenantId = createTenant(`Invitado ${suffix}`);
+  const password = randomBytes(24).toString('base64url');
+
+  db.prepare(`
+    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
+    VALUES (?, ?, ?, ?, ?, 'docente', 1)
+  `).run(id, tenantId, 'Invitado', email, bcrypt.hashSync(password, 10));
+
+  return {
+    id,
+    tenant_id: tenantId,
+    nombre: 'Invitado',
+    email,
+    rol: 'docente',
+    is_guest: true,
+  };
+}
+
+export function getUserById(userId: string): User | null {
+  const row = db.prepare(`
+    SELECT id, tenant_id, nombre, email, rol, COALESCE(is_guest, 0) AS is_guest
+    FROM usuarios
+    WHERE id = ?
+  `).get(userId) as (Omit<User, 'is_guest'> & { is_guest: number }) | undefined;
+
+  if (!row) return null;
+  return {
+    id: row.id,
+    tenant_id: row.tenant_id,
+    nombre: row.nombre,
+    email: row.email,
+    rol: row.rol,
+    is_guest: Boolean(row.is_guest),
+  };
+}
+
+/**
+ * Elimina usuario invitado + tenant (y datos asociados por CASCADE).
+ * No-op si el usuario no existe o no es invitado.
+ */
+export function purgeGuestAccount(userId: string) {
+  const user = getUserById(userId);
+  if (!user?.is_guest) return false;
+
+  const purge = db.transaction(() => {
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM usuarios WHERE id = ? AND is_guest = 1').run(userId);
+    db.prepare('DELETE FROM tenants WHERE id = ?').run(user.tenant_id);
+  });
+  purge();
+  return true;
+}
+
+/** Borra invitados sin sesión vigente (cierres abruptos / cookies vencidas). */
+export function purgeExpiredGuestAccounts() {
+  const rows = db.prepare(`
+    SELECT u.id
+    FROM usuarios u
+    WHERE COALESCE(u.is_guest, 0) = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM sessions s
+        WHERE s.user_id = u.id
+          AND s.expires_at > datetime('now')
+      )
+  `).all() as Array<{ id: string }>;
+
+  let purged = 0;
+  for (const row of rows) {
+    if (purgeGuestAccount(row.id)) purged += 1;
+  }
+  return purged;
 }
 
 db.exec(`
@@ -271,6 +350,8 @@ db.exec(`
     estado TEXT NOT NULL DEFAULT 'enviado' CHECK (estado IN ('enviado', 'calificado')),
     nota_id TEXT,
     observaciones TEXT,
+    correccion_json TEXT,
+    corregido_at TEXT,
     submitted_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -324,6 +405,8 @@ db.exec(`
 migrateTenancy();
 migrateAcademicStructure();
 migrateAlumnosDniTenancy();
+migrateTrabajoCorreccion();
+migrateGuestFlag();
 createIndexes();
 seed();
 
@@ -334,6 +417,15 @@ function tableColumns(table: string) {
 function ensureColumn(table: string, column: string, ddl: string) {
   if (tableColumns(table).some((item) => item.name === column)) return;
   db.prepare(`ALTER TABLE ${table} ADD COLUMN ${ddl}`).run();
+}
+
+function migrateTrabajoCorreccion() {
+  ensureColumn('trabajo_entregas', 'correccion_json', 'correccion_json TEXT');
+  ensureColumn('trabajo_entregas', 'corregido_at', 'corregido_at TEXT');
+}
+
+function migrateGuestFlag() {
+  ensureColumn('usuarios', 'is_guest', 'is_guest INTEGER NOT NULL DEFAULT 0');
 }
 
 function tableSql(table: string) {
@@ -517,8 +609,8 @@ function insertUser(user: User & { password: string }) {
   if (exists) return;
 
   db.prepare(`
-    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol)
-    VALUES (@id, @tenant_id, @nombre, @email, @password_hash, @rol)
+    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
+    VALUES (@id, @tenant_id, @nombre, @email, @password_hash, @rol, 0)
   `).run({
     ...user,
     password_hash: bcrypt.hashSync(user.password, 12),

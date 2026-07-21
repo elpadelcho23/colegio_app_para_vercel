@@ -2,7 +2,12 @@ import { defineMiddleware } from 'astro:middleware';
 import { getUserFromToken, SESSION_COOKIE } from './server/auth';
 import { startBackupScheduler } from './server/backup';
 
-const publicApiRoutes = new Set(['/api/auth/login', '/api/auth/logout', '/api/auth/register']);
+const publicApiRoutes = new Set([
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/register',
+  '/api/auth/guest',
+]);
 const publicPageRoutes = new Set(['/login', '/register']);
 const protectedPagePrefixes = ['/asistencia', '/notas', '/actividades', '/cursos', '/materias', '/registro', '/admin'];
 startBackupScheduler();

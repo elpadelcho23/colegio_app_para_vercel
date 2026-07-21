@@ -1,16 +1,29 @@
 ---
 import { TRABAJO_UPLOAD_LIMITS } from '../lib/trabajo-upload-limits';
+
+interface Props {
+  mode?: 'entregas' | 'corregir';
+}
+
+const { mode = 'entregas' } = Astro.props;
+const isCorregir = mode === 'corregir';
 ---
 
-<section class="panel tools-section" data-tools-section="entregas">
+<section class="panel tools-section" data-tools-section="entregas" data-entregas-panel={mode}>
   <div class="section-title">
-    <h2>Entregas de alumnos</h2>
-    <p>Subí trabajos entregados (PDF, Word, imágenes, TXT) vinculados a una actividad del curso.</p>
+    <h2>{isCorregir ? 'Corregir entregas' : 'Entregas de alumnos'}</h2>
+    <p>
+      {
+        isCorregir
+          ? 'Usá Corregir con IA en entregas digitales (PDF, DOCX o TXT) del curso actual.'
+          : 'Subí trabajos entregados (PDF, Word, TXT o imágenes) vinculados a una actividad del curso actual.'
+      }
+    </p>
   </div>
 
   <form class="form-grid context-workbar" data-trabajo-context-form>
     <div class="input-group full-width">
-      <label><span>Colegio</span><select name="colegio" required></select></label>
+      <label><span>Escuela</span><select name="colegio" required></select></label>
       <label><span>Turno</span><select name="turno" required></select></label>
       <label><span>Curso</span><select name="cursoId" required></select></label>
       <label><span>Materia</span><select name="materiaId" required></select></label>
@@ -18,65 +31,77 @@ import { TRABAJO_UPLOAD_LIMITS } from '../lib/trabajo-upload-limits';
   </form>
 
   <div class="activity-mode-panel full-width" data-activity-mode-panel="cargar">
-    <form
-      class="form-grid full-width"
-      data-trabajo-upload-form
-      data-max-files={TRABAJO_UPLOAD_LIMITS.maxFiles}
-      data-max-file-mb={TRABAJO_UPLOAD_LIMITS.maxFileMb}
-    >
-      <label class="full-width">
-        <span>Actividad del curso</span>
-        <select name="actividadId" data-trabajo-actividad-select required>
-          <option value="">Elegí una actividad</option>
-        </select>
-      </label>
+    {!isCorregir && (
+      <form
+        class="form-grid full-width"
+        data-trabajo-upload-form
+        data-max-files={TRABAJO_UPLOAD_LIMITS.maxFiles}
+        data-max-file-mb={TRABAJO_UPLOAD_LIMITS.maxFileMb}
+      >
+        <label class="full-width">
+          <span>Actividad del curso</span>
+          <select name="actividadId" data-trabajo-actividad-select required>
+            <option value="">Elegí una actividad</option>
+          </select>
+        </label>
 
-      <label class="full-width">
-        <span>Alumno (opcional)</span>
-        <select name="alumnoId" data-trabajo-alumno-select>
-          <option value="">Sin alumno específico</option>
-        </select>
-      </label>
+        <label class="full-width">
+          <span>Alumno (opcional)</span>
+          <select name="alumnoId" data-trabajo-alumno-select>
+            <option value="">Sin alumno específico</option>
+          </select>
+        </label>
 
-      <label class="full-width">
-        <span>Título del trabajo</span>
-        <input name="titulo" placeholder="Ej: TP HTML - Martina Ruiz" required />
-      </label>
+        <label class="full-width">
+          <span>Título del trabajo</span>
+          <input name="titulo" placeholder="Ej: TP HTML - Martina Ruiz" required />
+        </label>
 
-      <label class="full-width">
-        <span>Archivos</span>
-        <input
-          type="file"
-          name="archivos"
-          multiple
-          required
-          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.gif,.txt,application/pdf,image/*,text/plain"
-          data-trabajo-files
-        />
-        <small class="muted">
-          Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} archivos · {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u
-        </small>
-      </label>
+        <label class="full-width">
+          <span>Archivos</span>
+          <input
+            type="file"
+            name="archivos"
+            multiple
+            required
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.gif,.txt,application/pdf,image/*,text/plain"
+            data-trabajo-files
+          />
+          <small class="muted">
+            Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} archivos · {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u
+          </small>
+        </label>
 
-      <label class="full-width">
-        <span>Observaciones (opcional)</span>
-        <input name="observaciones" placeholder="Ej: entrega en papel y digital" />
-      </label>
+        <label class="full-width">
+          <span>Observaciones (opcional)</span>
+          <input name="observaciones" placeholder="Ej: entrega en papel y digital" />
+        </label>
 
-      <div class="ai-file-feedback full-width is-hidden" data-trabajo-file-feedback aria-live="polite"></div>
+        <div class="ai-file-feedback full-width is-hidden" data-trabajo-file-feedback aria-live="polite"></div>
 
-      <button class="btn btn-primary btn-block" type="submit" data-trabajo-submit>Cargar trabajo</button>
-    </form>
+        <button class="btn btn-primary btn-block" type="submit" data-trabajo-submit>Cargar trabajo</button>
+      </form>
+    )}
 
     <section class="full-width">
       <div class="section-title">
-        <h3>Trabajos cargados en este curso</h3>
+        <h3>{isCorregir ? 'Entregas para corregir' : 'Trabajos cargados en este curso'}</h3>
       </div>
       <div class="filters-grid">
         <select data-trabajo-estado-filter aria-label="Estado de calificación">
-          <option value="">Todos</option>
-          <option value="enviado">Pendiente de calificar</option>
-          <option value="calificado">Calificado</option>
+          {isCorregir ? (
+            <>
+              <option value="enviado" selected>Pendiente de calificar</option>
+              <option value="calificado">Ya calificado</option>
+              <option value="">Todas</option>
+            </>
+          ) : (
+            <>
+              <option value="">Todos</option>
+              <option value="enviado">Pendiente de calificar</option>
+              <option value="calificado">Calificado</option>
+            </>
+          )}
         </select>
       </div>
       <div class="list" data-trabajo-history></div>

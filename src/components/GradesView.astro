@@ -10,10 +10,11 @@ const { spaMode = false } = Astro.props;
   <div class="header-content">
     <p class="eyebrow">Calificaciones</p>
     <h1>Carga de notas</h1>
-    <p>Calificá a todo el curso de una vez según escuela, turno, materia y actividad.</p>
+    <p>Calificá al curso elegido arriba.</p>
   </div>
   <div class="actions-group">
-    <button class="btn btn-primary btn-block" type="button" data-grades-view-toggle>Ver calificaciones</button>
+    <button class="btn btn-secondary btn-block" type="button" data-grades-view-toggle>Ver calificaciones</button>
+    <button class="btn btn-ghost btn-block" type="button" data-print-course-notes>Imprimir notas del curso</button>
   </div>
 </header>
 
@@ -28,14 +29,17 @@ const { spaMode = false } = Astro.props;
         <option value="">Todas las escuelas</option>
       </select>
       <select data-grade-course-filter aria-label="Curso"></select>
-      <select data-grade-subject-filter aria-label="Materia"></select>
+      <div class="filter-field">
+        <select data-grade-subject-filter aria-label="Materia"></select>
+        <small class="field-error" data-grade-subject-error hidden></small>
+      </div>
     </div>
   </section>
 
   <section class="panel">
     <div class="section-title">
       <h2>Actividades del contexto</h2>
-      <p>TPs y evaluaciones con escuela, turno, curso, materia y fechas. Tocá una actividad para cargar la evaluación.</p>
+      <p>Tocá una actividad para cargar sus notas.</p>
     </div>
 
     <div class="filters-grid">
@@ -62,7 +66,7 @@ const { spaMode = false } = Astro.props;
     <form class="form-grid" data-grade-meta-form>
       <div class="section-title full-width">
         <h2>Cargar evaluación</h2>
-        <p>Completá los datos de la evaluación y asigná la nota a cada alumno del listado.</p>
+        <p>Datos de la evaluación y nota por alumno.</p>
       </div>
 
       <input type="hidden" name="subjectId" />
@@ -189,9 +193,9 @@ const { spaMode = false } = Astro.props;
 <p class="tools-nav-link-wrap">
   {spaMode ? (
     <button type="button" class="tools-nav-link" data-tools-focus="excel" data-tools-tab="notas">
-      ¿Tenés planilla Excel? Importá o exportá notas en Más herramientas →
+      ¿Tenés planilla Excel? Importá o exportá en Excel y cuenta →
     </button>
   ) : (
-    <a class="tools-nav-link" href="/herramientas">¿Tenés planilla Excel? Importá o exportá notas en Más herramientas →</a>
+    <a class="tools-nav-link" href="/herramientas">¿Tenés planilla Excel? Importá o exportá en Excel y cuenta →</a>
   )}
 </p>

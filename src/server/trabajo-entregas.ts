@@ -64,6 +64,8 @@ export function listTrabajoEntregas(user: User, filters: {
       te.estado,
       te.nota_id,
       te.observaciones,
+      te.correccion_json,
+      te.corregido_at,
       te.submitted_at,
       te.updated_at,
       te.created_at,
@@ -104,10 +106,26 @@ export function listTrabajoEntregas(user: User, filters: {
     ORDER BY created_at ASC
   `);
 
-  return rows.map((row) => ({
-    ...row,
-    archivos: archivosStmt.all(row.id),
-  }));
+  return rows.map((row) => {
+    let correccion: unknown = null;
+    if (typeof row.correccion_json === 'string' && row.correccion_json) {
+      try {
+        correccion = JSON.parse(row.correccion_json);
+      } catch {
+        correccion = null;
+      }
+    }
+    return {
+      ...row,
+      id: String(row.id),
+      correccion,
+      archivos: archivosStmt.all(row.id),
+    } as Record<string, unknown> & {
+      id: string;
+      correccion: unknown;
+      archivos: unknown[];
+    };
+  });
 }
 
 export function getTrabajoArchivo(user: User, archivoId: string) {

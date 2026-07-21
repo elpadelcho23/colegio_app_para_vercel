@@ -1,14 +1,15 @@
 ﻿---
 const { currentPath = '/', spaEnabled = false } = Astro.props;
 const user = Astro.locals.user;
+const isGuest = Boolean(user?.is_guest);
 
 const spaLinks = [
   { view: 'panel', href: '/', label: 'Panel', shortLabel: 'Panel' },
   { view: 'registro', href: '/registro', label: 'Alumnos', shortLabel: 'Alumnos' },
   { view: 'cursos', href: '/cursos', label: 'Cursos', shortLabel: 'Cursos' },
   { view: 'asistencia', href: '/asistencia', label: 'Asistencia', shortLabel: 'Asist.' },
-  { view: 'notas', href: '/notas', label: 'Calificaciones', shortLabel: 'Notas' },
-  { view: 'actividades', href: '/actividades', label: 'Actividades', shortLabel: 'Agenda' },
+  { view: 'notas', href: '/notas', label: 'Calificaciones', shortLabel: 'Calificaciones' },
+  { view: 'actividades', href: '/actividades', label: 'Actividades', shortLabel: 'Actividades' },
 ] as const;
 
 const staticLinks = [
@@ -30,12 +31,13 @@ const isActive = (href: string) => {
     {user && (
       <button
         type="button"
-        class="sync-indicator is-hidden"
+        class="sync-indicator"
         data-sync-indicator
         aria-label="Estado de sincronización"
         title="Sincronización"
       >
         <span class="sync-indicator-dot" aria-hidden="true"></span>
+        <span class="sync-indicator-label" data-sync-indicator-label>Guardado</span>
       </button>
     )}
     {user && (
@@ -47,10 +49,16 @@ const isActive = (href: string) => {
     {user && (
       <span class="institution-strip-user">
         <span class="institution-strip-user-name">{user.nombre}</span>
-        <span class="institution-strip-user-role"> - {user.rol}</span>
+        <span class="institution-strip-user-role"> - {isGuest ? 'invitado' : user.rol}</span>
       </span>
     )}
   </div>
+  {isGuest && (
+    <div class="guest-banner" role="status" data-guest-banner>
+      <strong>Modo invitado</strong>
+      <span>— los datos se borran al salir. Podés recargar sin perder lo importado.</span>
+    </div>
+  )}
   <nav class="topbar" aria-label="Navegación principal">
     {spaEnabled ? (
       <button class="brand brand-button" type="button" data-spa-nav="panel" aria-label="Ir al panel principal">
@@ -112,7 +120,7 @@ const isActive = (href: string) => {
             data-spa-nav="herramientas"
             role="menuitem"
           >
-            Más herramientas
+            Excel y cuenta
           </button>
         </>
       ) : (
@@ -134,7 +142,7 @@ const isActive = (href: string) => {
             aria-current={isActive('/herramientas') ? 'page' : undefined}
             role="menuitem"
           >
-            Más herramientas
+            Excel y cuenta
           </a>
         </>
       )}
@@ -149,8 +157,8 @@ const isActive = (href: string) => {
         </a>
       ))}
       {user ? (
-        <form method="post" action="/api/auth/logout" class="nav-form">
-          <button type="submit">Salir</button>
+        <form method="post" action="/api/auth/logout" class="nav-form" data-logout-form>
+          <button type="submit">{isGuest ? 'Salir y borrar datos' : 'Salir'}</button>
         </form>
       ) : (
         <a href="/login" class:list={[{ active: currentPath === '/login' }]}>Login</a>
@@ -158,6 +166,35 @@ const isActive = (href: string) => {
       <button class="theme-toggle" type="button" data-theme-toggle>Modo oscuro</button>
     </div>
   </nav>
+
+  {user && (
+    <div class="global-teaching-context" data-global-teaching-context>
+      <div class="gtc-summary-row">
+        <div class="gtc-summary">
+          <span class="gtc-label">Curso actual</span>
+          <strong data-gtc-summary>Elegí curso y materia</strong>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-gtc-toggle>
+          Cambiar curso
+        </button>
+      </div>
+      <form class="gtc-form is-hidden" data-gtc-form hidden>
+        <label>
+          <span>Escuela</span>
+          <select name="escuela" data-gtc-school aria-label="Escuela activa"></select>
+        </label>
+        <label>
+          <span>Curso</span>
+          <select name="curso" data-gtc-course aria-label="Curso activo" required></select>
+        </label>
+        <label>
+          <span>Materia</span>
+          <select name="materia" data-gtc-subject aria-label="Materia activa" required></select>
+        </label>
+        <button type="submit" class="btn btn-primary btn-sm">Usar este curso</button>
+      </form>
+    </div>
+  )}
 </header>
 
 {spaEnabled && user && (
@@ -221,17 +258,29 @@ const isActive = (href: string) => {
   .sync-indicator {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
+    gap: 0.4rem;
+    min-height: 2rem;
+    width: auto;
+    max-width: 11rem;
+    padding: 0.25rem 0.55rem 0.25rem 0.45rem;
     border: 1px solid var(--line, #d9e1dc);
     border-radius: 999px;
     background: var(--surface, #fff);
     cursor: pointer;
-    padding: 0;
+    color: var(--muted, #5f6b66);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .sync-indicator-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .sync-indicator-dot {
+    flex: 0 0 auto;
     width: 0.65rem;
     height: 0.65rem;
     border-radius: 999px;
@@ -248,6 +297,19 @@ const isActive = (href: string) => {
 
   .sync-indicator[data-sync-state='offline'] .sync-indicator-dot {
     background: #6b7280;
+  }
+
+  @media (max-width: 640px) {
+    .sync-indicator-label {
+      display: none;
+    }
+
+    .sync-indicator {
+      width: 2rem;
+      max-width: none;
+      padding: 0;
+      justify-content: center;
+    }
   }
 
   .global-cycle-picker {
@@ -284,6 +346,72 @@ const isActive = (href: string) => {
     width: 100%;
   }
 
+  .global-teaching-context {
+    width: min(var(--content-max, 1120px), calc(100% - 24px));
+    margin: 0 auto;
+    padding: 0.55rem 0.75rem 0.75rem;
+    border-bottom: 1px solid var(--line, #d9e1dc);
+    background: color-mix(in srgb, var(--surface, #fff) 92%, var(--bg, #f3f6f4));
+  }
+
+  .gtc-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .gtc-summary {
+    display: grid;
+    gap: 0.1rem;
+    min-width: 0;
+  }
+
+  .gtc-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted, #5f6b66);
+  }
+
+  .gtc-summary strong {
+    font-size: 0.95rem;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .gtc-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.55rem;
+    margin-top: 0.65rem;
+    align-items: end;
+  }
+
+  .gtc-form label {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.82rem;
+    color: var(--muted, #5f6b66);
+  }
+
+  .gtc-form select {
+    min-height: var(--tap, 44px);
+    padding: 0.45rem 0.55rem;
+    border-radius: 0.45rem;
+    border: 1px solid var(--line, #d9e1dc);
+    background: var(--surface, #fff);
+    font: inherit;
+    color: inherit;
+  }
+
+  .gtc-form.is-hidden,
+  .gtc-form[hidden] {
+    display: none;
+  }
+
   @media (max-width: 1023px) {
     .global-cycle-picker--strip {
       display: none;
@@ -294,6 +422,24 @@ const isActive = (href: string) => {
       padding-bottom: 0.55rem;
       margin-bottom: 0.35rem;
       border-bottom: 1px solid var(--line, #d9e1dc);
+    }
+
+    .global-teaching-context {
+      width: 100%;
+      padding-left: 0.85rem;
+      padding-right: 0.85rem;
+    }
+
+    .gtc-summary strong {
+      white-space: normal;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .global-teaching-context {
+      width: 100%;
+      margin: 0;
+      padding: 0.65rem 0.85rem 0.85rem;
     }
   }
 </style>

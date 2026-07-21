@@ -7,7 +7,7 @@ import {
   STUDENT_EXCEL_NOTES,
   STUDENT_EXCEL_SHEET,
 } from '../lib/student-excel-reference';
-import { normalizeTurnoValue, splitMateriasValue } from '../lib/excel-column-map';
+import { normalizeTurnoValue, splitMateriasValue, normalizeComparableText, normalizeDniValue, matchGradeField, scoreGradeHeaderRow } from '../lib/excel-column-map';
 import { EXCEL_IMPORT_LIMITS } from '../lib/excel-import-limits';
 import {
   columnMapToMapping,
@@ -26,11 +26,22 @@ import {
   type AttendanceExcelMapping,
 } from '../lib/attendance-excel-mapping';
 import {
+  gradeColumnMapToMapping,
+  GRADE_MAPPABLE_FIELDS,
+  parseGradeExcelMappingJson,
+  serializeGradeMappingForClient,
+  validateGradeExcelMapping,
+  type GradeExcelMapping,
+} from '../lib/grade-excel-mapping';
+import {
   buildStudentSheetError,
   buildAttendanceSheetError,
+  buildGradeSheetError,
   parseAttendanceWorksheet,
+  parseGradeWorksheet,
   parseStudentWorksheet,
   type ParsedAttendanceRow,
+  type ParsedGradeRow,
   type ParsedStudentRow,
 } from './excel-parse';
 import { canAccessStudent, canAccessSubject } from './auth';
@@ -47,6 +58,18 @@ export interface ImportResult {
   skipped: number;
   errors: ImportRowError[];
   coursesCreated?: number;
+  /** Ciclo lectivo usado al crear/asignar cursos en esta importación. */
+  cicloLectivo?: number;
+}
+
+export type ImportExcelOptions = {
+  cicloLectivo?: number;
+};
+
+function resolveImportCicloLectivo(value: unknown) {
+  const year = Number(value);
+  if (Number.isFinite(year) && year >= 2000 && year <= 2100) return Math.floor(year);
+  return new Date().getFullYear();
 }
 
 type RowRecord = Record<string, string | number | null>;
@@ -165,17 +188,47 @@ function pickWorksheet(workbook: ExcelJS.Workbook, type: ExcelImportType) {
 
 function worksheetToRows(worksheet: ExcelJS.Worksheet): RowRecord[] {
   const maxColumns = Math.max(worksheet.columnCount || 0, worksheet.actualColumnCount || 0, 1);
-  const headers: string[] = [];
 
+  // Detectar fila de encabezados (1–12) con score de campos de notas, o fila 1 por defecto
+  let headerRowNumber = 1;
+  let bestScore = -1;
+  const scanLimit = Math.min(12, worksheet.rowCount || 1);
+  for (let rowNumber = 1; rowNumber <= scanLimit; rowNumber += 1) {
+    const labels: string[] = [];
+    for (let column = 1; column <= maxColumns; column += 1) {
+      labels.push(String(cellText(worksheet.getRow(rowNumber).getCell(column).value) ?? ''));
+    }
+    const score = scoreGradeHeaderRow(labels);
+    if (score > bestScore) {
+      bestScore = score;
+      headerRowNumber = rowNumber;
+    }
+  }
+
+  const headers: string[] = [];
   for (let column = 1; column <= maxColumns; column += 1) {
-    const normalized = normalizeHeader(String(cellText(worksheet.getRow(1).getCell(column).value) ?? ''));
-    if (normalized) headers[column - 1] = HEADER_ALIASES[normalized] || normalized;
+    const raw = String(cellText(worksheet.getRow(headerRowNumber).getCell(column).value) ?? '');
+    const normalized = normalizeHeader(raw);
+    if (!normalized) continue;
+    const aliased = HEADER_ALIASES[normalized];
+    if (aliased) {
+      headers[column - 1] = aliased;
+      continue;
+    }
+    const smart = matchGradeField(raw);
+    if (smart) {
+      headers[column - 1] = smart === 'evaluacion' ? 'evaluacion'
+        : smart === 'calificacion' ? 'calificacion'
+        : smart;
+      continue;
+    }
+    headers[column - 1] = normalized;
   }
 
   const rows: RowRecord[] = [];
 
   worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return;
+    if (rowNumber <= headerRowNumber) return;
 
     const record: RowRecord = {};
     let hasValue = false;
@@ -220,19 +273,23 @@ function ensureSchool(user: User, nombre: string, updatedAt: string) {
 }
 
 function ensureSubject(user: User, nombre: string, updatedAt: string) {
-  const tenantId = user.tenant_id;
-  const existing = db.prepare(`
-    SELECT id FROM materias
-    WHERE tenant_id = ? AND LOWER(nombre) = LOWER(?)
-  `).get(tenantId, nombre) as { id: string } | undefined;
-
-  const subjectId = existing?.id || `mat-${randomUUID()}`;
-  if (!existing) {
-    db.prepare(`
-      INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
-      VALUES (?, ?, ?, 1, ?)
-    `).run(subjectId, tenantId, nombre, updatedAt);
+  const soft = findSubject(user, nombre);
+  if (soft) {
+    if (user.rol !== 'admin') {
+      db.prepare(`
+        INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id)
+        VALUES (?, ?, ?)
+      `).run(user.tenant_id, user.id, soft.id);
+    }
+    return soft.id;
   }
+
+  const tenantId = user.tenant_id;
+  const subjectId = `mat-${randomUUID()}`;
+  db.prepare(`
+    INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
+    VALUES (?, ?, ?, 1, ?)
+  `).run(subjectId, tenantId, nombre, updatedAt);
 
   if (user.rol !== 'admin') {
     db.prepare(`
@@ -246,7 +303,7 @@ function ensureSubject(user: User, nombre: string, updatedAt: string) {
 
 function findCourse(user: User, escuela: string, nombre: string, turno: string, cicloLectivo = new Date().getFullYear()) {
   const year = Number.isFinite(cicloLectivo) ? cicloLectivo : new Date().getFullYear();
-  return db.prepare(`
+  const exact = db.prepare(`
     SELECT id FROM cursos
     WHERE tenant_id = ?
       AND LOWER(escuela) = LOWER(?)
@@ -254,39 +311,124 @@ function findCourse(user: User, escuela: string, nombre: string, turno: string, 
       AND LOWER(turno) = LOWER(?)
       AND ciclo_lectivo = ?
   `).get(user.tenant_id, escuela, nombre, turno, year) as { id: string } | undefined;
+  if (exact) return exact;
+
+  const candidates = db.prepare(`
+    SELECT id, escuela, nombre, turno FROM cursos
+    WHERE tenant_id = ? AND ciclo_lectivo = ?
+  `).all(user.tenant_id, year) as Array<{ id: string; escuela: string; nombre: string; turno: string }>;
+
+  const targetEscuela = normalizeComparableText(escuela);
+  const targetNombre = normalizeComparableText(nombre);
+  const targetTurno = normalizeComparableText(turno);
+  return candidates.find((course) => (
+    normalizeComparableText(course.escuela) === targetEscuela
+    && normalizeComparableText(course.nombre) === targetNombre
+    && normalizeComparableText(course.turno) === targetTurno
+  ));
 }
 
 function findStudent(user: User, courseId: string, nombre: string, dni: string | null) {
-  if (dni) {
+  const normalizedDni = dni ? normalizeDniValue(dni) : null;
+  if (normalizedDni) {
     const byDni = db.prepare(`
       SELECT id FROM alumnos
       WHERE tenant_id = ? AND curso_id = ? AND dni = ?
-    `).get(user.tenant_id, courseId, dni) as { id: string } | undefined;
+    `).get(user.tenant_id, courseId, normalizedDni) as { id: string } | undefined;
     if (byDni) return byDni;
+
+    const byDniTenant = db.prepare(`
+      SELECT id FROM alumnos
+      WHERE tenant_id = ? AND dni = ?
+    `).get(user.tenant_id, normalizedDni) as { id: string } | undefined;
+    if (byDniTenant) return byDniTenant;
   }
 
-  return db.prepare(`
+  const exact = db.prepare(`
     SELECT id FROM alumnos
     WHERE tenant_id = ? AND curso_id = ? AND LOWER(nombre) = LOWER(?)
   `).get(user.tenant_id, courseId, nombre) as { id: string } | undefined;
+  if (exact) return exact;
+
+  const candidates = db.prepare(`
+    SELECT id, nombre FROM alumnos
+    WHERE tenant_id = ? AND curso_id = ? AND activo = 1
+  `).all(user.tenant_id, courseId) as Array<{ id: string; nombre: string }>;
+  const target = normalizeComparableText(nombre);
+  const soft = candidates.find((student) => normalizeComparableText(student.nombre) === target);
+  if (soft) return soft;
+
+  // Permite "Apellido Nombre" vs "Nombre Apellido"
+  const targetTokens = new Set(target.split(' ').filter(Boolean));
+  if (targetTokens.size >= 2) {
+    return candidates.find((student) => {
+      const tokens = new Set(normalizeComparableText(student.nombre).split(' ').filter(Boolean));
+      if (tokens.size !== targetTokens.size) return false;
+      for (const token of targetTokens) {
+        if (!tokens.has(token)) return false;
+      }
+      return true;
+    });
+  }
+
+  return undefined;
 }
 
 function findSubject(user: User, nombre: string) {
-  return db.prepare(`
+  const exact = db.prepare(`
     SELECT id FROM materias
     WHERE tenant_id = ? AND LOWER(nombre) = LOWER(?)
   `).get(user.tenant_id, nombre) as { id: string } | undefined;
+  if (exact) return exact;
+
+  const candidates = db.prepare(`
+    SELECT id, nombre FROM materias
+    WHERE tenant_id = ? AND activo = 1
+  `).all(user.tenant_id) as Array<{ id: string; nombre: string }>;
+  const target = normalizeComparableText(nombre);
+  return candidates.find((subject) => normalizeComparableText(subject.nombre) === target);
+}
+
+/** Busca materia con match suave; si no existe, la crea y la asigna al docente. */
+function resolveSubject(user: User, nombre: string, updatedAt: string) {
+  const found = findSubject(user, nombre);
+  if (found) {
+    if (user.rol !== 'admin') {
+      db.prepare(`
+        INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id)
+        VALUES (?, ?, ?)
+      `).run(user.tenant_id, user.id, found.id);
+    }
+    return found.id;
+  }
+  return ensureSubject(user, nombre, updatedAt);
 }
 
 function splitMaterias(value: string | number | null) {
   return splitMateriasValue(value);
 }
 
-function upsertStudentRow(user: User, row: ParsedStudentRow, updatedAt: string, errors: ImportRowError[]) {
-  if (!row.turno) return { imported: 0, updated: 0, coursesCreated: 0 };
+function upsertStudentRow(
+  user: User,
+  row: ParsedStudentRow,
+  updatedAt: string,
+  errors: ImportRowError[],
+  cicloLectivo = new Date().getFullYear(),
+) {
+  if (!row.turno) {
+    errors.push({ row: row.rowNumber, message: 'Falta el turno (Mañana, Tarde o Noche).' });
+    return { imported: 0, updated: 0, coursesCreated: 0 };
+  }
 
   try {
-    const { id: courseId, created: courseCreated } = ensureCourse(user, row.escuela, row.curso, row.turno, updatedAt);
+    const { id: courseId, created: courseCreated } = ensureCourse(
+      user,
+      row.escuela,
+      row.curso,
+      row.turno,
+      updatedAt,
+      cicloLectivo,
+    );
 
     const existingByDni = row.dni
       ? db.prepare('SELECT id FROM alumnos WHERE tenant_id = ? AND dni = ?').get(user.tenant_id, row.dni) as { id: string } | undefined
@@ -354,25 +496,32 @@ function upsertStudentRow(user: User, row: ParsedStudentRow, updatedAt: string, 
   }
 }
 
-function importStudentRows(user: User, rows: ParsedStudentRow[], errors: ImportRowError[]) {
+function importStudentRows(
+  user: User,
+  rows: ParsedStudentRow[],
+  errors: ImportRowError[],
+  cicloLectivo = new Date().getFullYear(),
+) {
   let imported = 0;
   let updated = 0;
   let coursesCreated = 0;
+  let skipped = 0;
   const updatedAt = new Date().toISOString();
 
   for (const row of rows) {
     if (row.errors.length) {
       row.errors.forEach((message) => errors.push({ row: row.rowNumber, message }));
+      skipped += 1;
       continue;
     }
 
-    const result = upsertStudentRow(user, row, updatedAt, errors);
+    const result = upsertStudentRow(user, row, updatedAt, errors, cicloLectivo);
     imported += result.imported;
     updated += result.updated;
     coursesCreated += result.coursesCreated;
   }
 
-  return { imported, updated, skipped: 0, coursesCreated };
+  return { imported, updated, skipped, coursesCreated, cicloLectivo };
 }
 
 function ensureCourse(
@@ -384,9 +533,9 @@ function ensureCourse(
   cicloLectivo = new Date().getFullYear(),
 ): { id: string; created: boolean } {
   ensureSchool(user, escuela, updatedAt);
+  const year = Number.isFinite(cicloLectivo) ? cicloLectivo : new Date().getFullYear();
   const existing = findCourse(user, escuela, nombre, turno, year);
   const courseId = existing?.id || `curso-${randomUUID()}`;
-  const year = Number.isFinite(cicloLectivo) ? cicloLectivo : new Date().getFullYear();
 
   if (existing) {
     db.prepare(`
@@ -445,9 +594,25 @@ function importAttendanceFromParsed(user: User, rows: ParsedAttendanceRow[], err
     turno: row.turno,
     materia: row.materia,
     nombre: row.nombre,
+    dni: row.dni,
     estado: row.estado,
   }));
   return importAttendance(user, records, errors);
+}
+
+function appendInvalidRowErrors(
+  invalidRows: Array<{ rowNumber: number; errors: string[] }>,
+  errors: ImportRowError[],
+) {
+  for (const row of invalidRows) {
+    if (row.errors.length) {
+      for (const message of row.errors) {
+        errors.push({ row: row.rowNumber, message });
+      }
+    } else {
+      errors.push({ row: row.rowNumber, message: 'Fila inválida: faltan datos obligatorios o el formato no se reconoció.' });
+    }
+  }
 }
 
 function importAttendance(user: User, rows: RowRecord[], errors: ImportRowError[]) {
@@ -457,13 +622,14 @@ function importAttendance(user: User, rows: RowRecord[], errors: ImportRowError[
   const docenteId = user.id;
 
   rows.forEach((row, index) => {
-    const rowNumber = index + 2;
+    const rowNumber = Number(row.rowNumber) || index + 2;
     const fecha = parseDate(row.fecha ?? null);
     const escuela = String(row.escuela ?? '').trim();
     const curso = String(row.curso ?? '').trim();
     const turno = normalizeTurno(row.turno ?? null);
     const materia = String(row.materia ?? '').trim();
     const alumno = String(row.nombre ?? '').trim();
+    const dni = row.dni != null ? normalizeDniValue(row.dni) : null;
     const estado = normalizeEstado(row.estado ?? null);
 
     if (!fecha || !escuela || !curso || !turno || !materia || !alumno || !estado) {
@@ -480,19 +646,15 @@ function importAttendance(user: User, rows: RowRecord[], errors: ImportRowError[
       return;
     }
 
-    const subject = findSubject(user, materia);
-    if (!subject) {
-      errors.push({ row: rowNumber, message: `Materia no encontrada: ${materia}.` });
-      return;
-    }
+    const subjectId = resolveSubject(user, materia, updatedAt);
 
-    const student = findStudent(user, course.id, alumno, null);
+    const student = findStudent(user, course.id, alumno, dni);
     if (!student) {
       errors.push({ row: rowNumber, message: `Alumno no encontrado: ${alumno} en ${curso}.` });
       return;
     }
 
-    if (!canAccessStudent(user, student.id) || !canAccessSubject(user, subject.id)) {
+    if (!canAccessStudent(user, student.id) || !canAccessSubject(user, subjectId)) {
       errors.push({ row: rowNumber, message: 'No tenés permiso sobre ese alumno o materia.' });
       return;
     }
@@ -500,22 +662,43 @@ function importAttendance(user: User, rows: RowRecord[], errors: ImportRowError[
     const existing = db.prepare(`
       SELECT id FROM asistencias
       WHERE tenant_id = ? AND docente_id = ? AND alumno_id = ? AND materia_id = ? AND fecha = ?
-    `).get(user.tenant_id, docenteId, student.id, subject.id, fecha) as { id: string } | undefined;
+    `).get(user.tenant_id, docenteId, student.id, subjectId, fecha) as { id: string } | undefined;
 
-    const attendanceId = existing?.id || `attendance:${docenteId}:${student.id}:${subject.id}:${fecha}`;
+    const attendanceId = existing?.id || `attendance:${docenteId}:${student.id}:${subjectId}:${fecha}`;
 
     db.prepare(`
       INSERT INTO asistencias (id, tenant_id, docente_id, alumno_id, materia_id, fecha, estado, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (docente_id, alumno_id, materia_id, fecha)
       DO UPDATE SET estado = excluded.estado, updated_at = excluded.updated_at
-    `).run(attendanceId, user.tenant_id, docenteId, student.id, subject.id, fecha, estado, updatedAt);
+    `).run(attendanceId, user.tenant_id, docenteId, student.id, subjectId, fecha, estado, updatedAt);
 
     if (existing) updated += 1;
     else imported += 1;
   });
 
   return { imported, updated, skipped: 0 };
+}
+
+function importGradesFromParsed(user: User, rows: ParsedGradeRow[], errors: ImportRowError[]) {
+  const records: RowRecord[] = rows.map((row) => ({
+    rowNumber: row.rowNumber,
+    fecha: row.fecha,
+    escuela: row.escuela,
+    curso: row.curso,
+    turno: row.turno,
+    materia: row.materia,
+    nombre: row.nombre,
+    dni: row.dni,
+    evaluacion: row.evaluacion,
+    calificacion: row.calificacion,
+    importancia: row.importancia,
+    entrega: row.entrega,
+    motivo: row.motivo,
+    tipo: row.tipo,
+    periodo: row.periodo,
+  }));
+  return importGrades(user, records, errors);
 }
 
 function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
@@ -525,13 +708,14 @@ function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
   const docenteId = user.id;
 
   rows.forEach((row, index) => {
-    const rowNumber = index + 2;
+    const rowNumber = Number(row.rowNumber) || index + 2;
     const fecha = parseDate(row.fecha ?? null);
     const escuela = String(row.escuela ?? '').trim();
     const curso = String(row.curso ?? '').trim();
     const turno = normalizeTurno(row.turno ?? null);
     const materia = String(row.materia ?? '').trim();
     const alumno = String(row.nombre ?? '').trim();
+    const dni = row.dni != null ? normalizeDniValue(row.dni) : null;
     const titulo = String(row.evaluacion ?? '').trim();
     const { valor, calificacionTexto } = parseCalificacion(row.calificacion ?? null);
     const peso = parsePeso(row.importancia ?? null);
@@ -559,19 +743,15 @@ function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
       return;
     }
 
-    const subject = findSubject(user, materia);
-    if (!subject) {
-      errors.push({ row: rowNumber, message: `Materia no encontrada: ${materia}.` });
-      return;
-    }
+    const subjectId = resolveSubject(user, materia, updatedAt);
 
-    const student = findStudent(user, course.id, alumno, null);
+    const student = findStudent(user, course.id, alumno, dni);
     if (!student) {
       errors.push({ row: rowNumber, message: `Alumno no encontrado: ${alumno} en ${curso}.` });
       return;
     }
 
-    if (!canAccessStudent(user, student.id) || !canAccessSubject(user, subject.id)) {
+    if (!canAccessStudent(user, student.id) || !canAccessSubject(user, subjectId)) {
       errors.push({ row: rowNumber, message: 'No tenés permiso sobre ese alumno o materia.' });
       return;
     }
@@ -579,7 +759,7 @@ function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
     const existing = db.prepare(`
       SELECT id FROM notas
       WHERE tenant_id = ? AND docente_id = ? AND alumno_id = ? AND materia_id = ? AND titulo = ? AND fecha = ?
-    `).get(user.tenant_id, docenteId, student.id, subject.id, titulo, fecha) as { id: string } | undefined;
+    `).get(user.tenant_id, docenteId, student.id, subjectId, titulo, fecha) as { id: string } | undefined;
 
     const gradeId = existing?.id || `nota-${randomUUID()}`;
 
@@ -603,7 +783,7 @@ function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
       user.tenant_id,
       docenteId,
       student.id,
-      subject.id,
+      subjectId,
       titulo,
       tipoEvaluacion,
       valor,
@@ -652,6 +832,7 @@ export async function previewAttendanceExcelBuffer(user: User, buffer: ArrayBuff
       turno: row.turno,
       materia: row.materia,
       nombre: row.nombre,
+      dni: row.dni,
       estado: row.estado,
     })),
     errors: [
@@ -693,6 +874,51 @@ export async function previewStudentExcelBuffer(user: User, buffer: ArrayBuffer,
       turno: row.turno,
       nombre: row.nombre,
       dni: row.dni,
+      materias: Array.isArray(row.materias) ? row.materias.join(', ') : (row.materias || ''),
+    })),
+    errors: [
+      ...(sheetError ? [{ row: 0, message: sheetError }] : []),
+      ...(parsed?.mappingErrors || []).map((message) => ({ row: 0, message })),
+      ...(parsed?.invalidRows || []).flatMap((row) =>
+        row.errors.map((message) => ({ row: row.rowNumber, message })),
+      ),
+    ].slice(0, 25),
+    canImport: Boolean(parsed && parsed.validRows.length > 0 && mappingErrors.length === 0),
+  };
+}
+
+export async function previewGradeExcelBuffer(user: User, buffer: ArrayBuffer, mappingInput?: GradeExcelMapping | null) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const parsed = parseGradeWorksheet(workbook, { mapping: mappingInput || null });
+  const sheetError = buildGradeSheetError(parsed);
+  const mapping = parsed ? gradeColumnMapToMapping(parsed.headerRow, parsed.columnMap) : null;
+  const mappingErrors = mapping ? validateGradeExcelMapping(mapping) : ['No se pudo leer la planilla.'];
+
+  return {
+    sheetName: parsed?.sheetName || null,
+    headerRow: parsed?.headerRow || 0,
+    detectedHeaders: parsed?.detectedHeaders || [],
+    availableColumns: (parsed?.detectedHeaders || []).map((label, index) => ({ index, label: label || `Columna ${index + 1}` })),
+    mapping: mapping ? serializeGradeMappingForClient(mapping) : null,
+    mappableFields: GRADE_MAPPABLE_FIELDS,
+    mappingErrors,
+    requiresMapping: Boolean(parsed?.requiresMapping),
+    columnMap: parsed?.columnMap || {},
+    totalRows: parsed?.rows.length || 0,
+    validRows: parsed?.validRows.length || 0,
+    invalidRows: parsed?.invalidRows.length || 0,
+    preview: (parsed?.validRows || []).slice(0, 5).map((row) => ({
+      row: row.rowNumber,
+      fecha: row.fecha,
+      escuela: row.escuela,
+      curso: row.curso,
+      turno: row.turno,
+      materia: row.materia,
+      nombre: row.nombre,
+      dni: row.dni,
+      evaluacion: row.evaluacion,
+      calificacion: row.calificacion,
     })),
     errors: [
       ...(sheetError ? [{ row: 0, message: sheetError }] : []),
@@ -715,17 +941,25 @@ export function parseAttendanceImportMapping(raw: FormDataEntryValue | null) {
   return parseAttendanceExcelMappingJson(raw);
 }
 
+export function parseGradeImportMapping(raw: FormDataEntryValue | null) {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  return parseGradeExcelMappingJson(raw);
+}
+
 export async function previewExcelBuffer(
   user: User,
   type: ExcelImportType,
   buffer: ArrayBuffer,
-  mappingInput?: StudentExcelMapping | AttendanceExcelMapping | null,
+  mappingInput?: StudentExcelMapping | AttendanceExcelMapping | GradeExcelMapping | null,
 ) {
   if (type === 'alumnos') {
     return previewStudentExcelBuffer(user, buffer, mappingInput as StudentExcelMapping | null);
   }
   if (type === 'asistencias') {
     return previewAttendanceExcelBuffer(user, buffer, mappingInput as AttendanceExcelMapping | null);
+  }
+  if (type === 'notas') {
+    return previewGradeExcelBuffer(user, buffer, mappingInput as GradeExcelMapping | null);
   }
   throw new Error(`Vista previa no disponible para ${type}.`);
 }
@@ -734,10 +968,12 @@ export async function importExcelBuffer(
   user: User,
   type: ExcelImportType,
   buffer: ArrayBuffer,
-  mappingInput?: StudentExcelMapping | AttendanceExcelMapping | null,
+  mappingInput?: StudentExcelMapping | AttendanceExcelMapping | GradeExcelMapping | null,
+  options: ImportExcelOptions = {},
 ): Promise<ImportResult> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
+  const cicloLectivo = resolveImportCicloLectivo(options.cicloLectivo);
 
   if (type === 'alumnos') {
     const parsed = parseStudentWorksheet(workbook, { mapping: mappingInput || null });
@@ -748,6 +984,7 @@ export async function importExcelBuffer(
         imported: 0,
         updated: 0,
         skipped: 0,
+        cicloLectivo,
         errors: [{ row: 0, message: sheetError || mappingErrors[0] || 'No se pudo leer la planilla de alumnos.' }],
       };
     }
@@ -757,6 +994,7 @@ export async function importExcelBuffer(
         imported: 0,
         updated: 0,
         skipped: 0,
+        cicloLectivo,
         errors: [{ row: 0, message: mappingErrors[0] }],
       };
     }
@@ -766,12 +1004,19 @@ export async function importExcelBuffer(
         imported: 0,
         updated: 0,
         skipped: 0,
+        cicloLectivo,
         errors: [{ row: 0, message: `El archivo supera el máximo de ${EXCEL_IMPORT_LIMITS.maxRows} filas.` }],
       };
     }
 
     const errors: ImportRowError[] = [];
-    const counts = importStudentRows(user, parsed.rows, errors);
+    const counts = importStudentRows(user, parsed.rows, errors, cicloLectivo);
+    if (counts.imported + counts.updated === 0 && errors.length === 0) {
+      errors.push({
+        row: 0,
+        message: 'No se importó ninguna fila. Revisá el mapeo de columnas y que haya datos debajo del encabezado.',
+      });
+    }
     return { ...counts, errors };
   }
 
@@ -809,8 +1054,56 @@ export async function importExcelBuffer(
     }
 
     const errors: ImportRowError[] = [];
+    appendInvalidRowErrors(parsed.invalidRows, errors);
     const counts = importAttendanceFromParsed(user, parsed.validRows, errors);
-    return { ...counts, errors };
+    return {
+      ...counts,
+      skipped: counts.skipped + parsed.invalidRows.length,
+      errors,
+    };
+  }
+
+  if (type === 'notas') {
+    const parsed = parseGradeWorksheet(workbook, { mapping: mappingInput as GradeExcelMapping | null });
+    const sheetError = buildGradeSheetError(parsed);
+    const mappingErrors = parsed
+      ? validateGradeExcelMapping(gradeColumnMapToMapping(parsed.headerRow, parsed.columnMap))
+      : ['No se pudo leer la planilla.'];
+    if (!parsed || sheetError) {
+      return {
+        imported: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [{ row: 0, message: sheetError || mappingErrors[0] || 'No se pudo leer la planilla de notas.' }],
+      };
+    }
+
+    if (mappingErrors.length) {
+      return {
+        imported: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [{ row: 0, message: mappingErrors[0] }],
+      };
+    }
+
+    if (parsed.rows.length > EXCEL_IMPORT_LIMITS.maxRows) {
+      return {
+        imported: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [{ row: 0, message: `El archivo supera el máximo de ${EXCEL_IMPORT_LIMITS.maxRows} filas.` }],
+      };
+    }
+
+    const errors: ImportRowError[] = [];
+    appendInvalidRowErrors(parsed.invalidRows, errors);
+    const counts = importGradesFromParsed(user, parsed.validRows, errors);
+    return {
+      ...counts,
+      skipped: counts.skipped + parsed.invalidRows.length,
+      errors,
+    };
   }
 
   const worksheet = pickWorksheet(workbook, type);

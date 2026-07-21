@@ -3,6 +3,7 @@ import { isAllowedExcelImportFile, parseImportType } from '../../../lib/excel-im
 import {
   importExcelBuffer,
   parseAttendanceImportMapping,
+  parseGradeImportMapping,
   parseStudentImportMapping,
 } from '../../../server/excel-import';
 
@@ -32,12 +33,18 @@ export const POST: APIRoute = async ({ locals, request }) => {
       ? parseStudentImportMapping(form.get('mapping'))
       : type === 'asistencias'
         ? parseAttendanceImportMapping(form.get('mapping'))
-        : null;
-    const result = await importExcelBuffer(user, type, buffer, mapping);
+        : type === 'notas'
+          ? parseGradeImportMapping(form.get('mapping'))
+          : null;
+    const cicloRaw = form.get('cicloLectivo');
+    const cicloLectivo = typeof cicloRaw === 'string' && cicloRaw.trim()
+      ? Number(cicloRaw.trim())
+      : undefined;
+    const result = await importExcelBuffer(user, type, buffer, mapping, { cicloLectivo });
     const hasBlockingErrors = result.errors.some((item) => item.row === 0);
     const processed = result.imported + result.updated;
 
-    if (hasBlockingErrors || (processed === 0 && result.errors.length > 0)) {
+    if (hasBlockingErrors || processed === 0) {
       return Response.json(
         {
           error: result.errors[0]?.message || 'No se pudo importar el archivo.',
@@ -52,7 +59,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       type,
       ...result,
       message: type === 'alumnos' && result.coursesCreated
-        ? `Importación completada: ${result.imported} alumnos nuevos, ${result.updated} actualizados, ${result.coursesCreated} curso(s) creado(s)${result.errors.length ? `. ${result.errors.length} fila(s) omitida(s)` : ''}.`
+        ? `Importación completada: ${result.imported} alumnos nuevos, ${result.updated} actualizados, ${result.coursesCreated} curso(s) creado(s) (ciclo ${result.cicloLectivo ?? ''})${result.errors.length ? `. ${result.errors.length} fila(s) omitida(s)` : ''}.`
         : `Importación completada: ${result.imported} nuevos, ${result.updated} actualizados${result.errors.length ? `. ${result.errors.length} fila(s) omitida(s)` : ''}.`,
     });
   } catch (error) {

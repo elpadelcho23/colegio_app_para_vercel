@@ -51,11 +51,25 @@ export function replaceContent(parent, ...children) {
   parent.replaceChildren(...normalizeChildren(children));
 }
 
-export function emptyState(title, message = '') {
-  return el('div', { className: 'empty' },
+export function emptyState(title, message = '', options = {}) {
+  const { ctaLabel = '', spaNav = '', onClick = null } = options;
+  const children = [
     el('h3', {}, title),
     message ? el('p', {}, message) : null,
-  );
+  ];
+
+  if (ctaLabel && (spaNav || onClick)) {
+    const props = {
+      className: 'btn btn-primary empty-cta',
+      type: 'button',
+    };
+    if (spaNav) props.dataset = { spaNav };
+    const button = el('button', props, ctaLabel);
+    if (onClick) button.addEventListener('click', onClick);
+    children.push(button);
+  }
+
+  return el('div', { className: 'empty' }, ...children);
 }
 
 export function metric(value, label) {

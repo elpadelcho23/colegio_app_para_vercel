@@ -5,6 +5,13 @@ import { db, type User } from './db';
 
 export const SESSION_COOKIE = 'aula_clara_session';
 const SESSION_DAYS = 7;
+/** TTL de seguridad en SQLite para invitados (cookie de navegador sin expires). */
+const GUEST_SESSION_HOURS = 12;
+
+export type SessionOptions = {
+  /** Cookie de sesión del navegador (sin expires) + TTL corto en SQLite. */
+  sessionOnly?: boolean;
+};
 
 export { CLIENT_DATA_STORAGE };
 
@@ -178,18 +185,24 @@ function respondWithSessionHtml(
   },
   url: URL,
   html: string,
+  options: SessionOptions = {},
 ) {
   const previousToken = cookies.get(SESSION_COOKIE)?.value;
-  const session = rotateSession(userId, previousToken);
+  const session = rotateSession(userId, previousToken, options);
 
   if (previousToken) {
     cookies.delete(SESSION_COOKIE, cookieOptions(url));
   }
 
-  cookies.set(SESSION_COOKIE, session.token, {
+  const cookieProps: Record<string, unknown> = {
     ...cookieOptions(url),
-    expires: session.expiresAt,
-  });
+  };
+  // Sesión de navegador: sin `expires` se borra al cerrar el browser.
+  if (!options.sessionOnly) {
+    cookieProps.expires = session.expiresAt;
+  }
+
+  cookies.set(SESSION_COOKIE, session.token, cookieProps);
 
   return new Response(html, {
     status: 200,
@@ -223,13 +236,35 @@ export function respondWithFreshSession(
   return respondWithSessionHtml(userId, cookies, url, buildFreshSessionHtml(userId, redirectTo));
 }
 
+export function respondWithGuestSession(
+  userId: string,
+  cookies: {
+    get: (name: string) => { value: string } | undefined;
+    set: (name: string, value: string, options: Record<string, unknown>) => void;
+    delete: (name: string, options: Record<string, unknown>) => void;
+  },
+  url: URL,
+  redirectTo = '/',
+) {
+  return respondWithSessionHtml(
+    userId,
+    cookies,
+    url,
+    buildFreshSessionHtml(userId, redirectTo),
+    { sessionOnly: true },
+  );
+}
+
 export function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
 
-export function createSession(userId: string) {
+export function createSession(userId: string, options: SessionOptions = {}) {
   const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const ttlMs = options.sessionOnly
+    ? GUEST_SESSION_HOURS * 60 * 60 * 1000
+    : SESSION_DAYS * 24 * 60 * 60 * 1000;
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
   const id = `sess-${randomBytes(16).toString('hex')}`;
 
   db.prepare(`
@@ -237,43 +272,53 @@ export function createSession(userId: string) {
     VALUES (?, ?, ?, ?)
   `).run(id, userId, hashToken(token), expiresAt);
 
-  return { token, expiresAt: new Date(expiresAt) };
+  return { token, expiresAt: new Date(expiresAt), sessionOnly: Boolean(options.sessionOnly) };
 }
 
 export function isStrongPassword(password: string) {
   return (
     typeof password === 'string' &&
-    password.length >= 10 &&
-    /[a-z]/.test(password) &&
-    /[A-Z]/.test(password) &&
-    /\d/.test(password) &&
-    /[^A-Za-z0-9]/.test(password)
+    password.length >= 5 &&
+    /[a-zA-Z]/.test(password) &&
+    /\d/.test(password)
   );
+}
+
+function mapUserRow(row: Omit<User, 'is_guest'> & { is_guest?: number | boolean; password_hash?: string }): User {
+  return {
+    id: row.id,
+    tenant_id: row.tenant_id,
+    nombre: row.nombre,
+    email: row.email,
+    rol: row.rol,
+    is_guest: Boolean(row.is_guest),
+  };
 }
 
 export function verifyLogin(email: string, password: string): User | null {
   const row = db.prepare(`
-    SELECT id, tenant_id, nombre, email, password_hash, rol
+    SELECT id, tenant_id, nombre, email, password_hash, rol, COALESCE(is_guest, 0) AS is_guest
     FROM usuarios
     WHERE lower(email) = lower(?)
-  `).get(email) as (User & { password_hash: string }) | undefined;
+  `).get(email) as (Omit<User, 'is_guest'> & { password_hash: string; is_guest: number }) | undefined;
 
   if (!row || !bcrypt.compareSync(password, row.password_hash)) return null;
-  return { id: row.id, tenant_id: row.tenant_id, nombre: row.nombre, email: row.email, rol: row.rol };
+  return mapUserRow(row);
 }
 
 export function getUserFromToken(token?: string): User | null {
   if (!token) return null;
 
   const row = db.prepare(`
-    SELECT usuarios.id, usuarios.tenant_id, usuarios.nombre, usuarios.email, usuarios.rol
+    SELECT usuarios.id, usuarios.tenant_id, usuarios.nombre, usuarios.email, usuarios.rol,
+           COALESCE(usuarios.is_guest, 0) AS is_guest
     FROM sessions
     JOIN usuarios ON usuarios.id = sessions.user_id
     WHERE sessions.token_hash = ?
       AND sessions.expires_at > datetime('now')
-  `).get(hashToken(token)) as User | undefined;
+  `).get(hashToken(token)) as (Omit<User, 'is_guest'> & { is_guest: number }) | undefined;
 
-  return row ?? null;
+  return row ? mapUserRow(row) : null;
 }
 
 export function deleteSession(token?: string) {
@@ -282,9 +327,9 @@ export function deleteSession(token?: string) {
 }
 
 /** Invalida la sesión previa (si existía) y emite un token nuevo — mitiga session fixation. */
-export function rotateSession(userId: string, previousToken?: string) {
+export function rotateSession(userId: string, previousToken?: string, options: SessionOptions = {}) {
   if (previousToken) deleteSession(previousToken);
-  return createSession(userId);
+  return createSession(userId, options);
 }
 
 export function cookieOptions(url: URL) {

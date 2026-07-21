@@ -9,19 +9,35 @@ import {
 } from '../lib/student-excel-reference';
 
 interface Props {
-  importType: 'alumnos' | 'asistencias';
+  importType: 'alumnos' | 'asistencias' | 'notas';
   title?: string;
   description?: string;
   submitLabel?: string;
 }
 
+const defaultCopy = {
+  alumnos: {
+    title: 'Cargar alumnos desde Excel',
+    description: 'Creá una plantilla con los nombres de columnas de tu colegio y reutilizala en cada carga.',
+    submitLabel: 'Importar alumnos',
+  },
+  asistencias: {
+    title: 'Cargar asistencias desde Excel',
+    description: 'Definí cómo se lee tu planilla de presentismo una sola vez.',
+    submitLabel: 'Importar asistencias',
+  },
+  notas: {
+    title: 'Cargar notas desde Excel',
+    description: 'Mapeá las columnas de tu planilla de calificaciones y guardá la plantilla.',
+    submitLabel: 'Importar notas',
+  },
+} as const;
+
 const {
   importType,
-  title = importType === 'alumnos' ? 'Cargar alumnos desde Excel' : 'Cargar asistencias desde Excel',
-  description = importType === 'alumnos'
-    ? 'Creá una plantilla con los nombres de columnas de tu colegio y reutilizala en cada carga.'
-    : 'Definí cómo se lee tu planilla de presentismo una sola vez.',
-  submitLabel = importType === 'alumnos' ? 'Importar alumnos' : 'Importar asistencias',
+  title = defaultCopy[importType].title,
+  description = defaultCopy[importType].description,
+  submitLabel = defaultCopy[importType].submitLabel,
 } = Astro.props;
 
 const maxFileMb = Math.round(EXCEL_IMPORT_LIMITS.maxFileBytes / (1024 * 1024));
@@ -33,6 +49,7 @@ const attendanceColumns = [
   { label: 'Turno', required: true },
   { label: 'Materia', required: true },
   { label: 'Alumno', required: true },
+  { label: 'DNI', required: false },
   { label: 'Estado', required: true },
 ];
 
@@ -40,7 +57,26 @@ const attendanceNotes = [
   'Podés usar tu propia planilla: mapeá cada columna y guardala como plantilla.',
   'Estado: Presente, Ausente, P, A, Falta.',
   'Fecha en AAAA-MM-DD o formato de Excel.',
-  'Curso, materia y alumno deben existir en el sistema.',
+  'DNI opcional mejora el match del alumno. La materia se crea si no existe.',
+];
+
+const gradeColumns = [
+  { label: 'Fecha', required: true },
+  { label: 'Colegio', required: true },
+  { label: 'Curso', required: true },
+  { label: 'Turno', required: true },
+  { label: 'Materia', required: true },
+  { label: 'Alumno', required: true },
+  { label: 'DNI', required: false },
+  { label: 'Evaluacion', required: true },
+  { label: 'Calificacion', required: true },
+];
+
+const gradeNotes = [
+  'Mapeá cada columna de tu planilla y guardá la plantilla para la próxima vez.',
+  'Calificación: 1–10 o texto (S/C, Ausente…).',
+  'DNI opcional mejora el match. La materia se crea si no existe.',
+  'Columnas opcionales: Importancia, Entrega, Motivo, Tipo, Período.',
 ];
 ---
 
@@ -56,32 +92,25 @@ const attendanceNotes = [
   </div>
 
   <ol class="excel-workspace-steps" aria-label="Pasos de importación">
-    <li class="excel-workspace-step is-active" data-excel-step="template">
+    <li class="excel-workspace-step is-active" data-excel-step="file">
       <span class="excel-workspace-step-num">1</span>
-      <span class="excel-workspace-step-label">Plantilla</span>
+      <span class="excel-workspace-step-label">Subí el archivo</span>
     </li>
-    <li class="excel-workspace-step" data-excel-step="file">
+    <li class="excel-workspace-step" data-excel-step="columns">
       <span class="excel-workspace-step-num">2</span>
-      <span class="excel-workspace-step-label">Archivo</span>
-    </li>
-    <li class="excel-workspace-step" data-excel-step="mapping">
-      <span class="excel-workspace-step-num">3</span>
-      <span class="excel-workspace-step-label">Mapeo</span>
-    </li>
-    <li class="excel-workspace-step" data-excel-step="confirm">
-      <span class="excel-workspace-step-num">4</span>
-      <span class="excel-workspace-step-label">Importar</span>
+      <span class="excel-workspace-step-label">Confirmá columnas</span>
     </li>
   </ol>
 
   <div class="excel-toast is-hidden" data-excel-toast role="status" aria-live="polite"></div>
 
-  <div class="excel-template-library" data-excel-template-library>
+  <details class="excel-template-library" data-excel-template-library>
+    <summary>
+      <strong>Plantillas guardadas</strong>
+      <span class="muted"> (opcional)</span>
+    </summary>
     <div class="excel-template-library-head">
-      <div>
-        <strong>Mis plantillas</strong>
-        <p class="muted">Elegí una guardada o creá una nueva indicando los nombres de columna de tu Excel.</p>
-      </div>
+      <p class="muted">Reutilizá un mapeo de columnas de otra carga.</p>
       <div class="excel-template-library-actions">
         <button type="button" class="btn btn-secondary btn-sm" data-excel-template-new>
           + Nueva plantilla
@@ -91,10 +120,10 @@ const attendanceNotes = [
     </div>
     <div class="excel-template-cards" data-excel-template-cards role="listbox" aria-label="Plantillas guardadas">
       <p class="excel-template-empty muted" data-excel-template-empty>
-        Todavía no tenés plantillas. Creá una con el botón de arriba o subí un Excel para detectar columnas automáticamente.
+        Todavía no hay plantillas. Podés crear una después de mapear columnas.
       </p>
     </div>
-  </div>
+  </details>
 
   <section class="excel-template-builder is-hidden panel" data-excel-template-builder>
     <div class="section-title">
@@ -155,7 +184,7 @@ const attendanceNotes = [
         ))}
       </ul>
     </details>
-  ) : (
+  ) : importType === 'asistencias' ? (
     <details class="excel-reference full-width">
       <summary>Ver columnas sugeridas (opcional)</summary>
       <div class="table-container excel-reference-table">
@@ -167,7 +196,7 @@ const attendanceNotes = [
                   {column.label}
                   {column.required
                     ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
-                    : null}
+                    : <span class="excel-ref-tag">opcional</span>}
                 </th>
               ))}
             </tr>
@@ -176,6 +205,31 @@ const attendanceNotes = [
       </div>
       <ul class="import-requirements excel-reference-notes">
         {attendanceNotes.map((note) => (
+          <li>{note}</li>
+        ))}
+      </ul>
+    </details>
+  ) : (
+    <details class="excel-reference full-width">
+      <summary>Ver columnas sugeridas (opcional)</summary>
+      <div class="table-container excel-reference-table">
+        <table>
+          <thead>
+            <tr>
+              {gradeColumns.map((column) => (
+                <th>
+                  {column.label}
+                  {column.required
+                    ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
+                    : <span class="excel-ref-tag">opcional</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+        </table>
+      </div>
+      <ul class="import-requirements excel-reference-notes">
+        {gradeNotes.map((note) => (
           <li>{note}</li>
         ))}
       </ul>
@@ -193,8 +247,8 @@ const attendanceNotes = [
         required
       />
       <div class="excel-dropzone-body">
-        <strong>Arrastrá tu Excel acá</strong>
-        <span>o hacé clic para elegir · .xlsx / .xls · máx. {maxFileMb} MB</span>
+        <strong>Subí el archivo</strong>
+        <span>Arrastrá o elegí · .xlsx / .xls · máx. {maxFileMb} MB</span>
         <span class="excel-dropzone-file muted" data-excel-dropzone-label>Sin archivo seleccionado</span>
       </div>
     </div>
@@ -204,8 +258,8 @@ const attendanceNotes = [
     <section class="excel-mapping full-width is-hidden" data-excel-mapping-panel>
       <div class="excel-mapping-head">
         <div class="section-title">
-          <h4>Conectar columnas</h4>
-          <p>Relacioná cada dato del sistema con una columna de tu planilla.</p>
+          <h4>Confirmá columnas</h4>
+          <p>Para cada columna de tu Excel, elegí el tipo de dato (Nombre, Curso, Materia, etc.).</p>
         </div>
         <div class="excel-mapping-progress" data-excel-mapping-progress aria-live="polite">
           <span data-excel-mapping-progress-text>0 de 0 obligatorios</span>
@@ -227,7 +281,11 @@ const attendanceNotes = [
           <span>Hoja usada</span>
           <input type="text" readonly data-excel-sheet-name value="—" aria-label="Hoja de Excel detectada" />
         </label>
+        <button class="btn btn-ghost" type="button" data-excel-ai-map title="Opcional: pedile a la IA que proponga columnas">
+          Reconocer con IA (opcional)
+        </button>
       </div>
+      <p class="muted excel-ai-map-hint" data-excel-ai-map-hint hidden></p>
 
       <div class="excel-mapping-table" data-excel-mapping-fields></div>
 
