@@ -18,7 +18,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   const aulaId = String(params.id || '');
   let aula;
   try {
-    aula = getAulaForTeacher(user, aulaId);
+    aula = await getAulaForTeacher(user, aulaId);
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : 'Aula no encontrada.' },
@@ -40,20 +40,20 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   }
 
   try {
-    const curso = db.prepare('SELECT nombre, escuela, turno FROM cursos WHERE id = ?')
-      .get(aula.cursoId) as { nombre: string; escuela: string; turno: string } | undefined;
-    const act = db.prepare('SELECT materia_id, colegio, turno FROM actividades WHERE id = ?')
-      .get(aula.actividadId) as { materia_id: string; colegio: string; turno: string } | undefined;
-    const materia = db.prepare('SELECT nombre FROM materias WHERE id = ?')
-      .get(act?.materia_id) as { nombre: string } | undefined;
+    const curso = (await db.prepare('SELECT nombre, escuela, turno FROM cursos WHERE id = ?')
+      .get(aula.cursoId)) as { nombre: string; escuela: string; turno: string } | undefined;
+    const act = (await db.prepare('SELECT materia_id, colegio, turno FROM actividades WHERE id = ?')
+      .get(aula.actividadId)) as { materia_id: string; colegio: string; turno: string } | undefined;
+    const materia = (await db.prepare('SELECT nombre FROM materias WHERE id = ?')
+      .get(act?.materia_id)) as { nombre: string } | undefined;
 
     let sourceText = '';
 
     if (actividadRefId) {
-      const ref = db.prepare(`
+      const ref = (await db.prepare(`
         SELECT id, tenant_id, docente_id, titulo, contenido_json
         FROM actividades WHERE id = ?
-      `).get(actividadRefId) as {
+      `).get(actividadRefId)) as {
         id: string;
         tenant_id: string;
         docente_id: string;
@@ -100,7 +100,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
       quiz,
     });
 
-    const updated = applyDigitalQuizToClase(user, aulaId, {
+    const updated = await applyDigitalQuizToClase(user, aulaId, {
       titulo: quiz.titulo,
       preguntas: quiz.preguntas,
       hojaRespuestas: quiz.hojaRespuestas,

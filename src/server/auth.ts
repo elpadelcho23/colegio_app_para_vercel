@@ -236,7 +236,7 @@ export function buildFreshSessionHtml(userId: string, redirectTo = '/') {
 </html>`;
 }
 
-function respondWithSessionHtml(
+async function respondWithSessionHtml(
   userId: string,
   cookies: {
     get: (name: string) => { value: string } | undefined;
@@ -248,7 +248,7 @@ function respondWithSessionHtml(
   options: SessionOptions = {},
 ) {
   const previousToken = cookies.get(SESSION_COOKIE)?.value;
-  const session = rotateSession(userId, previousToken, options);
+  const session = await rotateSession(userId, previousToken, options);
 
   if (previousToken) {
     cookies.delete(SESSION_COOKIE, cookieOptions(url));
@@ -264,7 +264,7 @@ function respondWithSessionHtml(
 
   cookies.set(SESSION_COOKIE, session.token, cookieProps);
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (user) {
     cookies.set(
       SESSION_PASSPORT_COOKIE,
@@ -283,7 +283,7 @@ function respondWithSessionHtml(
   });
 }
 
-export function respondWithLoginSession(
+export async function respondWithLoginSession(
   userId: string,
   cookies: {
     get: (name: string) => { value: string } | undefined;
@@ -296,7 +296,7 @@ export function respondWithLoginSession(
   return respondWithSessionHtml(userId, cookies, url, buildLoginSessionHtml(userId, redirectTo));
 }
 
-export function respondWithFreshSession(
+export async function respondWithFreshSession(
   userId: string,
   cookies: {
     get: (name: string) => { value: string } | undefined;
@@ -309,7 +309,7 @@ export function respondWithFreshSession(
   return respondWithSessionHtml(userId, cookies, url, buildFreshSessionHtml(userId, redirectTo));
 }
 
-export function respondWithGuestSession(
+export async function respondWithGuestSession(
   userId: string,
   cookies: {
     get: (name: string) => { value: string } | undefined;
@@ -333,7 +333,7 @@ export function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
 
-export function createSession(userId: string, options: SessionOptions = {}) {
+export async function createSession(userId: string, options: SessionOptions = {}) {
   const token = randomBytes(32).toString('base64url');
   const ttlMs = options.sessionOnly
     ? GUEST_SESSION_HOURS * 60 * 60 * 1000
@@ -341,7 +341,7 @@ export function createSession(userId: string, options: SessionOptions = {}) {
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
   const id = `sess-${randomBytes(16).toString('hex')}`;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO sessions (id, user_id, token_hash, expires_at)
     VALUES (?, ?, ?, ?)
   `).run(id, userId, hashToken(token), expiresAt);
@@ -369,40 +369,40 @@ function mapUserRow(row: Omit<User, 'is_guest'> & { is_guest?: number | boolean;
   };
 }
 
-export function verifyLogin(email: string, password: string): User | null {
-  const row = db.prepare(`
+export async function verifyLogin(email: string, password: string): Promise<User | null> {
+  const row = (await db.prepare(`
     SELECT id, tenant_id, nombre, email, password_hash, rol, COALESCE(is_guest, 0) AS is_guest
     FROM usuarios
     WHERE lower(email) = lower(?)
-  `).get(email) as (Omit<User, 'is_guest'> & { password_hash: string; is_guest: number }) | undefined;
+  `).get(email)) as (Omit<User, 'is_guest'> & { password_hash: string; is_guest: number }) | undefined;
 
   if (!row || !bcrypt.compareSync(password, row.password_hash)) return null;
   return mapUserRow(row);
 }
 
-export function getUserFromToken(token?: string): User | null {
+export async function getUserFromToken(token?: string): Promise<User | null> {
   if (!token) return null;
 
-  const row = db.prepare(`
+  const row = (await db.prepare(`
     SELECT usuarios.id, usuarios.tenant_id, usuarios.nombre, usuarios.email, usuarios.rol,
            COALESCE(usuarios.is_guest, 0) AS is_guest
     FROM sessions
     JOIN usuarios ON usuarios.id = sessions.user_id
     WHERE sessions.token_hash = ?
       AND sessions.expires_at > datetime('now')
-  `).get(hashToken(token)) as (Omit<User, 'is_guest'> & { is_guest: number }) | undefined;
+  `).get(hashToken(token))) as (Omit<User, 'is_guest'> & { is_guest: number }) | undefined;
 
   return row ? mapUserRow(row) : null;
 }
 
-export function deleteSession(token?: string) {
+export async function deleteSession(token?: string) {
   if (!token) return;
-  db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
+  await db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
 }
 
 /** Invalida la sesión previa (si existía) y emite un token nuevo — mitiga session fixation. */
-export function rotateSession(userId: string, previousToken?: string, options: SessionOptions = {}) {
-  if (previousToken) deleteSession(previousToken);
+export async function rotateSession(userId: string, previousToken?: string, options: SessionOptions = {}) {
+  if (previousToken) await deleteSession(previousToken);
   return createSession(userId, options);
 }
 
@@ -415,9 +415,9 @@ export function cookieOptions(url: URL) {
   };
 }
 
-export function canAccessStudent(user: User, studentId: string) {
+export async function canAccessStudent(user: User, studentId: string) {
   if (user.rol === 'admin') return true;
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT alumnos.id
     FROM alumnos
     JOIN docente_cursos ON docente_cursos.curso_id = alumnos.curso_id
@@ -429,9 +429,9 @@ export function canAccessStudent(user: User, studentId: string) {
   return Boolean(row);
 }
 
-export function canAccessSubject(user: User, subjectId: string) {
+export async function canAccessSubject(user: User, subjectId: string) {
   if (user.rol === 'admin') return true;
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT materia_id
     FROM docente_materias
     WHERE materia_id = ?
@@ -441,9 +441,9 @@ export function canAccessSubject(user: User, subjectId: string) {
   return Boolean(row);
 }
 
-export function canAccessCourse(user: User, courseId: string) {
+export async function canAccessCourse(user: User, courseId: string) {
   if (user.rol === 'admin') return true;
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT curso_id
     FROM docente_cursos
     WHERE curso_id = ?

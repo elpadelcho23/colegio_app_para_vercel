@@ -11,7 +11,7 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
   }
 
   try {
-    const aula = setActividadClase(
+    const aula = await setActividadClase(
       user,
       String(params.id || ''),
       body.preguntas as PreguntaInput[],

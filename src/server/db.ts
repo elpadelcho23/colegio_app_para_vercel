@@ -1,18 +1,8 @@
-import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
-import { mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
+import { db, dbPath, isRemoteTurso } from './db-client';
 
-const localDbDir = join(dirname(fileURLToPath(import.meta.url)), '../../.data');
-const vercelDbDir = '/tmp/aula-clara-data';
-export const dbPath = join(process.env.VERCEL ? vercelDbDir : localDbDir, 'aula-clara.sqlite');
-mkdirSync(process.env.VERCEL ? vercelDbDir : localDbDir, { recursive: true });
-
-export const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+export { db, dbPath };
 
 export const DEFAULT_TENANT_ID = 'tenant-demo';
 export const ADMIN_TENANT_ID = 'tenant-admin';
@@ -26,22 +16,22 @@ export interface User {
   is_guest?: boolean;
 }
 
-export function createTenant(nombre: string, id = `tenant-${randomBytes(8).toString('hex')}`) {
-  db.prepare(`
+export async function createTenant(nombre: string, id = `tenant-${randomBytes(8).toString('hex')}`) {
+  await db.prepare(`
     INSERT OR IGNORE INTO tenants (id, nombre)
     VALUES (?, ?)
   `).run(id, nombre.trim() || 'Cuenta docente');
   return id;
 }
 
-export function createUser(user: Omit<User, 'id' | 'tenant_id'> & { password: string; tenant_id?: string }) {
+export async function createUser(user: Omit<User, 'id' | 'tenant_id'> & { password: string; tenant_id?: string }) {
   const email = String(user.email).trim().toLowerCase();
-  const existing = db.prepare('SELECT id FROM usuarios WHERE lower(email) = lower(?)').get(email);
+  const existing = await db.prepare('SELECT id FROM usuarios WHERE lower(email) = lower(?)').get(email);
   if (existing) return null;
 
   const id = `docente-${randomBytes(8).toString('hex')}`;
-  const tenantId = user.tenant_id || createTenant(`Cuenta de ${user.nombre.trim() || email}`);
-  db.prepare(`
+  const tenantId = user.tenant_id || (await createTenant(`Cuenta de ${user.nombre.trim() || email}`));
+  await db.prepare(`
     INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
     VALUES (?, ?, ?, ?, ?, ?, 0)
   `).run(id, tenantId, user.nombre.trim(), email, bcrypt.hashSync(user.password, 12), user.rol);
@@ -50,14 +40,14 @@ export function createUser(user: Omit<User, 'id' | 'tenant_id'> & { password: st
 }
 
 /** Cuenta efímera aislada: tenant propio, sin persistencia entre visitas. */
-export function createGuestUser(): User {
+export async function createGuestUser(): Promise<User> {
   const suffix = randomBytes(8).toString('hex');
   const id = `guest-${suffix}`;
   const email = `guest-${suffix}@guest.local`;
-  const tenantId = createTenant(`Invitado ${suffix}`);
+  const tenantId = await createTenant(`Invitado ${suffix}`);
   const password = randomBytes(24).toString('base64url');
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
     VALUES (?, ?, ?, ?, ?, 'docente', 1)
   `).run(id, tenantId, 'Invitado', email, bcrypt.hashSync(password, 10));
@@ -71,7 +61,7 @@ export function createGuestUser(): User {
     is_guest: true,
   };
 
-  seedGuestDemoData(user);
+  await seedGuestDemoData(user);
   return user;
 }
 
@@ -79,7 +69,7 @@ export function createGuestUser(): User {
  * Datos de prueba para que el invitado pueda usar panel, asistencia, notas y clase virtual
  * sin tener que importar Excel primero. IDs únicos por usuario (PK global).
  */
-export function seedGuestDemoData(user: User) {
+export async function seedGuestDemoData(user: User) {
   if (!user?.is_guest) return;
 
   const tenantId = user.tenant_id;
@@ -96,13 +86,13 @@ export function seedGuestDemoData(user: User) {
   const al2 = `${prefix}-al-2`;
   const al3 = `${prefix}-al-3`;
 
-  const existing = db.prepare('SELECT 1 AS ok FROM cursos WHERE tenant_id = ? LIMIT 1').get(tenantId) as
+  const existing = (await db.prepare('SELECT 1 AS ok FROM cursos WHERE tenant_id = ? LIMIT 1').get(tenantId)) as
     | { ok: number }
     | undefined;
   if (existing) return;
 
-  const tx = db.transaction(() => {
-    db.prepare('INSERT OR IGNORE INTO escuelas (id, tenant_id, nombre) VALUES (?, ?, ?)').run(
+  const tx = db.transaction(async () => {
+    await db.prepare('INSERT OR IGNORE INTO escuelas (id, tenant_id, nombre) VALUES (?, ?, ?)').run(
       schoolId,
       tenantId,
       'Escuela Tecnica 1',
@@ -112,42 +102,42 @@ export function seedGuestDemoData(user: User) {
       INSERT OR IGNORE INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    insertCourse.run(cursoManana, tenantId, 'Escuela Tecnica 1', '6to 1ra', 'Manana', 2026, now);
-    insertCourse.run(cursoTarde, tenantId, 'Escuela Tecnica 1', '5to 2da', 'Tarde', 2026, now);
+    await insertCourse.run(cursoManana, tenantId, 'Escuela Tecnica 1', '6to 1ra', 'Manana', 2026, now);
+    await insertCourse.run(cursoTarde, tenantId, 'Escuela Tecnica 1', '5to 2da', 'Tarde', 2026, now);
 
     const insertSubject = db.prepare(`
       INSERT OR IGNORE INTO materias (id, tenant_id, nombre, activo, updated_at)
       VALUES (?, ?, ?, 1, ?)
     `);
-    insertSubject.run(matMate, tenantId, 'Matematica', now);
-    insertSubject.run(matProg, tenantId, 'Programacion', now);
-    insertSubject.run(matLit, tenantId, 'Literatura', now);
+    await insertSubject.run(matMate, tenantId, 'Matematica', now);
+    await insertSubject.run(matProg, tenantId, 'Programacion', now);
+    await insertSubject.run(matLit, tenantId, 'Literatura', now);
 
     const insertStudent = db.prepare(`
       INSERT OR IGNORE INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    insertStudent.run(al1, tenantId, cursoManana, 'Martina Ruiz', '44111222', 'Laura Ruiz', now);
-    insertStudent.run(al2, tenantId, cursoManana, 'Tomas Pereyra', '45222333', 'Ruben Pereyra', now);
-    insertStudent.run(al3, tenantId, cursoTarde, 'Sofia Molina', '46333444', 'Ana Molina', now);
+    await insertStudent.run(al1, tenantId, cursoManana, 'Martina Ruiz', '44111222', 'Laura Ruiz', now);
+    await insertStudent.run(al2, tenantId, cursoManana, 'Tomas Pereyra', '45222333', 'Ruben Pereyra', now);
+    await insertStudent.run(al3, tenantId, cursoTarde, 'Sofia Molina', '46333444', 'Ana Molina', now);
 
-    db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)').run(
+    await db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)').run(
       tenantId,
       user.id,
       schoolId,
     );
-    db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(
+    await db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(
       tenantId,
       user.id,
       cursoManana,
     );
-    db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(
+    await db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(
       tenantId,
       user.id,
       cursoTarde,
     );
     for (const materiaId of [matMate, matProg, matLit]) {
-      db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)').run(
+      await db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)').run(
         tenantId,
         user.id,
         materiaId,
@@ -157,18 +147,18 @@ export function seedGuestDemoData(user: User) {
     const assignStudentSubject = db.prepare(
       'INSERT OR IGNORE INTO alumno_materias (tenant_id, alumno_id, materia_id) VALUES (?, ?, ?)',
     );
-    assignStudentSubject.run(tenantId, al1, matMate);
-    assignStudentSubject.run(tenantId, al1, matProg);
-    assignStudentSubject.run(tenantId, al2, matMate);
-    assignStudentSubject.run(tenantId, al2, matProg);
-    assignStudentSubject.run(tenantId, al3, matLit);
+    await assignStudentSubject.run(tenantId, al1, matMate);
+    await assignStudentSubject.run(tenantId, al1, matProg);
+    await assignStudentSubject.run(tenantId, al2, matMate);
+    await assignStudentSubject.run(tenantId, al2, matProg);
+    await assignStudentSubject.run(tenantId, al3, matLit);
 
     const insertGrade = db.prepare(`
       INSERT OR IGNORE INTO notas (
         id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion, valor, peso, fecha, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    insertGrade.run(
+    await insertGrade.run(
       `${prefix}-nota-1`,
       tenantId,
       user.id,
@@ -181,7 +171,7 @@ export function seedGuestDemoData(user: User) {
       now.slice(0, 10),
       now,
     );
-    insertGrade.run(
+    await insertGrade.run(
       `${prefix}-nota-2`,
       tenantId,
       user.id,
@@ -200,12 +190,12 @@ export function seedGuestDemoData(user: User) {
         id, tenant_id, docente_id, alumno_id, materia_id, fecha, estado, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    insertAttendance.run(`${prefix}-asis-1`, tenantId, user.id, al2, matProg, '2026-03-10', 'ausente', now);
-    insertAttendance.run(`${prefix}-asis-2`, tenantId, user.id, al2, matProg, '2026-03-12', 'ausente', now);
-    insertAttendance.run(`${prefix}-asis-3`, tenantId, user.id, al1, matProg, '2026-03-10', 'presente', now);
+    await insertAttendance.run(`${prefix}-asis-1`, tenantId, user.id, al2, matProg, '2026-03-10', 'ausente', now);
+    await insertAttendance.run(`${prefix}-asis-2`, tenantId, user.id, al2, matProg, '2026-03-12', 'ausente', now);
+    await insertAttendance.run(`${prefix}-asis-3`, tenantId, user.id, al1, matProg, '2026-03-10', 'presente', now);
   });
 
-  tx();
+  await tx();
 }
 
 /**
@@ -213,7 +203,7 @@ export function seedGuestDemoData(user: User) {
  * Si el id ya existe en otro tenant (PK global en SQLite compartido/ephemeral),
  * remapea a un id scoped al tenant para no corromper ni fallar en silencio.
  */
-export function ensureTeachingContextRows(input: {
+export async function ensureTeachingContextRows(input: {
   user: User;
   cursoId: string;
   materiaId: string;
@@ -221,32 +211,32 @@ export function ensureTeachingContextRows(input: {
   turno: string;
   cursoNombre?: string;
   materiaNombre?: string;
-}): { cursoId: string; materiaId: string } {
+}): Promise<{ cursoId: string; materiaId: string }> {
   const tenantId = input.user.tenant_id;
   const now = new Date().toISOString();
   const desiredCursoId = String(input.cursoId || '').trim();
   const desiredMateriaId = String(input.materiaId || '').trim();
   if (!desiredCursoId || !desiredMateriaId) return { cursoId: '', materiaId: '' };
 
-  function resolveOwnedId(table: 'cursos' | 'materias', desiredId: string): string {
-    const row = db.prepare(`SELECT tenant_id FROM ${table} WHERE id = ?`).get(desiredId) as
+  async function resolveOwnedId(table: 'cursos' | 'materias', desiredId: string): Promise<string> {
+    const row = (await db.prepare(`SELECT tenant_id FROM ${table} WHERE id = ?`).get(desiredId)) as
       | { tenant_id: string }
       | undefined;
     if (!row || row.tenant_id === tenantId) return desiredId;
 
     const remapped = `${desiredId}~${tenantId}`;
-    const again = db.prepare(`SELECT tenant_id FROM ${table} WHERE id = ?`).get(remapped) as
+    const again = (await db.prepare(`SELECT tenant_id FROM ${table} WHERE id = ?`).get(remapped)) as
       | { tenant_id: string }
       | undefined;
     if (!again || again.tenant_id === tenantId) return remapped;
     return `${desiredId}~${tenantId}~${randomBytes(4).toString('hex')}`;
   }
 
-  const cursoId = resolveOwnedId('cursos', desiredCursoId);
-  const materiaId = resolveOwnedId('materias', desiredMateriaId);
+  const cursoId = await resolveOwnedId('cursos', desiredCursoId);
+  const materiaId = await resolveOwnedId('materias', desiredMateriaId);
 
-  const tx = db.transaction(() => {
-    db.prepare(`
+  const tx = db.transaction(async () => {
+    await db.prepare(`
       INSERT INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
@@ -265,7 +255,7 @@ export function ensureTeachingContextRows(input: {
       now,
     );
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
       VALUES (?, ?, ?, 1, ?)
       ON CONFLICT(id) DO UPDATE SET
@@ -280,28 +270,28 @@ export function ensureTeachingContextRows(input: {
       now,
     );
 
-    db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(
+    await db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(
       tenantId,
       input.user.id,
       cursoId,
     );
-    db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)').run(
+    await db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)').run(
       tenantId,
       input.user.id,
       materiaId,
     );
   });
 
-  tx();
+  await tx();
   return { cursoId, materiaId };
 }
 
-export function getUserById(userId: string): User | null {
-  const row = db.prepare(`
+export async function getUserById(userId: string): Promise<User | null> {
+  const row = (await db.prepare(`
     SELECT id, tenant_id, nombre, email, rol, COALESCE(is_guest, 0) AS is_guest
     FROM usuarios
     WHERE id = ?
-  `).get(userId) as (Omit<User, 'is_guest'> & { is_guest: number }) | undefined;
+  `).get(userId)) as (Omit<User, 'is_guest'> & { is_guest: number }) | undefined;
 
   if (!row) return null;
   return {
@@ -318,19 +308,19 @@ export function getUserById(userId: string): User | null {
  * Elimina usuario invitado + tenant (y datos asociados por CASCADE).
  * No-op si el usuario no existe o no es invitado (salvo que se pase tenantId del passport).
  */
-export function purgeGuestAccount(userId: string, tenantIdHint?: string) {
-  const user = getUserById(userId);
+export async function purgeGuestAccount(userId: string, tenantIdHint?: string) {
+  const user = await getUserById(userId);
   if (user && !user.is_guest) return false;
 
   const tenantId = user?.tenant_id || tenantIdHint;
   if (!tenantId && !user) return false;
 
-  const purge = db.transaction(() => {
-    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  const purge = db.transaction(async () => {
+    await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
     // Borrar tablas hijas por si algún FK no hace CASCADE en migraciones viejas
     if (tenantId) {
       try {
-        db.prepare(`
+        await db.prepare(`
           DELETE FROM aula_intento_eventos
           WHERE intento_id IN (SELECT id FROM aula_intentos WHERE tenant_id = ?)
         `).run(tenantId);
@@ -338,12 +328,12 @@ export function purgeGuestAccount(userId: string, tenantIdHint?: string) {
         // ignore
       }
       try {
-        db.prepare('DELETE FROM aula_intentos WHERE tenant_id = ?').run(tenantId);
+        await db.prepare('DELETE FROM aula_intentos WHERE tenant_id = ?').run(tenantId);
       } catch {
         // ignore
       }
       try {
-        db.prepare(`
+        await db.prepare(`
           DELETE FROM actividad_preguntas
           WHERE actividad_id IN (SELECT id FROM actividades WHERE tenant_id = ?)
         `).run(tenantId);
@@ -371,24 +361,24 @@ export function purgeGuestAccount(userId: string, tenantIdHint?: string) {
       ];
       for (const table of tables) {
         try {
-          db.prepare(`DELETE FROM ${table} WHERE tenant_id = ?`).run(tenantId);
+          await db.prepare(`DELETE FROM ${table} WHERE tenant_id = ?`).run(tenantId);
         } catch {
           // tabla puede no existir en schemas viejos
         }
       }
     }
-    db.prepare('DELETE FROM usuarios WHERE id = ?').run(userId);
+    await db.prepare('DELETE FROM usuarios WHERE id = ?').run(userId);
     if (tenantId) {
-      db.prepare('DELETE FROM tenants WHERE id = ?').run(tenantId);
+      await db.prepare('DELETE FROM tenants WHERE id = ?').run(tenantId);
     }
   });
-  purge();
+  await purge();
   return true;
 }
 
 /** Borra invitados sin sesión vigente (cierres abruptos / cookies vencidas). */
-export function purgeExpiredGuestAccounts() {
-  const rows = db.prepare(`
+export async function purgeExpiredGuestAccounts() {
+  const rows = (await db.prepare(`
     SELECT u.id
     FROM usuarios u
     WHERE COALESCE(u.is_guest, 0) = 1
@@ -397,16 +387,34 @@ export function purgeExpiredGuestAccounts() {
         WHERE s.user_id = u.id
           AND s.expires_at > datetime('now')
       )
-  `).all() as Array<{ id: string }>;
+  `).all()) as Array<{ id: string }>;
 
   let purged = 0;
   for (const row of rows) {
-    if (purgeGuestAccount(row.id)) purged += 1;
+    if (await purgeGuestAccount(row.id)) purged += 1;
   }
   return purged;
 }
 
-db.exec(`
+let readyPromise: Promise<void> | null = null;
+
+/** Idempotente: primer caller dispara la inicialización, el resto espera la misma promesa. */
+export async function ensureDbReady() {
+  if (!readyPromise) readyPromise = initSchema();
+  return readyPromise;
+}
+
+async function initSchema() {
+  await db.pragma('foreign_keys = ON');
+  if (!isRemoteTurso()) await db.pragma('journal_mode = WAL');
+
+  await db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS tenants (
     id TEXT PRIMARY KEY,
     nombre TEXT NOT NULL,
@@ -748,35 +756,46 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_alumnos_curso ON alumnos(curso_id);
 `);
 
-migrateTenancy();
-migrateAcademicStructure();
-migrateAlumnosDniTenancy();
-migrateTrabajoCorreccion();
-migrateGuestFlag();
-migrateAulaTemporal();
-createIndexes();
-seed();
-
-function tableColumns(table: string) {
-  return db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  await migrateTenancy();
+  await migrateAcademicStructure();
+  await migrateAlumnosDniTenancy();
+  await migrateTrabajoCorreccion();
+  await migrateGuestFlag();
+  await migrateAulaTemporal();
+  await createIndexes();
+  await setSchemaVersion(1);
+  await seed();
 }
 
-function ensureColumn(table: string, column: string, ddl: string) {
-  if (tableColumns(table).some((item) => item.name === column)) return;
-  db.prepare(`ALTER TABLE ${table} ADD COLUMN ${ddl}`).run();
+async function setSchemaVersion(version: number) {
+  await db.prepare(`
+    INSERT INTO schema_meta (key, value, updated_at)
+    VALUES ('schema_version', ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `).run(String(version));
 }
 
-function migrateTrabajoCorreccion() {
-  ensureColumn('trabajo_entregas', 'correccion_json', 'correccion_json TEXT');
-  ensureColumn('trabajo_entregas', 'corregido_at', 'corregido_at TEXT');
+async function tableColumns(table: string) {
+  return (await db.prepare(`PRAGMA table_info(${table})`).all()) as Array<{ name: string }>;
 }
 
-function migrateGuestFlag() {
-  ensureColumn('usuarios', 'is_guest', 'is_guest INTEGER NOT NULL DEFAULT 0');
+async function ensureColumn(table: string, column: string, ddl: string) {
+  const columns = await tableColumns(table);
+  if (columns.some((item) => item.name === column)) return;
+  await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${ddl}`).run();
 }
 
-function migrateAulaTemporal() {
-  db.exec(`
+async function migrateTrabajoCorreccion() {
+  await ensureColumn('trabajo_entregas', 'correccion_json', 'correccion_json TEXT');
+  await ensureColumn('trabajo_entregas', 'corregido_at', 'corregido_at TEXT');
+}
+
+async function migrateGuestFlag() {
+  await ensureColumn('usuarios', 'is_guest', 'is_guest INTEGER NOT NULL DEFAULT 0');
+}
+
+async function migrateAulaTemporal() {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS actividad_preguntas (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL,
@@ -845,19 +864,19 @@ function migrateAulaTemporal() {
     );
   `);
 
-  ensureColumn('aulas_temporales', 'publicada', 'publicada INTEGER NOT NULL DEFAULT 0');
+  await ensureColumn('aulas_temporales', 'publicada', 'publicada INTEGER NOT NULL DEFAULT 0');
 }
 
-function tableSql(table: string) {
-  return (db.prepare(`
+async function tableSql(table: string) {
+  return ((await db.prepare(`
     SELECT sql
     FROM sqlite_master
     WHERE type = 'table' AND name = ?
-  `).get(table) as { sql: string } | undefined)?.sql || '';
+  `).get(table)) as { sql: string } | undefined)?.sql || '';
 }
 
-function migrateAcademicStructure() {
-  db.exec(`
+async function migrateAcademicStructure() {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS alumno_materias (
       tenant_id TEXT NOT NULL DEFAULT '${DEFAULT_TENANT_ID}',
       alumno_id TEXT NOT NULL,
@@ -870,10 +889,10 @@ function migrateAcademicStructure() {
     );
   `);
 
-  const notasSql = tableSql('notas');
+  const notasSql = await tableSql('notas');
   if (notasSql.includes('valor REAL NOT NULL')) {
-    db.exec('PRAGMA foreign_keys = OFF;');
-    db.exec(`
+    await db.exec('PRAGMA foreign_keys = OFF;');
+    await db.exec(`
       CREATE TABLE notas_migrated (
         id TEXT PRIMARY KEY,
         tenant_id TEXT NOT NULL DEFAULT '${DEFAULT_TENANT_ID}',
@@ -904,19 +923,19 @@ function migrateAcademicStructure() {
       DROP TABLE notas;
       ALTER TABLE notas_migrated RENAME TO notas;
     `);
-    db.exec('PRAGMA foreign_keys = ON;');
+    await db.exec('PRAGMA foreign_keys = ON;');
   }
 
-  ensureColumn('notas', 'tipo_evaluacion', 'tipo_evaluacion TEXT');
-  ensureColumn('notas', 'calificacion_texto', 'calificacion_texto TEXT');
-  ensureColumn('notas', 'fecha_entrega', 'fecha_entrega TEXT');
-  ensureColumn('notas', 'periodo', 'periodo TEXT');
-  ensureColumn('notas', 'motivo', 'motivo TEXT');
+  await ensureColumn('notas', 'tipo_evaluacion', 'tipo_evaluacion TEXT');
+  await ensureColumn('notas', 'calificacion_texto', 'calificacion_texto TEXT');
+  await ensureColumn('notas', 'fecha_entrega', 'fecha_entrega TEXT');
+  await ensureColumn('notas', 'periodo', 'periodo TEXT');
+  await ensureColumn('notas', 'motivo', 'motivo TEXT');
 
-  const calendarioSql = tableSql('calendario_eventos');
+  const calendarioSql = await tableSql('calendario_eventos');
   if (calendarioSql.includes("CHECK (tipo IN ('evaluacion', 'tp', 'cierre_tp', 'asistencia', 'nota', 'evento'))")) {
-    db.exec('PRAGMA foreign_keys = OFF;');
-    db.exec(`
+    await db.exec('PRAGMA foreign_keys = OFF;');
+    await db.exec(`
       CREATE TABLE calendario_eventos_migrated (
         id TEXT PRIMARY KEY,
         tenant_id TEXT NOT NULL,
@@ -945,16 +964,16 @@ function migrateAcademicStructure() {
       DROP TABLE calendario_eventos;
       ALTER TABLE calendario_eventos_migrated RENAME TO calendario_eventos;
     `);
-    db.exec('PRAGMA foreign_keys = ON;');
+    await db.exec('PRAGMA foreign_keys = ON;');
   }
 }
 
-function migrateAlumnosDniTenancy() {
-  const alumnosSql = tableSql('alumnos');
+async function migrateAlumnosDniTenancy() {
+  const alumnosSql = await tableSql('alumnos');
   if (!alumnosSql || !/dni\s+TEXT\s+UNIQUE/i.test(alumnosSql)) return;
 
-  db.exec('PRAGMA foreign_keys = OFF;');
-  db.exec(`
+  await db.exec('PRAGMA foreign_keys = OFF;');
+  await db.exec(`
     CREATE TABLE alumnos_migrated (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL DEFAULT '${DEFAULT_TENANT_ID}',
@@ -979,37 +998,37 @@ function migrateAlumnosDniTenancy() {
     DROP TABLE alumnos;
     ALTER TABLE alumnos_migrated RENAME TO alumnos;
   `);
-  db.exec('PRAGMA foreign_keys = ON;');
+  await db.exec('PRAGMA foreign_keys = ON;');
 }
 
-function migrateTenancy() {
-  db.prepare('INSERT OR IGNORE INTO tenants (id, nombre) VALUES (?, ?)').run(DEFAULT_TENANT_ID, 'Cuenta demo');
-  db.prepare('INSERT OR IGNORE INTO tenants (id, nombre) VALUES (?, ?)').run(ADMIN_TENANT_ID, 'Administracion');
+async function migrateTenancy() {
+  await db.prepare('INSERT OR IGNORE INTO tenants (id, nombre) VALUES (?, ?)').run(DEFAULT_TENANT_ID, 'Cuenta demo');
+  await db.prepare('INSERT OR IGNORE INTO tenants (id, nombre) VALUES (?, ?)').run(ADMIN_TENANT_ID, 'Administracion');
 
-  ensureColumn('usuarios', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
-  ensureColumn('cursos', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
-  ensureColumn('materias', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
-  ensureColumn('materias', 'activo', 'activo INTEGER NOT NULL DEFAULT 1');
-  ensureColumn('alumnos', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
-  ensureColumn('docente_cursos', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
-  ensureColumn('docente_materias', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
-  ensureColumn('asistencias', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
-  ensureColumn('notas', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
-  ensureColumn('sync_log', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
+  await ensureColumn('usuarios', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
+  await ensureColumn('cursos', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
+  await ensureColumn('materias', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
+  await ensureColumn('materias', 'activo', 'activo INTEGER NOT NULL DEFAULT 1');
+  await ensureColumn('alumnos', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
+  await ensureColumn('docente_cursos', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
+  await ensureColumn('docente_materias', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
+  await ensureColumn('asistencias', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
+  await ensureColumn('notas', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
+  await ensureColumn('sync_log', 'tenant_id', `tenant_id TEXT DEFAULT '${DEFAULT_TENANT_ID}'`);
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE usuarios
     SET tenant_id = CASE WHEN rol = 'admin' THEN ? ELSE ? END
     WHERE tenant_id IS NULL OR tenant_id = ''
   `).run(ADMIN_TENANT_ID, DEFAULT_TENANT_ID);
 
   for (const table of ['cursos', 'materias', 'alumnos', 'docente_cursos', 'docente_materias', 'asistencias', 'notas', 'sync_log']) {
-    db.prepare(`UPDATE ${table} SET tenant_id = ? WHERE tenant_id IS NULL OR tenant_id = ''`).run(DEFAULT_TENANT_ID);
+    await db.prepare(`UPDATE ${table} SET tenant_id = ? WHERE tenant_id IS NULL OR tenant_id = ''`).run(DEFAULT_TENANT_ID);
   }
 }
 
-function createIndexes() {
-  db.exec(`
+async function createIndexes() {
+  await db.exec(`
     CREATE INDEX IF NOT EXISTS idx_cursos_tenant ON cursos(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_materias_tenant ON materias(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_alumnos_tenant_curso ON alumnos(tenant_id, curso_id);
@@ -1028,11 +1047,11 @@ function createIndexes() {
   `);
 }
 
-function insertUser(user: User & { password: string }) {
-  const exists = db.prepare('SELECT id FROM usuarios WHERE id = ?').get(user.id);
+async function insertUser(user: User & { password: string }) {
+  const exists = await db.prepare('SELECT id FROM usuarios WHERE id = ?').get(user.id);
   if (exists) return;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
     VALUES (@id, @tenant_id, @nombre, @email, @password_hash, @rol, 0)
   `).run({
@@ -1128,7 +1147,7 @@ function docenteScopeClause(alias = 'c') {
   `;
 }
 
-export function getCourseViewSnapshot(user: User, filters: CourseViewFilters): CourseViewSnapshot | null {
+export async function getCourseViewSnapshot(user: User, filters: CourseViewFilters): Promise<CourseViewSnapshot | null> {
   if (!filters.subjectId) return null;
 
   const courseFilter = filters.courseId
@@ -1142,7 +1161,7 @@ export function getCourseViewSnapshot(user: User, filters: CourseViewFilters): C
   const parsedKey = filters.courseKey ? parseCourseKey(filters.courseKey) : null;
   const permissionClause = user.rol === 'admin' ? '' : docenteScopeClause();
 
-  const rows = db.prepare(`
+  const rows = (await db.prepare(`
     SELECT
       c.id AS curso_id,
       c.escuela,
@@ -1198,7 +1217,7 @@ export function getCourseViewSnapshot(user: User, filters: CourseViewFilters): C
     curso_nombre: parsedKey?.curso_nombre || null,
     turno: parsedKey?.turno || null,
     subject_id: filters.subjectId,
-  }) as CourseViewRow[];
+  })) as CourseViewRow[];
 
   if (!rows.length) return null;
 
@@ -1272,8 +1291,8 @@ export function getCourseViewSnapshot(user: User, filters: CourseViewFilters): C
   };
 }
 
-function seed() {
-  insertUser({
+async function seed() {
+  await insertUser({
     id: 'docente-demo',
     tenant_id: DEFAULT_TENANT_ID,
     nombre: 'Docente Demo',
@@ -1282,7 +1301,7 @@ function seed() {
     rol: 'docente',
   });
 
-  insertUser({
+  await insertUser({
     id: 'admin-demo',
     tenant_id: ADMIN_TENANT_ID,
     nombre: 'Admin Demo',
@@ -1295,49 +1314,49 @@ function seed() {
     INSERT OR IGNORE INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo)
     VALUES (@id, @tenant_id, @escuela, @nombre, @turno, @ciclo_lectivo)
   `);
-  insertCourse.run({ id: 'curso-6-1-manana', tenant_id: DEFAULT_TENANT_ID, escuela: 'Escuela Tecnica 1', nombre: '6to 1ra', turno: 'Manana', ciclo_lectivo: 2026 });
-  insertCourse.run({ id: 'curso-5-2-tarde', tenant_id: DEFAULT_TENANT_ID, escuela: 'Escuela Tecnica 1', nombre: '5to 2da', turno: 'Tarde', ciclo_lectivo: 2026 });
+  await insertCourse.run({ id: 'curso-6-1-manana', tenant_id: DEFAULT_TENANT_ID, escuela: 'Escuela Tecnica 1', nombre: '6to 1ra', turno: 'Manana', ciclo_lectivo: 2026 });
+  await insertCourse.run({ id: 'curso-5-2-tarde', tenant_id: DEFAULT_TENANT_ID, escuela: 'Escuela Tecnica 1', nombre: '5to 2da', turno: 'Tarde', ciclo_lectivo: 2026 });
 
   const insertSchool = db.prepare('INSERT OR IGNORE INTO escuelas (id, tenant_id, nombre) VALUES (?, ?, ?)');
-  insertSchool.run('escuela-tecnica-1', DEFAULT_TENANT_ID, 'Escuela Tecnica 1');
+  await insertSchool.run('escuela-tecnica-1', DEFAULT_TENANT_ID, 'Escuela Tecnica 1');
 
   const insertSubject = db.prepare('INSERT OR IGNORE INTO materias (id, tenant_id, nombre) VALUES (?, ?, ?)');
-  insertSubject.run('matematica', DEFAULT_TENANT_ID, 'Matematica');
-  insertSubject.run('programacion', DEFAULT_TENANT_ID, 'Programacion');
-  insertSubject.run('literatura', DEFAULT_TENANT_ID, 'Literatura');
+  await insertSubject.run('matematica', DEFAULT_TENANT_ID, 'Matematica');
+  await insertSubject.run('programacion', DEFAULT_TENANT_ID, 'Programacion');
+  await insertSubject.run('literatura', DEFAULT_TENANT_ID, 'Literatura');
 
   const insertStudent = db.prepare(`
     INSERT OR IGNORE INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor)
     VALUES (@id, @tenant_id, @curso_id, @nombre, @dni, @tutor)
   `);
-  insertStudent.run({ id: 'al-1', tenant_id: DEFAULT_TENANT_ID, curso_id: 'curso-6-1-manana', nombre: 'Martina Ruiz', dni: '44111222', tutor: 'Laura Ruiz' });
-  insertStudent.run({ id: 'al-2', tenant_id: DEFAULT_TENANT_ID, curso_id: 'curso-6-1-manana', nombre: 'Tomas Pereyra', dni: '45222333', tutor: 'Ruben Pereyra' });
-  insertStudent.run({ id: 'al-3', tenant_id: DEFAULT_TENANT_ID, curso_id: 'curso-5-2-tarde', nombre: 'Sofia Molina', dni: '46333444', tutor: 'Ana Molina' });
+  await insertStudent.run({ id: 'al-1', tenant_id: DEFAULT_TENANT_ID, curso_id: 'curso-6-1-manana', nombre: 'Martina Ruiz', dni: '44111222', tutor: 'Laura Ruiz' });
+  await insertStudent.run({ id: 'al-2', tenant_id: DEFAULT_TENANT_ID, curso_id: 'curso-6-1-manana', nombre: 'Tomas Pereyra', dni: '45222333', tutor: 'Ruben Pereyra' });
+  await insertStudent.run({ id: 'al-3', tenant_id: DEFAULT_TENANT_ID, curso_id: 'curso-5-2-tarde', nombre: 'Sofia Molina', dni: '46333444', tutor: 'Ana Molina' });
 
   const assignCourse = db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)');
-  assignCourse.run(DEFAULT_TENANT_ID, 'docente-demo', 'curso-6-1-manana');
-  assignCourse.run(DEFAULT_TENANT_ID, 'docente-demo', 'curso-5-2-tarde');
+  await assignCourse.run(DEFAULT_TENANT_ID, 'docente-demo', 'curso-6-1-manana');
+  await assignCourse.run(DEFAULT_TENANT_ID, 'docente-demo', 'curso-5-2-tarde');
 
   const assignSchool = db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)');
-  assignSchool.run(DEFAULT_TENANT_ID, 'docente-demo', 'escuela-tecnica-1');
+  await assignSchool.run(DEFAULT_TENANT_ID, 'docente-demo', 'escuela-tecnica-1');
 
   const assignSubject = db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)');
-  assignSubject.run(DEFAULT_TENANT_ID, 'docente-demo', 'matematica');
-  assignSubject.run(DEFAULT_TENANT_ID, 'docente-demo', 'programacion');
-  assignSubject.run(DEFAULT_TENANT_ID, 'docente-demo', 'literatura');
+  await assignSubject.run(DEFAULT_TENANT_ID, 'docente-demo', 'matematica');
+  await assignSubject.run(DEFAULT_TENANT_ID, 'docente-demo', 'programacion');
+  await assignSubject.run(DEFAULT_TENANT_ID, 'docente-demo', 'literatura');
 
   const assignStudentSubject = db.prepare('INSERT OR IGNORE INTO alumno_materias (tenant_id, alumno_id, materia_id) VALUES (?, ?, ?)');
-  assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-1', 'matematica');
-  assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-1', 'programacion');
-  assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-2', 'matematica');
-  assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-2', 'programacion');
-  assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-3', 'literatura');
+  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-1', 'matematica');
+  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-1', 'programacion');
+  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-2', 'matematica');
+  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-2', 'programacion');
+  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-3', 'literatura');
 
   const insertGrade = db.prepare(`
     INSERT OR IGNORE INTO notas (id, tenant_id, docente_id, alumno_id, materia_id, titulo, valor, peso, fecha, updated_at)
     VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @titulo, @valor, @peso, @fecha, @updated_at)
   `);
-  insertGrade.run({
+  await insertGrade.run({
     id: 'nota-db-1',
     tenant_id: DEFAULT_TENANT_ID,
     docente_id: 'docente-demo',
@@ -1349,7 +1368,7 @@ function seed() {
     fecha: '2026-05-05',
     updated_at: '2026-05-05T03:00:00.000Z',
   });
-  insertGrade.run({
+  await insertGrade.run({
     id: 'nota-db-2',
     tenant_id: DEFAULT_TENANT_ID,
     docente_id: 'docente-demo',
@@ -1369,7 +1388,7 @@ function seed() {
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  insertActividad.run(
+  await insertActividad.run(
     'act-demo-tp1',
     DEFAULT_TENANT_ID,
     'docente-demo',
@@ -1385,7 +1404,7 @@ function seed() {
     JSON.stringify({ template: 'tp-v1', bloques: [{ type: 'consigna', texto: 'Desarrollar landing responsive.' }] }),
     new Date().toISOString(),
   );
-  insertActividad.run(
+  await insertActividad.run(
     'act-demo-eval1',
     DEFAULT_TENANT_ID,
     'docente-demo',

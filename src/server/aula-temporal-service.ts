@@ -156,16 +156,16 @@ function optionIds(opciones: Array<{ id: string; texto: string }>) {
   return opciones.map((item) => item.id);
 }
 
-export function replaceActividadPreguntas(
+export async function replaceActividadPreguntas(
   user: User,
   actividadId: string,
   preguntas: PreguntaInput[],
 ) {
-  const actividad = db.prepare(`
+  const actividad = (await db.prepare(`
     SELECT id, tenant_id, docente_id
     FROM actividades
     WHERE id = ?
-  `).get(actividadId) as { id: string; tenant_id: string; docente_id: string } | undefined;
+  `).get(actividadId)) as { id: string; tenant_id: string; docente_id: string } | undefined;
 
   if (!actividad) throw new Error('Actividad no encontrada.');
   if (user.rol !== 'admin' && (actividad.tenant_id !== user.tenant_id || actividad.docente_id !== user.id)) {
@@ -225,8 +225,8 @@ export function replaceActividadPreguntas(
       explicacion: string | null;
     }>;
 
-  const tx = db.transaction(() => {
-    db.prepare('DELETE FROM actividad_preguntas WHERE actividad_id = ? AND tenant_id = ?')
+  const tx = db.transaction(async () => {
+    await db.prepare('DELETE FROM actividad_preguntas WHERE actividad_id = ? AND tenant_id = ?')
       .run(actividadId, actividad.tenant_id);
 
     const insert = db.prepare(`
@@ -238,7 +238,7 @@ export function replaceActividadPreguntas(
     `);
 
     for (const pregunta of cleaned) {
-      insert.run({
+      await insert.run({
         ...pregunta,
         tenant_id: actividad.tenant_id,
         actividad_id: actividadId,
@@ -246,21 +246,22 @@ export function replaceActividadPreguntas(
     }
   });
 
-  tx();
+  await tx();
   return listPreguntas(actividadId);
 }
 
-export function listPreguntas(actividadId: string) {
-  return db.prepare(`
+export async function listPreguntas(actividadId: string) {
+  return (await db.prepare(`
     SELECT id, actividad_id, orden, tipo, enunciado, opciones_json, correctas_json, puntaje, explicacion
     FROM actividad_preguntas
     WHERE actividad_id = ?
     ORDER BY orden ASC, created_at ASC
-  `).all(actividadId) as PreguntaRow[];
+  `).all(actividadId)) as PreguntaRow[];
 }
 
-export function preguntasForTeacher(actividadId: string) {
-  return listPreguntas(actividadId).map((row) => ({
+export async function preguntasForTeacher(actividadId: string) {
+  const rows = await listPreguntas(actividadId);
+  return rows.map((row) => ({
     id: row.id,
     tipo: row.tipo,
     enunciado: row.enunciado,
@@ -271,14 +272,14 @@ export function preguntasForTeacher(actividadId: string) {
   }));
 }
 
-function matchAlumnoId(tenantId: string, cursoId: string, nombre: string, apellido: string) {
+async function matchAlumnoId(tenantId: string, cursoId: string, nombre: string, apellido: string) {
   const key = nombreKey(nombre, apellido);
   const [apellidoKey, nombreKeyPart] = key.split('|');
-  const candidates = db.prepare(`
+  const candidates = (await db.prepare(`
     SELECT id, nombre
     FROM alumnos
     WHERE tenant_id = ? AND curso_id = ? AND activo = 1
-  `).all(tenantId, cursoId) as Array<{ id: string; nombre: string }>;
+  `).all(tenantId, cursoId)) as Array<{ id: string; nombre: string }>;
 
   const matches = candidates.filter((alumno) => {
     const full = normalizeNamePart(alumno.nombre);
@@ -319,7 +320,7 @@ function matchAlumnoId(tenantId: string, cursoId: string, nombre: string, apelli
   return { alumnoId: null, match: 'none' as const };
 }
 
-export function createAulaTemporal(input: {
+export async function createAulaTemporal(input: {
   user: User;
   actividadId: string;
   modo: AulaModo;
@@ -332,11 +333,11 @@ export function createAulaTemporal(input: {
   allowEmpty?: boolean;
   publicada?: boolean;
 }) {
-  const actividad = db.prepare(`
+  const actividad = (await db.prepare(`
     SELECT id, tenant_id, docente_id, curso_id, materia_id, titulo, colegio, turno
     FROM actividades
     WHERE id = ?
-  `).get(input.actividadId) as {
+  `).get(input.actividadId)) as {
     id: string;
     tenant_id: string;
     docente_id: string;
@@ -356,10 +357,10 @@ export function createAulaTemporal(input: {
   }
 
   if (input.preguntas?.length) {
-    replaceActividadPreguntas(input.user, actividad.id, input.preguntas);
+    await replaceActividadPreguntas(input.user, actividad.id, input.preguntas);
   }
 
-  const preguntas = listPreguntas(actividad.id);
+  const preguntas = await listPreguntas(actividad.id);
   const allowEmpty = Boolean(input.allowEmpty);
   if (!allowEmpty && !preguntas.length) throw new Error('La actividad no tiene preguntas tipadas.');
 
@@ -384,7 +385,7 @@ export function createAulaTemporal(input: {
   const joinToken = randomBytes(18).toString('base64url');
   const publicada = input.publicada === true || (!allowEmpty && preguntas.length > 0) ? 1 : 0;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO aulas_temporales (
       id, tenant_id, docente_id, actividad_id, curso_id, join_token, modo,
       duracion_minutos, expires_at, estado, anti_trampa_json, mostrar_nota_al_alumno, titulo, publicada
@@ -411,7 +412,7 @@ export function createAulaTemporal(input: {
   return getAulaForTeacher(input.user, id);
 }
 
-export function createClaseVirtual(input: {
+export async function createClaseVirtual(input: {
   user: User;
   colegio: string;
   turno: string;
@@ -433,7 +434,7 @@ export function createClaseVirtual(input: {
     throw new Error('Completá escuela, turno, curso, materia y título de la clase.');
   }
 
-  const teaching = ensureTeachingContextRows({
+  const teaching = await ensureTeachingContextRows({
     user: input.user,
     cursoId,
     materiaId,
@@ -443,19 +444,19 @@ export function createClaseVirtual(input: {
   const resolvedCursoId = teaching.cursoId || cursoId;
   const resolvedMateriaId = teaching.materiaId || materiaId;
 
-  const curso = db.prepare(`
+  const curso = (await db.prepare(`
     SELECT id, tenant_id FROM cursos WHERE id = ? AND tenant_id = ?
-  `).get(resolvedCursoId, input.user.tenant_id) as { id: string; tenant_id: string } | undefined;
+  `).get(resolvedCursoId, input.user.tenant_id)) as { id: string; tenant_id: string } | undefined;
   if (!curso) throw new Error('Curso no encontrado. Elegí un curso en “Curso actual” o crealo en Cursos.');
 
-  const materia = db.prepare(`
+  const materia = (await db.prepare(`
     SELECT id FROM materias WHERE id = ? AND tenant_id = ?
-  `).get(resolvedMateriaId, input.user.tenant_id) as { id: string } | undefined;
+  `).get(resolvedMateriaId, input.user.tenant_id)) as { id: string } | undefined;
   if (!materia) throw new Error('Materia no encontrada. Elegí una materia en “Curso actual”.');
 
   const actividadId = `act-${randomUUID()}`;
   const now = new Date().toISOString();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO actividades (
       id, tenant_id, docente_id, colegio, turno, curso_id, materia_id,
       tipo, titulo, estado, contenido_json, updated_at
@@ -496,13 +497,13 @@ export function createClaseVirtual(input: {
   });
 }
 
-export function setActividadClase(
+export async function setActividadClase(
   user: User,
   aulaId: string,
   preguntas: PreguntaInput[],
   options: { publicar?: boolean } = {},
 ) {
-  const aula = getAulaForTeacher(user, aulaId);
+  const aula = await getAulaForTeacher(user, aulaId);
   if (!preguntas?.length) throw new Error('Agregá al menos una pregunta digital.');
 
   if (aula.modo === 'multiple_choice') {
@@ -510,34 +511,34 @@ export function setActividadClase(
     if (invalid) throw new Error('En opción múltiple solo se permiten preguntas MC.');
   }
 
-  replaceActividadPreguntas(user, aula.actividadId, preguntas);
+  await replaceActividadPreguntas(user, aula.actividadId, preguntas);
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE aulas_temporales
     SET publicada = 1, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(aulaId);
 
   // Keep content update simple without json_set
-  const row = db.prepare('SELECT contenido_json FROM actividades WHERE id = ?').get(aula.actividadId) as { contenido_json: string };
+  const row = (await db.prepare('SELECT contenido_json FROM actividades WHERE id = ?').get(aula.actividadId)) as { contenido_json: string };
   const contenido = parseJson<Record<string, unknown>>(row?.contenido_json, {});
   contenido.digitalOnly = true;
   contenido.modoOnline = aula.modo;
   contenido.bloques = preguntas.map((q) => ({ type: 'pregunta', texto: q.enunciado, puntaje: q.puntaje || 1 }));
-  db.prepare('UPDATE actividades SET contenido_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+  await db.prepare('UPDATE actividades SET contenido_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(JSON.stringify(contenido), aula.actividadId);
 
   if (options.publicar === false) {
-    db.prepare(`UPDATE aulas_temporales SET publicada = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(aulaId);
+    await db.prepare(`UPDATE aulas_temporales SET publicada = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(aulaId);
   }
 
   return getAulaForTeacher(user, aulaId);
 }
 
-export function publicarClase(user: User, aulaId: string) {
-  const aula = getAulaForTeacher(user, aulaId);
+export async function publicarClase(user: User, aulaId: string) {
+  const aula = await getAulaForTeacher(user, aulaId);
   if (!aula.preguntas?.length) throw new Error('Primero agregá la actividad digital con preguntas.');
-  db.prepare(`
+  await db.prepare(`
     UPDATE aulas_temporales
     SET publicada = 1, estado = 'abierta', updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
@@ -545,14 +546,14 @@ export function publicarClase(user: User, aulaId: string) {
   return getAulaForTeacher(user, aulaId);
 }
 
-export function getAulaByToken(token: string) {
-  const aula = db.prepare(`
+export async function getAulaByToken(token: string) {
+  const aula = (await db.prepare(`
     SELECT a.*, act.titulo AS actividad_titulo, act.materia_id, c.nombre AS curso_nombre, c.escuela
     FROM aulas_temporales a
     JOIN actividades act ON act.id = a.actividad_id
     JOIN cursos c ON c.id = a.curso_id
     WHERE a.join_token = ?
-  `).get(token) as (AulaRow & {
+  `).get(token)) as (AulaRow & {
     actividad_titulo: string;
     materia_id: string;
     curso_nombre: string;
@@ -562,14 +563,14 @@ export function getAulaByToken(token: string) {
   return aula || null;
 }
 
-export function getAulaForTeacher(user: User, aulaId: string) {
-  const aula = db.prepare(`
+export async function getAulaForTeacher(user: User, aulaId: string) {
+  const aula = (await db.prepare(`
     SELECT a.*, act.titulo AS actividad_titulo, act.materia_id, c.nombre AS curso_nombre, c.escuela
     FROM aulas_temporales a
     JOIN actividades act ON act.id = a.actividad_id
     JOIN cursos c ON c.id = a.curso_id
     WHERE a.id = ?
-  `).get(aulaId) as (AulaRow & {
+  `).get(aulaId)) as (AulaRow & {
     actividad_titulo: string;
     materia_id: string;
     curso_nombre: string;
@@ -581,13 +582,15 @@ export function getAulaForTeacher(user: User, aulaId: string) {
     throw new Error('Sin acceso al aula.');
   }
 
-  const intentos = db.prepare(`
+  const intentos = (await db.prepare(`
     SELECT i.*, al.nombre AS alumno_nombre
     FROM aula_intentos i
     LEFT JOIN alumnos al ON al.id = i.alumno_id
     WHERE i.aula_id = ?
     ORDER BY i.submitted_at DESC, i.started_at DESC
-  `).all(aulaId) as Array<IntentoRow & { alumno_nombre: string | null }>;
+  `).all(aulaId)) as Array<IntentoRow & { alumno_nombre: string | null }>;
+
+  const preguntas = await preguntasForTeacher(aula.actividad_id);
 
   return {
     id: aula.id,
@@ -606,7 +609,7 @@ export function getAulaForTeacher(user: User, aulaId: string) {
     mostrarNotaAlAlumno: Boolean(aula.mostrar_nota_al_alumno),
     joinToken: aula.join_token,
     joinPath: `/s/${aula.join_token}`,
-    preguntas: preguntasForTeacher(aula.actividad_id),
+    preguntas,
     intentos: intentos.map((item) => ({
       id: item.id,
       nombre: item.nombre,
@@ -625,8 +628,8 @@ export function getAulaForTeacher(user: User, aulaId: string) {
   };
 }
 
-export function listAulasForDocente(user: User, actividadId?: string) {
-  const rows = db.prepare(`
+export async function listAulasForDocente(user: User, actividadId?: string) {
+  const rows = (await db.prepare(`
     SELECT a.id, a.modo, a.estado, a.expires_at, a.duracion_minutos, a.join_token, a.titulo,
            a.actividad_id, act.titulo AS actividad_titulo, a.created_at,
            (SELECT COUNT(*) FROM aula_intentos i WHERE i.aula_id = a.id) AS intentos_count
@@ -637,7 +640,7 @@ export function listAulasForDocente(user: User, actividadId?: string) {
       AND (? IS NULL OR a.actividad_id = ?)
     ORDER BY a.created_at DESC
     LIMIT 50
-  `).all(user.tenant_id, user.id, actividadId || null, actividadId || null) as Array<{
+  `).all(user.tenant_id, user.id, actividadId || null, actividadId || null)) as Array<{
     id: string;
     modo: AulaModo;
     estado: string;
@@ -666,33 +669,33 @@ export function listAulasForDocente(user: User, actividadId?: string) {
 }
 
 export async function closeAula(user: User, aulaId: string) {
-  getAulaForTeacher(user, aulaId);
+  await getAulaForTeacher(user, aulaId);
 
-  const pendientes = db.prepare(`
+  const pendientes = (await db.prepare(`
     SELECT id FROM aula_intentos
     WHERE aula_id = ? AND estado = 'en_curso'
-  `).all(aulaId) as Array<{ id: string }>;
+  `).all(aulaId)) as Array<{ id: string }>;
 
   for (const row of pendientes) {
     try {
-      submitIntento(row.id, { forceTimeout: true, reason: 'clase_cerrada' });
+      await submitIntento(row.id, { forceTimeout: true, reason: 'clase_cerrada' });
     } catch {
       // continue
     }
   }
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE aulas_temporales
     SET estado = 'cerrada', updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(aulaId);
 
-  const porCorregir = db.prepare(`
+  const porCorregir = (await db.prepare(`
     SELECT id FROM aula_intentos
     WHERE aula_id = ?
       AND estado IN ('entregado', 'vencido', 'bloqueado')
       AND nota_10 IS NULL
-  `).all(aulaId) as Array<{ id: string }>;
+  `).all(aulaId)) as Array<{ id: string }>;
 
   for (const row of porCorregir) {
     try {
@@ -705,8 +708,8 @@ export async function closeAula(user: User, aulaId: string) {
   return getAulaForTeacher(user, aulaId);
 }
 
-export function listActividadesCargables(user: User, cursoId?: string) {
-  const rows = db.prepare(`
+export async function listActividadesCargables(user: User, cursoId?: string) {
+  const rows = (await db.prepare(`
     SELECT
       a.id,
       a.titulo,
@@ -726,7 +729,7 @@ export function listActividadesCargables(user: User, cursoId?: string) {
       AND (? IS NULL OR ? = '' OR a.curso_id = ?)
     ORDER BY a.updated_at DESC
     LIMIT 100
-  `).all(user.tenant_id, user.id, cursoId || null, cursoId || null, cursoId || null) as Array<{
+  `).all(user.tenant_id, user.id, cursoId || null, cursoId || null, cursoId || null)) as Array<{
     id: string;
     titulo: string;
     tipo: string;
@@ -851,8 +854,8 @@ export function extractPreguntasFromContenido(contenidoJson: string | null | und
   return preguntas.filter((p) => p.enunciado);
 }
 
-export function resolverPreguntasActividad(actividadId: string): PreguntaInput[] {
-  const tipadas = preguntasForTeacher(actividadId);
+export async function resolverPreguntasActividad(actividadId: string): Promise<PreguntaInput[]> {
+  const tipadas = await preguntasForTeacher(actividadId);
   if (tipadas.length) {
     return tipadas.map((p) => ({
       tipo: p.tipo,
@@ -863,36 +866,36 @@ export function resolverPreguntasActividad(actividadId: string): PreguntaInput[]
       explicacion: p.explicacion,
     }));
   }
-  const row = db.prepare('SELECT contenido_json FROM actividades WHERE id = ?').get(actividadId) as
+  const row = (await db.prepare('SELECT contenido_json FROM actividades WHERE id = ?').get(actividadId)) as
     | { contenido_json: string }
     | undefined;
   return extractPreguntasFromContenido(row?.contenido_json);
 }
 
-export function cargarActividadExistente(
+export async function cargarActividadExistente(
   user: User,
   aulaId: string,
   actividadOrigenId: string,
   options: { publicar?: boolean } = {},
 ) {
-  const aula = getAulaForTeacher(user, aulaId);
-  const origen = db.prepare(`
+  const aula = await getAulaForTeacher(user, aulaId);
+  const origen = (await db.prepare(`
     SELECT id, tenant_id, docente_id, titulo
     FROM actividades
     WHERE id = ?
-  `).get(actividadOrigenId) as { id: string; tenant_id: string; docente_id: string; titulo: string } | undefined;
+  `).get(actividadOrigenId)) as { id: string; tenant_id: string; docente_id: string; titulo: string } | undefined;
 
   if (!origen) throw new Error('Actividad no encontrada.');
   if (user.rol !== 'admin' && (origen.tenant_id !== user.tenant_id || origen.docente_id !== user.id)) {
     throw new Error('Sin acceso a esa actividad.');
   }
 
-  let preguntas = resolverPreguntasActividad(origen.id);
+  let preguntas = await resolverPreguntasActividad(origen.id);
   if (!preguntas.length) {
     throw new Error('Esa actividad no tiene texto/preguntas para importar.');
   }
 
-  const fromPlainContent = preguntasForTeacher(origen.id).length === 0;
+  const fromPlainContent = (await preguntasForTeacher(origen.id)).length === 0;
   // Si la clase es solo MC y vinieron abiertas desde Evaluación/TP, las convertimos a MC borrador (2 opciones vacías) para que el profe marque.
   if (aula.modo === 'multiple_choice') {
     preguntas = preguntas.map((p, index) => {
@@ -918,7 +921,7 @@ export function cargarActividadExistente(
   // Si hace falta completar opciones/correctas, devolvemos preview para el editor (sin publicar).
   if (needsReview) {
     return {
-      ...getAulaForTeacher(user, aulaId),
+      ...(await getAulaForTeacher(user, aulaId)),
       needsReview: true,
       importedFrom: origen.titulo,
       preguntasPreview: preguntas,
@@ -926,17 +929,18 @@ export function cargarActividadExistente(
   }
 
   return {
-    ...setActividadClase(user, aulaId, preguntas, { publicar: options.publicar !== false }),
+    ...(await setActividadClase(user, aulaId, preguntas, { publicar: options.publicar !== false })),
     needsReview: false,
     importedFrom: origen.titulo,
   };
 }
 
-export function publicAulaPayload(token: string) {
-  const aula = getAulaByToken(token);
+export async function publicAulaPayload(token: string) {
+  const aula = await getAulaByToken(token);
   if (!aula) return null;
 
-  const preguntasCount = listPreguntas(aula.actividad_id).length;
+  const preguntas = await listPreguntas(aula.actividad_id);
+  const preguntasCount = preguntas.length;
   const expired = new Date(aula.expires_at).getTime() <= Date.now();
   const ready = Boolean(aula.publicada) && preguntasCount > 0 && aula.estado === 'abierta' && !expired;
 
@@ -955,15 +959,15 @@ export function publicAulaPayload(token: string) {
   };
 }
 
-function getIntento(intentoId: string) {
-  return db.prepare('SELECT * FROM aula_intentos WHERE id = ?').get(intentoId) as IntentoRow | undefined;
+async function getIntento(intentoId: string) {
+  return (await db.prepare('SELECT * FROM aula_intentos WHERE id = ?').get(intentoId)) as IntentoRow | undefined;
 }
 
-function buildStudentQuestions(aula: AulaRow, intento: IntentoRow) {
+async function buildStudentQuestions(aula: AulaRow, intento: IntentoRow) {
   const anti = parseAntiTrampa(aula.anti_trampa_json, aula.modo);
-  const preguntas = listPreguntas(aula.actividad_id);
+  const preguntas = await listPreguntas(aula.actividad_id);
   let order = parseJson<string[]>(intento.pregunta_order_json, []);
-  let opcionesOrder = parseJson<Record<string, string[]>>(intento.opciones_order_json, {});
+  const opcionesOrder = parseJson<Record<string, string[]>>(intento.opciones_order_json, {});
 
   if (!order.length) {
     order = preguntas.map((p) => p.id);
@@ -979,7 +983,7 @@ function buildStudentQuestions(aula: AulaRow, intento: IntentoRow) {
     }
   }
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE aula_intentos
     SET pregunta_order_json = ?, opciones_order_json = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
@@ -1003,8 +1007,8 @@ function buildStudentQuestions(aula: AulaRow, intento: IntentoRow) {
   }).filter(Boolean);
 }
 
-export function joinAula(token: string, nombreRaw: string, apellidoRaw: string) {
-  const aula = getAulaByToken(token);
+export async function joinAula(token: string, nombreRaw: string, apellidoRaw: string) {
+  const aula = await getAulaByToken(token);
   if (!aula) throw new Error('Link inválido.');
   if (aula.estado !== 'abierta' || new Date(aula.expires_at).getTime() <= Date.now()) {
     throw new Error('El aula ya no está disponible.');
@@ -1012,7 +1016,8 @@ export function joinAula(token: string, nombreRaw: string, apellidoRaw: string) 
   if (!aula.publicada) {
     throw new Error('La clase todavía no está lista. El docente está cargando la actividad.');
   }
-  if (!listPreguntas(aula.actividad_id).length) {
+  const preguntas = await listPreguntas(aula.actividad_id);
+  if (!preguntas.length) {
     throw new Error('La clase aún no tiene actividad digital para responder.');
   }
 
@@ -1021,9 +1026,9 @@ export function joinAula(token: string, nombreRaw: string, apellidoRaw: string) 
   if (!nombre || !apellido) throw new Error('Ingresá nombre y apellido.');
 
   const key = nombreKey(nombre, apellido);
-  const existing = db.prepare(`
+  const existing = (await db.prepare(`
     SELECT * FROM aula_intentos WHERE aula_id = ? AND nombre_key = ?
-  `).get(aula.id, key) as IntentoRow | undefined;
+  `).get(aula.id, key)) as IntentoRow | undefined;
 
   if (existing && ['entregado', 'vencido', 'bloqueado'].includes(existing.estado)) {
     throw new Error('Ya registraste una entrega con ese nombre y apellido.');
@@ -1031,18 +1036,18 @@ export function joinAula(token: string, nombreRaw: string, apellidoRaw: string) 
 
   if (existing && existing.estado === 'en_curso') {
     if (new Date(existing.ends_at).getTime() <= Date.now()) {
-      submitIntento(existing.id, { forceTimeout: true });
+      await submitIntento(existing.id, { forceTimeout: true });
       throw new Error('El tiempo de tu intento anterior ya venció.');
     }
     return buildJoinResponse(aula, existing);
   }
 
-  const match = matchAlumnoId(aula.tenant_id, aula.curso_id, nombre, apellido);
+  const match = await matchAlumnoId(aula.tenant_id, aula.curso_id, nombre, apellido);
   const now = new Date();
   const ends = new Date(now.getTime() + aula.duracion_minutos * 60 * 1000);
   const id = randomUUID();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO aula_intentos (
       id, tenant_id, aula_id, alumno_id, nombre, apellido, nombre_key,
       started_at, ends_at, respuestas_json, flags_json, estado
@@ -1067,13 +1072,13 @@ export function joinAula(token: string, nombreRaw: string, apellidoRaw: string) 
     }]),
   });
 
-  const intento = getIntento(id)!;
+  const intento = (await getIntento(id))!;
   return buildJoinResponse(aula, intento);
 }
 
-function buildJoinResponse(aula: AulaRow & { actividad_titulo?: string; curso_nombre?: string; escuela?: string }, intento: IntentoRow) {
+async function buildJoinResponse(aula: AulaRow & { actividad_titulo?: string; curso_nombre?: string; escuela?: string }, intento: IntentoRow) {
   const anti = parseAntiTrampa(aula.anti_trampa_json, aula.modo);
-  const preguntas = buildStudentQuestions(aula, intento);
+  const preguntas = await buildStudentQuestions(aula, intento);
   return {
     intentoId: intento.id,
     nombre: intento.nombre,
@@ -1096,17 +1101,17 @@ function buildJoinResponse(aula: AulaRow & { actividad_titulo?: string; curso_no
   };
 }
 
-export function assertIntentoCookie(intentoId: string, cookieValue: string | undefined) {
+export async function assertIntentoCookie(intentoId: string, cookieValue: string | undefined) {
   if (!cookieValue || cookieValue !== intentoId) {
     throw new Error('Sesión de intento inválida.');
   }
-  const intento = getIntento(intentoId);
+  const intento = await getIntento(intentoId);
   if (!intento) throw new Error('Intento no encontrado.');
   return intento;
 }
 
-export function saveRespuestas(intentoId: string, respuestas: Record<string, unknown>) {
-  const intento = getIntento(intentoId);
+export async function saveRespuestas(intentoId: string, respuestas: Record<string, unknown>) {
+  const intento = await getIntento(intentoId);
   if (!intento) throw new Error('Intento no encontrado.');
   if (intento.estado !== 'en_curso') throw new Error('El intento ya no admite cambios.');
 
@@ -1116,7 +1121,7 @@ export function saveRespuestas(intentoId: string, respuestas: Record<string, unk
 
   const current = parseJson<Record<string, unknown>>(intento.respuestas_json, {});
   const next = { ...current, ...respuestas };
-  db.prepare(`
+  await db.prepare(`
     UPDATE aula_intentos
     SET respuestas_json = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
@@ -1125,12 +1130,12 @@ export function saveRespuestas(intentoId: string, respuestas: Record<string, unk
   return { ok: true, respuestas: next };
 }
 
-export function appendIntentoEvent(intentoId: string, type: string, detail?: Record<string, unknown>) {
-  const intento = getIntento(intentoId);
+export async function appendIntentoEvent(intentoId: string, type: string, detail?: Record<string, unknown>) {
+  const intento = await getIntento(intentoId);
   if (!intento) throw new Error('Intento no encontrado.');
   if (intento.estado !== 'en_curso') return { ok: true, estado: intento.estado };
 
-  const aula = db.prepare('SELECT * FROM aulas_temporales WHERE id = ?').get(intento.aula_id) as AulaRow;
+  const aula = (await db.prepare('SELECT * FROM aulas_temporales WHERE id = ?').get(intento.aula_id)) as AulaRow;
   const anti = parseAntiTrampa(aula.anti_trampa_json, aula.modo);
   const flags = parseJson<Array<Record<string, unknown>>>(intento.flags_json, []);
   flags.push({ type, at: new Date().toISOString(), ...(detail || {}) });
@@ -1143,14 +1148,14 @@ export function appendIntentoEvent(intentoId: string, type: string, detail?: Rec
     if (anti.actionOnFocusLimit === 'block') {
       estado = 'bloqueado';
     } else if (anti.actionOnFocusLimit === 'autosubmit') {
-      db.prepare(`
+      await db.prepare(`
         UPDATE aula_intentos SET flags_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
       `).run(JSON.stringify(flags), intentoId);
-      return { ok: true, estado: 'entregado', result: submitIntento(intentoId, { forceTimeout: false, reason: 'focus_limit' }) };
+      return { ok: true, estado: 'entregado', result: await submitIntento(intentoId, { forceTimeout: false, reason: 'focus_limit' }) };
     }
   }
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE aula_intentos
     SET flags_json = ?, estado = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
@@ -1159,8 +1164,8 @@ export function appendIntentoEvent(intentoId: string, type: string, detail?: Rec
   return { ok: true, estado, focusLosses, maxFocusLoss: anti.maxFocusLoss };
 }
 
-function scoreRespuestas(actividadId: string, respuestas: Record<string, unknown>) {
-  const preguntas = listPreguntas(actividadId);
+async function scoreRespuestas(actividadId: string, respuestas: Record<string, unknown>) {
+  const preguntas = await listPreguntas(actividadId);
   let earned = 0;
   let max = 0;
   let pendingOpen = 0;
@@ -1196,12 +1201,12 @@ function scoreRespuestas(actividadId: string, respuestas: Record<string, unknown
 }
 
 async function scoreRespuestasCompleto(actividadId: string, respuestas: Record<string, unknown>) {
-  const base = scoreRespuestas(actividadId, respuestas);
+  const base = await scoreRespuestas(actividadId, respuestas);
   if (!base.pendingOpen) return base;
 
   const { scoreOpenAnswersWithAi } = await import('./grade-digital-open');
   const open = await scoreOpenAnswersWithAi({
-    preguntas: listPreguntas(actividadId),
+    preguntas: await listPreguntas(actividadId),
     respuestas,
   });
 
@@ -1226,23 +1231,23 @@ async function scoreRespuestasCompleto(actividadId: string, respuestas: Record<s
   };
 }
 
-export function submitIntento(
+export async function submitIntento(
   intentoId: string,
   options: { forceTimeout?: boolean; reason?: string } = {},
 ) {
-  const intento = getIntento(intentoId);
+  const intento = await getIntento(intentoId);
   if (!intento) throw new Error('Intento no encontrado.');
 
   if (['entregado', 'vencido'].includes(intento.estado)) {
     return getSubmitResult(intento);
   }
 
-  const aula = db.prepare(`
+  const aula = (await db.prepare(`
     SELECT a.*, act.titulo AS actividad_titulo, act.materia_id
     FROM aulas_temporales a
     JOIN actividades act ON act.id = a.actividad_id
     WHERE a.id = ?
-  `).get(intento.aula_id) as AulaRow & { actividad_titulo: string; materia_id: string };
+  `).get(intento.aula_id)) as AulaRow & { actividad_titulo: string; materia_id: string };
 
   const now = new Date();
   const timedOut = new Date(intento.ends_at).getTime() <= now.getTime();
@@ -1252,7 +1257,7 @@ export function submitIntento(
 
   // Solo se registra la entrega. La auto-corrección corre al cerrar la clase.
   const estado = timedOut || options.forceTimeout ? 'vencido' : 'entregado';
-  db.prepare(`
+  await db.prepare(`
     UPDATE aula_intentos
     SET submitted_at = ?, flags_json = ?, estado = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
@@ -1263,20 +1268,20 @@ export function submitIntento(
     intentoId,
   );
 
-  return getSubmitResult(getIntento(intentoId)!, aula);
+  return getSubmitResult((await getIntento(intentoId))!, aula);
 }
 
 async function corregirIntentoAlCierre(intentoId: string) {
-  const intento = getIntento(intentoId);
+  const intento = await getIntento(intentoId);
   if (!intento) throw new Error('Intento no encontrado.');
   if (intento.nota_10 != null && intento.nota_id) return getSubmitResult(intento);
 
-  const aula = db.prepare(`
+  const aula = (await db.prepare(`
     SELECT a.*, act.titulo AS actividad_titulo, act.materia_id
     FROM aulas_temporales a
     JOIN actividades act ON act.id = a.actividad_id
     WHERE a.id = ?
-  `).get(intento.aula_id) as AulaRow & { actividad_titulo: string; materia_id: string };
+  `).get(intento.aula_id)) as AulaRow & { actividad_titulo: string; materia_id: string };
 
   const respuestas = parseJson<Record<string, unknown>>(intento.respuestas_json, {});
   const score = await scoreRespuestasCompleto(aula.actividad_id, respuestas);
@@ -1289,7 +1294,7 @@ async function corregirIntentoAlCierre(intentoId: string) {
       aula.modo === 'examen' ? 'Examen'
         : aula.modo === 'multiple_choice' ? 'Multiple choice'
           : 'Actividad';
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO notas (
         id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion,
         valor, calificacion_texto, peso, fecha, fecha_entrega, motivo, updated_at
@@ -1313,23 +1318,23 @@ async function corregirIntentoAlCierre(intentoId: string) {
         : `Auto al cierre: ${score.puntaje}/${score.puntajeMax} pts`,
     });
   } else if (notaId && score.nota10 != null) {
-    db.prepare('UPDATE notas SET valor = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    await db.prepare('UPDATE notas SET valor = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(score.nota10, notaId);
   }
 
   const flags = parseJson<Array<Record<string, unknown>>>(intento.flags_json, []);
   flags.push({ type: 'auto_grade_on_close', at: now.toISOString(), detail: score.detail });
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE aula_intentos
     SET puntaje = ?, nota_10 = ?, nota_id = ?, flags_json = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(score.puntaje, score.nota10, notaId, JSON.stringify(flags), intentoId);
 
-  return getSubmitResult(getIntento(intentoId)!, aula);
+  return getSubmitResult((await getIntento(intentoId))!, aula);
 }
 
-export function applyDigitalQuizToClase(
+export async function applyDigitalQuizToClase(
   user: User,
   aulaId: string,
   quiz: {
@@ -1340,13 +1345,13 @@ export function applyDigitalQuizToClase(
     referenciaHtml?: string;
   },
 ) {
-  const aula = getAulaForTeacher(user, aulaId);
+  const aula = await getAulaForTeacher(user, aulaId);
   if (!quiz.preguntas?.length) throw new Error('No hay preguntas para cargar.');
 
-  setActividadClase(user, aulaId, quiz.preguntas, { publicar: true });
+  await setActividadClase(user, aulaId, quiz.preguntas, { publicar: true });
 
-  const row = db.prepare('SELECT contenido_json, titulo FROM actividades WHERE id = ?')
-    .get(aula.actividadId) as { contenido_json: string; titulo: string };
+  const row = (await db.prepare('SELECT contenido_json, titulo FROM actividades WHERE id = ?')
+    .get(aula.actividadId)) as { contenido_json: string; titulo: string };
   const contenido = parseJson<Record<string, unknown>>(row.contenido_json, {});
   contenido.digitalOnly = true;
   contenido.modoOnline = aula.modo;
@@ -1355,26 +1360,26 @@ export function applyDigitalQuizToClase(
   contenido.documentoDocente = quiz.documentoDocente || quiz.hojaRespuestas || '';
   if (quiz.referenciaHtml) contenido.referenciaHtml = quiz.referenciaHtml;
   if (quiz.titulo) {
-    db.prepare('UPDATE actividades SET titulo = ?, contenido_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    await db.prepare('UPDATE actividades SET titulo = ?, contenido_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(String(quiz.titulo).trim(), JSON.stringify(contenido), aula.actividadId);
-    db.prepare('UPDATE aulas_temporales SET titulo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    await db.prepare('UPDATE aulas_temporales SET titulo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(String(quiz.titulo).trim(), aulaId);
   } else {
-    db.prepare('UPDATE actividades SET contenido_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    await db.prepare('UPDATE actividades SET contenido_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(JSON.stringify(contenido), aula.actividadId);
   }
 
   return getAulaForTeacher(user, aulaId);
 }
 
-export function getDocumentoReferenciaClase(user: User, aulaId: string) {
-  const aula = getAulaForTeacher(user, aulaId);
-  const row = db.prepare('SELECT contenido_json, titulo FROM actividades WHERE id = ?')
-    .get(aula.actividadId) as { contenido_json: string; titulo: string };
+export async function getDocumentoReferenciaClase(user: User, aulaId: string) {
+  const aula = await getAulaForTeacher(user, aulaId);
+  const row = (await db.prepare('SELECT contenido_json, titulo FROM actividades WHERE id = ?')
+    .get(aula.actividadId)) as { contenido_json: string; titulo: string };
   const contenido = parseJson<Record<string, unknown>>(row.contenido_json, {});
   let html = String(contenido.referenciaHtml || '').trim();
   if (!html) {
-    const preguntas = preguntasForTeacher(aula.actividadId);
+    const preguntas = await preguntasForTeacher(aula.actividadId);
     const hoja = String(contenido.hojaRespuestas || contenido.documentoDocente || '');
     html = `<!doctype html><html lang="es"><head><meta charset="utf-8"/><title>${aula.titulo}</title></head><body>
       <h1>${aula.titulo}</h1>
@@ -1386,8 +1391,8 @@ export function getDocumentoReferenciaClase(user: User, aulaId: string) {
   return { titulo: aula.titulo || row.titulo, html };
 }
 
-function getSubmitResult(intento: IntentoRow, aula?: AulaRow) {
-  const aulaRow = aula || db.prepare('SELECT * FROM aulas_temporales WHERE id = ?').get(intento.aula_id) as AulaRow;
+async function getSubmitResult(intento: IntentoRow, aula?: AulaRow) {
+  const aulaRow = aula || ((await db.prepare('SELECT * FROM aulas_temporales WHERE id = ?').get(intento.aula_id)) as AulaRow);
   const closed = aulaRow.estado === 'cerrada';
   const graded = intento.nota_10 != null;
   // La nota solo se muestra cuando la clase terminó y ya se auto-corrigió.
@@ -1409,48 +1414,47 @@ function getSubmitResult(intento: IntentoRow, aula?: AulaRow) {
   };
 }
 
-export function resumeIntento(intentoId: string) {
-  const intento = getIntento(intentoId);
+export async function resumeIntento(intentoId: string) {
+  const intento = await getIntento(intentoId);
   if (!intento) throw new Error('Intento no encontrado.');
-  const aula = getAulaByToken(
-    (db.prepare('SELECT join_token FROM aulas_temporales WHERE id = ?').get(intento.aula_id) as { join_token: string }).join_token,
-  );
+  const aulaTokenRow = (await db.prepare('SELECT join_token FROM aulas_temporales WHERE id = ?').get(intento.aula_id)) as { join_token: string };
+  const aula = await getAulaByToken(aulaTokenRow.join_token);
   if (!aula) throw new Error('Aula no encontrada.');
 
   if (intento.estado === 'en_curso' && new Date(intento.ends_at).getTime() <= Date.now()) {
-    return { done: true, result: submitIntento(intento.id, { forceTimeout: true }) };
+    return { done: true, result: await submitIntento(intento.id, { forceTimeout: true }) };
   }
 
   if (intento.estado !== 'en_curso') {
-    return { done: true, result: getSubmitResult(intento, aula) };
+    return { done: true, result: await getSubmitResult(intento, aula) };
   }
 
-  return { done: false, session: buildJoinResponse(aula, intento) };
+  return { done: false, session: await buildJoinResponse(aula, intento) };
 }
 
-export function vincularIntento(user: User, intentoId: string, alumnoId: string) {
-  const intento = getIntento(intentoId);
+export async function vincularIntento(user: User, intentoId: string, alumnoId: string) {
+  const intento = await getIntento(intentoId);
   if (!intento) throw new Error('Intento no encontrado.');
-  const aula = db.prepare(`
+  const aula = (await db.prepare(`
     SELECT a.*, act.materia_id, act.titulo AS actividad_titulo
     FROM aulas_temporales a
     JOIN actividades act ON act.id = a.actividad_id
     WHERE a.id = ?
-  `).get(intento.aula_id) as AulaRow & { materia_id: string; actividad_titulo: string };
+  `).get(intento.aula_id)) as AulaRow & { materia_id: string; actividad_titulo: string };
 
   if (user.rol !== 'admin' && (aula.tenant_id !== user.tenant_id || aula.docente_id !== user.id)) {
     throw new Error('Sin acceso.');
   }
 
-  const alumno = db.prepare(`
+  const alumno = (await db.prepare(`
     SELECT id FROM alumnos WHERE id = ? AND tenant_id = ? AND curso_id = ?
-  `).get(alumnoId, aula.tenant_id, aula.curso_id) as { id: string } | undefined;
+  `).get(alumnoId, aula.tenant_id, aula.curso_id)) as { id: string } | undefined;
   if (!alumno) throw new Error('Alumno no pertenece al curso del aula.');
 
   let notaId = intento.nota_id;
   if (!notaId && intento.nota_10 != null) {
     notaId = randomUUID();
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO notas (
         id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion,
         valor, peso, fecha, fecha_entrega, motivo, updated_at
@@ -1470,11 +1474,11 @@ export function vincularIntento(user: User, intentoId: string, alumnoId: string)
       fecha: (intento.submitted_at || new Date().toISOString()).slice(0, 10),
     });
   } else if (notaId) {
-    db.prepare('UPDATE notas SET alumno_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    await db.prepare('UPDATE notas SET alumno_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(alumnoId, notaId);
   }
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE aula_intentos
     SET alumno_id = ?, nota_id = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?

@@ -7,12 +7,12 @@ import {
   type PreguntaInput,
 } from '../../../server/aula-temporal-service';
 
-export const GET: APIRoute = ({ locals, url }) => {
+export const GET: APIRoute = async ({ locals, url }) => {
   const user = locals.user;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
   const actividadId = url.searchParams.get('actividadId') || undefined;
-  return Response.json({ aulas: listAulasForDocente(user, actividadId) });
+  return Response.json({ aulas: await listAulasForDocente(user, actividadId) });
 };
 
 export const POST: APIRoute = async ({ locals, request }) => {
@@ -28,7 +28,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   }
 
   try {
-    const aula = createAulaTemporal({
+    const aula = await createAulaTemporal({
       user,
       actividadId,
       modo,

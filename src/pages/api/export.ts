@@ -122,7 +122,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const attendanceTenantFilter = user.rol === 'admin' ? '' : 'AND asistencias.tenant_id = @tenant_id AND asistencias.docente_id = @docente_id';
   const gradeTenantFilter = user.rol === 'admin' ? '' : 'AND notas.tenant_id = @tenant_id AND notas.docente_id = @docente_id';
 
-  const asistencias = db.prepare(`
+  const asistencias = (await db.prepare(`
     WITH ranked_asistencias AS (
       SELECT
         asistencias.*,
@@ -159,9 +159,9 @@ export const GET: APIRoute = async ({ locals, url }) => {
       ${cicloFilter}
       ${coursePermission}
     ORDER BY asistencias.fecha, cursos.nombre, alumnos.nombre
-  `).all(params) as ExportRow[];
+  `).all(params)) as ExportRow[];
 
-  const notas = db.prepare(`
+  const notas = (await db.prepare(`
     SELECT
       notas.fecha AS Fecha,
       cursos.escuela AS Colegio,
@@ -194,9 +194,9 @@ export const GET: APIRoute = async ({ locals, url }) => {
       ${gradeTenantFilter}
       ${coursePermission}
     ORDER BY notas.fecha, cursos.nombre, alumnos.nombre
-  `).all(params) as ExportRow[];
+  `).all(params)) as ExportRow[];
 
-  const alumnosExport = db.prepare(`
+  const alumnosExport = (await db.prepare(`
     SELECT
       cursos.escuela AS Escuela,
       cursos.nombre AS Curso,
@@ -220,9 +220,9 @@ export const GET: APIRoute = async ({ locals, url }) => {
       ${user.rol === 'admin' ? '' : 'AND alumnos.tenant_id = @tenant_id'}
       ${coursePermission}
     ORDER BY cursos.escuela, cursos.nombre, alumnos.nombre
-  `).all(params) as ExportRow[];
+  `).all(params)) as ExportRow[];
 
-  const alumnos = db.prepare(`
+  const alumnos = (await db.prepare(`
     SELECT alumnos.id, alumnos.nombre, cursos.nombre AS curso, cursos.escuela AS colegio, cursos.turno AS turno
     FROM alumnos
     JOIN cursos ON cursos.id = alumnos.curso_id
@@ -232,10 +232,10 @@ export const GET: APIRoute = async ({ locals, url }) => {
       ${user.rol === 'admin' ? '' : 'AND alumnos.tenant_id = @tenant_id'}
       ${coursePermission}
     ORDER BY cursos.nombre, alumnos.nombre
-  `).all(params) as Array<{ id: string; nombre: string; curso: string; colegio: string; turno: string }>;
+  `).all(params)) as Array<{ id: string; nombre: string; curso: string; colegio: string; turno: string }>;
 
-  const resumen = alumnos.map((alumno) => {
-    const grades = db.prepare(`
+  const resumen = await Promise.all(alumnos.map(async (alumno) => {
+    const grades = (await db.prepare(`
       SELECT valor, peso
       FROM notas
       WHERE alumno_id = @alumno_id
@@ -243,16 +243,16 @@ export const GET: APIRoute = async ({ locals, url }) => {
         AND fecha BETWEEN @desde AND @hasta
         AND (@materia_id IS NULL OR materia_id = @materia_id)
         ${user.rol === 'admin' ? '' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
-    `).all({ ...params, alumno_id: alumno.id }) as Array<{ valor: number; peso: number }>;
+    `).all({ ...params, alumno_id: alumno.id })) as Array<{ valor: number; peso: number }>;
 
-    const attendanceRows = db.prepare(`
+    const attendanceRows = (await db.prepare(`
       SELECT estado
       FROM asistencias
       WHERE alumno_id = @alumno_id
         AND fecha BETWEEN @desde AND @hasta
         AND (@materia_id IS NULL OR materia_id = @materia_id)
         ${user.rol === 'admin' ? '' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
-    `).all({ ...params, alumno_id: alumno.id }) as Array<{ estado: string }>;
+    `).all({ ...params, alumno_id: alumno.id })) as Array<{ estado: string }>;
 
     const totalPeso = grades.reduce((acc, grade) => acc + Number(grade.peso || 100), 0);
     const promedio = totalPeso > 0
@@ -271,7 +271,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       'Registros de asistencia': attendanceRows.length,
       'Cantidad de notas': grades.length,
     };
-  }) as ExportRow[];
+  })) as ExportRow[];
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Aula Clara';

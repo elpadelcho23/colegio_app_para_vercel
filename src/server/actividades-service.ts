@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { db, type User } from './db';
 
-export function getActividadForUser(user: User, actividadId: string) {
-  const row = db.prepare(`
+export async function getActividadForUser(user: User, actividadId: string) {
+  const row = (await db.prepare(`
     SELECT
       actividades.id,
       actividades.tenant_id,
@@ -25,12 +25,12 @@ export function getActividadForUser(user: User, actividadId: string) {
     actividadId,
     user.tenant_id,
     ...(user.rol === 'admin' ? [] : [user.id]),
-  ) as Record<string, string> | undefined;
+  )) as Record<string, string> | undefined;
 
   return row;
 }
 
-export function insertActividad(options: {
+export async function insertActividad(options: {
   user: User;
   colegio: string;
   turno: string;
@@ -65,7 +65,7 @@ export function insertActividad(options: {
     ? { ...contenido as Record<string, unknown>, origenActividadId: origenActividadId || undefined }
     : contenido;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO actividades (
       id, tenant_id, docente_id, colegio, turno, curso_id, materia_id,
       tipo, titulo, estado, fecha_publicacion, fecha_vencimiento, contenido_json, updated_at
@@ -89,7 +89,7 @@ export function insertActividad(options: {
   );
 
   if (fechaVencimiento || fechaPublicacion) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO calendario_eventos (
         id, tenant_id, docente_id, curso_id, materia_id, tipo, titulo, descripcion,
         fecha_inicio, fecha_fin, source_type, source_id, updated_at

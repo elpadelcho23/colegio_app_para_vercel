@@ -2,6 +2,7 @@ import { defineMiddleware } from 'astro:middleware';
 import { getUserFromToken, SESSION_COOKIE } from './server/auth';
 import { SESSION_PASSPORT_COOKIE, rehydrateUserFromPassport } from './server/guest-passport';
 import { startBackupScheduler } from './server/backup';
+import { ensureDbReady } from './server/db';
 
 const publicApiRoutes = new Set([
   '/api/auth/login',
@@ -37,14 +38,16 @@ if (!process.env.VERCEL) {
   startBackupScheduler();
 }
 
-export const onRequest = defineMiddleware((context, next) => {
+export const onRequest = defineMiddleware(async (context, next) => {
+  await ensureDbReady();
+
   const token = context.cookies.get(SESSION_COOKIE)?.value;
-  let user = getUserFromToken(token);
+  let user = await getUserFromToken(token);
   if (!user && token) {
     const passport =
       context.cookies.get(SESSION_PASSPORT_COOKIE)?.value
       || context.cookies.get('aula_clara_guest_passport')?.value;
-    user = rehydrateUserFromPassport(token, passport);
+    user = await rehydrateUserFromPassport(token, passport);
   }
   context.locals.user = user;
 

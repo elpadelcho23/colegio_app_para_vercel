@@ -6,8 +6,8 @@ export function docenteTrabajoFilter(user: User) {
   return user.rol === 'admin' ? '' : 'AND te.tenant_id = @tenant_id AND te.docente_id = @docente_id';
 }
 
-export function countStudentsForContext(cursoId: string, materiaId: string, tenantId: string) {
-  const row = db.prepare(`
+export async function countStudentsForContext(cursoId: string, materiaId: string, tenantId: string) {
+  const row = (await db.prepare(`
     SELECT COUNT(DISTINCT alumnos.id) AS total
     FROM alumnos
     LEFT JOIN alumno_materias am ON am.alumno_id = alumnos.id AND am.tenant_id = alumnos.tenant_id
@@ -18,7 +18,7 @@ export function countStudentsForContext(cursoId: string, materiaId: string, tena
         NOT EXISTS (SELECT 1 FROM alumno_materias WHERE alumno_id = alumnos.id AND tenant_id = alumnos.tenant_id)
         OR am.materia_id = ?
       )
-  `).get(tenantId, cursoId, materiaId) as { total: number } | undefined;
+  `).get(tenantId, cursoId, materiaId)) as { total: number } | undefined;
   return row?.total || 0;
 }
 
@@ -43,7 +43,7 @@ export function computeActividadSeguimiento(options: {
   return 'en_progreso';
 }
 
-export function listTrabajoEntregas(user: User, filters: {
+export async function listTrabajoEntregas(user: User, filters: {
   cursoId?: string | null;
   materiaId?: string | null;
   actividadId?: string | null;
@@ -51,7 +51,7 @@ export function listTrabajoEntregas(user: User, filters: {
   desde?: string | null;
   hasta?: string | null;
 }) {
-  const rows = db.prepare(`
+  const rows = (await db.prepare(`
     SELECT
       te.id,
       te.actividad_id,
@@ -97,7 +97,7 @@ export function listTrabajoEntregas(user: User, filters: {
     estado: filters.estado || null,
     desde: filters.desde || null,
     hasta: filters.hasta || null,
-  }) as Array<Record<string, unknown>>;
+  })) as Array<Record<string, unknown>>;
 
   const archivosStmt = db.prepare(`
     SELECT id, entrega_id, filename, mime_type, size_bytes, created_at
@@ -106,7 +106,7 @@ export function listTrabajoEntregas(user: User, filters: {
     ORDER BY created_at ASC
   `);
 
-  return rows.map((row) => {
+  return Promise.all(rows.map(async (row) => {
     let correccion: unknown = null;
     if (typeof row.correccion_json === 'string' && row.correccion_json) {
       try {
@@ -119,17 +119,17 @@ export function listTrabajoEntregas(user: User, filters: {
       ...row,
       id: String(row.id),
       correccion,
-      archivos: archivosStmt.all(row.id),
+      archivos: await archivosStmt.all(row.id),
     } as Record<string, unknown> & {
       id: string;
       correccion: unknown;
       archivos: unknown[];
     };
-  });
+  }));
 }
 
-export function getTrabajoArchivo(user: User, archivoId: string) {
-  return db.prepare(`
+export async function getTrabajoArchivo(user: User, archivoId: string) {
+  return (await db.prepare(`
     SELECT ta.id, ta.entrega_id, ta.filename, ta.mime_type, ta.size_bytes, ta.storage_path, ta.created_at
     FROM trabajo_archivos ta
     JOIN trabajo_entregas te ON te.id = ta.entrega_id
@@ -140,7 +140,7 @@ export function getTrabajoArchivo(user: User, archivoId: string) {
     archivoId,
     user.tenant_id,
     ...(user.rol === 'admin' ? [] : [user.id]),
-  ) as {
+  )) as {
     id: string;
     entrega_id: string;
     filename: string;

@@ -8,13 +8,13 @@ import {
 export const PUT: APIRoute = async ({ params, request, cookies }) => {
   try {
     const intentoId = String(params.id || '');
-    assertIntentoCookie(intentoId, cookies.get(INTENTO_COOKIE)?.value);
+    await assertIntentoCookie(intentoId, cookies.get(INTENTO_COOKIE)?.value);
     const body = await request.json().catch(() => null);
     const respuestas = body?.respuestas && typeof body.respuestas === 'object'
       ? body.respuestas as Record<string, unknown>
       : null;
     if (!respuestas) return Response.json({ error: 'Faltan respuestas.' }, { status: 400 });
-    const result = saveRespuestas(intentoId, respuestas);
+    const result = await saveRespuestas(intentoId, respuestas);
     return Response.json(result);
   } catch (error) {
     return Response.json(

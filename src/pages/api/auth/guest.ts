@@ -2,13 +2,13 @@ import type { APIRoute } from 'astro';
 import { respondWithGuestSession } from '../../../server/auth';
 import { createGuestUser, purgeExpiredGuestAccounts } from '../../../server/db';
 
-export const POST: APIRoute = ({ cookies, url }) => {
+export const POST: APIRoute = async ({ cookies, url }) => {
   try {
-    purgeExpiredGuestAccounts();
+    await purgeExpiredGuestAccounts();
   } catch {
     // best-effort cleanup; guest login must still proceed
   }
 
-  const user = createGuestUser();
+  const user = await createGuestUser();
   return respondWithGuestSession(user.id, cookies, url);
 };

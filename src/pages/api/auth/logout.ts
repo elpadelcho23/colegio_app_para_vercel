@@ -9,14 +9,14 @@ import {
 import { purgeGuestAccount, purgeExpiredGuestAccounts } from '../../../server/db';
 import { readSessionPassport } from '../../../server/guest-passport';
 
-export const POST: APIRoute = ({ cookies, url, redirect, request }) => {
+export const POST: APIRoute = async ({ cookies, url, redirect, request }) => {
   const token = cookies.get(SESSION_COOKIE)?.value;
   const passport = readSessionPassport(token, cookies.get(SESSION_PASSPORT_COOKIE)?.value);
-  const user = getUserFromToken(token);
+  const user = await getUserFromToken(token);
   const guestUserId = user?.is_guest ? user.id : (passport?.isGuest ? passport.userId : undefined);
   const guestTenantId = user?.is_guest ? user.tenant_id : (passport?.isGuest ? passport.tenantId : undefined);
 
-  deleteSession(token);
+  await deleteSession(token);
   cookies.delete(SESSION_COOKIE, cookieOptions(url));
   cookies.delete(SESSION_PASSPORT_COOKIE, cookieOptions(url));
   // legacy cookie name (por si quedó de deploys previos)
@@ -24,14 +24,14 @@ export const POST: APIRoute = ({ cookies, url, redirect, request }) => {
 
   if (guestUserId) {
     try {
-      purgeGuestAccount(guestUserId, guestTenantId);
+      await purgeGuestAccount(guestUserId, guestTenantId);
     } catch {
       // best-effort
     }
   }
 
   try {
-    purgeExpiredGuestAccounts();
+    await purgeExpiredGuestAccounts();
   } catch {
     // best-effort
   }

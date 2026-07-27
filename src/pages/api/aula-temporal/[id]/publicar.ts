@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
 import { publicarClase } from '../../../../server/aula-temporal-service';
 
-export const POST: APIRoute = ({ locals, params }) => {
+export const POST: APIRoute = async ({ locals, params }) => {
   const user = locals.user;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
   try {
-    const aula = publicarClase(user, String(params.id || ''));
+    const aula = await publicarClase(user, String(params.id || ''));
     return Response.json({ aula });
   } catch (error) {
     return Response.json(

@@ -8,7 +8,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const apellido = String(body?.apellido || '').trim();
 
   try {
-    const session = joinAula(token, nombre, apellido);
+    const session = await joinAula(token, nombre, apellido);
     cookies.set(INTENTO_COOKIE, session.intentoId, {
       path: '/',
       httpOnly: true,

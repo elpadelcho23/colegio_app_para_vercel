@@ -103,14 +103,14 @@ function filters(url: URL, user: User) {
 const cicloFilter = cicloLectivoCourseFilter('cursos');
 const cicloOptionalFilter = cicloLectivoOptionalCourseFilter('cursos', 'base', 'curso_id');
 
-export const GET: APIRoute = ({ locals, url }) => {
+export const GET: APIRoute = async ({ locals, url }) => {
   const user = locals.user;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
   const currentScope = scope(user);
   const params = filters(url, user);
 
-  const eventosManual = db.prepare(`
+  const eventosManual = await db.prepare(`
     SELECT
       base.id,
       base.tipo,
@@ -134,7 +134,7 @@ export const GET: APIRoute = ({ locals, url }) => {
       ${currentScope.docente}
   `).all(params);
 
-  const asistencias = db.prepare(`
+  const asistencias = await db.prepare(`
     SELECT
       'asistencia-' || base.fecha || '-' || base.materia_id || '-' || alumnos.curso_id AS id,
       'asistencia' AS tipo,
@@ -161,7 +161,7 @@ export const GET: APIRoute = ({ locals, url }) => {
     GROUP BY base.fecha, base.materia_id, alumnos.curso_id
   `).all(params);
 
-  const notas = db.prepare(`
+  const notas = await db.prepare(`
     SELECT
       base.id,
       'nota' AS tipo,
@@ -190,7 +190,7 @@ export const GET: APIRoute = ({ locals, url }) => {
       ${currentScope.coursePermission}
   `).all(params);
 
-  const entregasNotas = db.prepare(`
+  const entregasNotas = await db.prepare(`
     SELECT
       'entrega-nota-' || base.id AS id,
       'nota' AS tipo,
@@ -216,7 +216,7 @@ export const GET: APIRoute = ({ locals, url }) => {
       ${currentScope.coursePermission}
   `).all(params);
 
-  const actividades = db.prepare(`
+  const actividades = await db.prepare(`
     SELECT
       base.id || '-publicacion' AS id,
       CASE WHEN base.tipo = 'tp' THEN 'tp' ELSE 'evento' END AS tipo,
@@ -278,11 +278,11 @@ export const GET: APIRoute = ({ locals, url }) => {
       ${currentScope.coursePermission}
   `).all(params);
 
-  const preferences = db.prepare(`
+  const preferences = (await db.prepare(`
     SELECT calendar_alerts, lead_days
     FROM notification_preferences
     WHERE user_id = ?
-  `).get(user.id) || { calendar_alerts: 0, lead_days: 3 };
+  `).get(user.id)) || { calendar_alerts: 0, lead_days: 3 };
 
   return Response.json({
     events: [...eventosManual, ...asistencias, ...notas, ...entregasNotas, ...actividades],
@@ -310,11 +310,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return Response.json({ error: 'Faltan tipo o fecha para crear el evento.' }, { status: 400 });
     }
 
-    if (cursoId && !canAccessCourse(user, cursoId)) {
+    if (cursoId && !(await canAccessCourse(user, cursoId))) {
       return Response.json({ error: 'El docente no tiene permiso sobre este curso.' }, { status: 403 });
     }
 
-    if (materiaId && !canAccessSubject(user, materiaId)) {
+    if (materiaId && !(await canAccessSubject(user, materiaId))) {
       return Response.json({ error: 'El docente no tiene permiso sobre esta materia.' }, { status: 403 });
     }
 
@@ -322,7 +322,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const now = new Date().toISOString();
     const titulo = tituloInput || CALENDAR_EVENT_TITLES[tipo];
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO calendario_eventos (
         id,
         tenant_id,
@@ -369,7 +369,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const enabled = Boolean(body?.calendarAlerts);
   const leadDays = Number.isFinite(Number(body?.leadDays)) ? Math.max(1, Math.min(30, Number(body.leadDays))) : 3;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO notification_preferences (user_id, tenant_id, calendar_alerts, lead_days, updated_at)
     VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET

@@ -6,11 +6,11 @@ import { db } from '../../../server/db';
 import { saveTrabajoFileAsync, copyTrabajoFile } from '../../../server/file-storage';
 import { listTrabajoEntregas } from '../../../server/trabajo-entregas';
 
-export const GET: APIRoute = ({ locals, url }) => {
+export const GET: APIRoute = async ({ locals, url }) => {
   const user = locals.user;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
-  const entregas = listTrabajoEntregas(user, {
+  const entregas = await listTrabajoEntregas(user, {
     cursoId: url.searchParams.get('curso') || url.searchParams.get('cursoId'),
     materiaId: url.searchParams.get('materia') || url.searchParams.get('materiaId'),
     actividadId: url.searchParams.get('actividad') || url.searchParams.get('actividadId'),
@@ -43,7 +43,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return Response.json({ error: 'Completá curso, materia, colegio, turno y título.' }, { status: 400 });
   }
 
-  const courseError = ensureDocenteCourseAccess(user, {
+  const courseError = await ensureDocenteCourseAccess(user, {
     id: cursoId,
     nombre: String(form.get('cursoNombre') || '').trim(),
     escuela: colegio,
@@ -51,7 +51,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   });
   if (courseError) return Response.json({ error: courseError }, { status: 403 });
 
-  const subjectError = ensureDocenteSubjectAccess(user, {
+  const subjectError = await ensureDocenteSubjectAccess(user, {
     id: materiaId,
     nombre: String(form.get('materiaNombre') || '').trim(),
   });
@@ -60,7 +60,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const files = form.getAll('archivos').filter((entry): entry is File => entry instanceof File && entry.size > 0);
 
   if (reenviarDesdeId) {
-    const source = listTrabajoEntregas(user, {}).find((item) => item.id === reenviarDesdeId);
+    const source = (await listTrabajoEntregas(user, {})).find((item) => item.id === reenviarDesdeId);
     if (!source) return Response.json({ error: 'El trabajo original no existe.' }, { status: 404 });
     if (!files.length && !(source.archivos as unknown[]).length) {
       return Response.json({ error: 'No hay archivos para reenviar.' }, { status: 400 });
@@ -81,7 +81,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const entregaId = `ent-${randomUUID()}`;
   const now = new Date().toISOString();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO trabajo_entregas (
       id, tenant_id, docente_id, actividad_id, alumno_id, curso_id, materia_id,
       colegio, turno, titulo, estado, observaciones, submitted_at, updated_at
@@ -111,11 +111,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const savedArchivos: Array<Record<string, unknown>> = [];
 
   if (reenviarDesdeId && !files.length) {
-    const sourceArchivos = db.prepare(`
+    const sourceArchivos = (await db.prepare(`
       SELECT id, filename, mime_type, size_bytes, storage_path
       FROM trabajo_archivos
       WHERE entrega_id = ?
-    `).all(reenviarDesdeId) as Array<{
+    `).all(reenviarDesdeId)) as Array<{
       filename: string;
       mime_type: string;
       size_bytes: number;
@@ -125,7 +125,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     for (const archivo of sourceArchivos) {
       const copied = copyTrabajoFile(archivo.storage_path, user.tenant_id, entregaId);
       if (!copied) continue;
-      insertArchivo.run(
+      await insertArchivo.run(
         copied.id,
         user.tenant_id,
         entregaId,
@@ -148,7 +148,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         entregaId,
         file,
       });
-      insertArchivo.run(
+      await insertArchivo.run(
         saved.id,
         user.tenant_id,
         entregaId,
@@ -167,7 +167,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   }
 
   if (!savedArchivos.length) {
-    db.prepare('DELETE FROM trabajo_entregas WHERE id = ?').run(entregaId);
+    await db.prepare('DELETE FROM trabajo_entregas WHERE id = ?').run(entregaId);
     return Response.json({ error: 'No se pudieron guardar los archivos.' }, { status: 500 });
   }
 
@@ -199,7 +199,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
     return Response.json({ error: 'Indicá la entrega y el alumno.' }, { status: 400 });
   }
 
-  const entrega = db.prepare(`
+  const entrega = (await db.prepare(`
     SELECT id, curso_id, materia_id
     FROM trabajo_entregas
     WHERE id = ?
@@ -209,17 +209,17 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
     entregaId,
     user.tenant_id,
     ...(user.rol === 'admin' ? [] : [user.id]),
-  ) as { id: string; curso_id: string; materia_id: string } | undefined;
+  )) as { id: string; curso_id: string; materia_id: string } | undefined;
 
   if (!entrega) {
     return Response.json({ error: 'Entrega no encontrada.' }, { status: 404 });
   }
 
-  const alumno = db.prepare(`
+  const alumno = (await db.prepare(`
     SELECT id, curso_id
     FROM alumnos
     WHERE id = ? AND tenant_id = ? AND activo = 1
-  `).get(alumnoId, user.tenant_id) as { id: string; curso_id: string } | undefined;
+  `).get(alumnoId, user.tenant_id)) as { id: string; curso_id: string } | undefined;
 
   if (!alumno) {
     return Response.json({ error: 'Alumno no encontrado.' }, { status: 404 });
@@ -230,7 +230,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
   }
 
   const now = new Date().toISOString();
-  db.prepare(`
+  await db.prepare(`
     UPDATE trabajo_entregas
     SET alumno_id = ?, updated_at = ?
     WHERE id = ? AND tenant_id = ?

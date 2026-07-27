@@ -16,7 +16,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   }
 
   try {
-    const aula = createClaseVirtual({
+    const aula = await createClaseVirtual({
       user,
       colegio: String(body?.colegio || ''),
       turno: String(body?.turno || ''),

@@ -40,7 +40,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return Response.json({ error: 'Completá tipo de actividad, colegio, turno, curso y materia.' }, { status: 400 });
   }
 
-  const courseAccessError = ensureDocenteCourseAccess(user, {
+  const courseAccessError = await ensureDocenteCourseAccess(user, {
     id: cursoId,
     nombre: String(form.get('cursoNombre') || '').trim(),
     escuela: colegio,
@@ -50,7 +50,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return Response.json({ error: courseAccessError }, { status: 403 });
   }
 
-  const subjectAccessError = ensureDocenteSubjectAccess(user, {
+  const subjectAccessError = await ensureDocenteSubjectAccess(user, {
     id: materiaId,
     nombre: String(form.get('materiaNombre') || '').trim(),
   });
@@ -64,8 +64,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
   }
 
   try {
-    const cursoRow = db.prepare('SELECT nombre FROM cursos WHERE id = ?').get(cursoId) as { nombre?: string } | undefined;
-    const materiaRow = db.prepare('SELECT nombre FROM materias WHERE id = ?').get(materiaId) as { nombre?: string } | undefined;
+    const cursoRow = (await db.prepare('SELECT nombre FROM cursos WHERE id = ?').get(cursoId)) as { nombre?: string } | undefined;
+    const materiaRow = (await db.prepare('SELECT nombre FROM materias WHERE id = ?').get(materiaId)) as { nombre?: string } | undefined;
     const cursoNombre = cursoRow?.nombre || cursoId;
     const materiaNombre = materiaRow?.nombre || materiaId;
 

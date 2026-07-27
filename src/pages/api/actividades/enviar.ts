@@ -20,12 +20,12 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return Response.json({ error: 'Indicá la actividad y el curso destino (colegio, turno, curso y materia).' }, { status: 400 });
   }
 
-  const source = getActividadForUser(user, actividadId);
+  const source = await getActividadForUser(user, actividadId);
   if (!source) {
     return Response.json({ error: 'La actividad no existe o no tenés permiso para enviarla.' }, { status: 404 });
   }
 
-  const courseError = ensureDocenteCourseAccess(user, {
+  const courseError = await ensureDocenteCourseAccess(user, {
     id: cursoId,
     nombre: String(body?.cursoNombre || '').trim(),
     escuela: colegio,
@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   });
   if (courseError) return Response.json({ error: courseError }, { status: 403 });
 
-  const subjectError = ensureDocenteSubjectAccess(user, {
+  const subjectError = await ensureDocenteSubjectAccess(user, {
     id: materiaId,
     nombre: String(body?.materiaNombre || '').trim(),
   });
@@ -47,7 +47,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     contenido = {};
   }
 
-  const created = insertActividad({
+  const created = await insertActividad({
     user,
     colegio,
     turno,

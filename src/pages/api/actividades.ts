@@ -22,13 +22,13 @@ function docenteFilter(user: User) {
   return user.rol === 'admin' ? '' : 'AND actividades.tenant_id = @tenant_id AND actividades.docente_id = @docente_id';
 }
 
-function validateAccess(
+async function validateAccess(
   user: User,
   cursoId: string,
   materiaId: string,
   context: { colegio?: string; turno?: string; cursoNombre?: string; materiaNombre?: string },
 ) {
-  const courseError = ensureDocenteCourseAccess(user, {
+  const courseError = await ensureDocenteCourseAccess(user, {
     id: cursoId,
     nombre: context.cursoNombre,
     escuela: context.colegio,
@@ -36,7 +36,7 @@ function validateAccess(
   });
   if (courseError) return courseError;
 
-  const subjectError = ensureDocenteSubjectAccess(user, {
+  const subjectError = await ensureDocenteSubjectAccess(user, {
     id: materiaId,
     nombre: context.materiaNombre,
   });
@@ -45,11 +45,11 @@ function validateAccess(
   return null;
 }
 
-export const GET: APIRoute = ({ locals, url }) => {
+export const GET: APIRoute = async ({ locals, url }) => {
   const user = locals.user;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
-  const actividades = db.prepare(`
+  const rows = await db.prepare(`
     SELECT
       actividades.id,
       actividades.colegio,
@@ -76,7 +76,9 @@ export const GET: APIRoute = ({ locals, url }) => {
       ${cicloFilter}
       ${docenteFilter(user)}
     ORDER BY COALESCE(actividades.fecha_vencimiento, actividades.created_at) DESC
-  `).all(paramsFromUrl(url, user)).map((actividad) => {
+  `).all(paramsFromUrl(url, user));
+
+  const actividades = rows.map((actividad) => {
     const item = actividad as { contenido_json: string };
     return {
       ...actividad as Record<string, unknown>,
@@ -106,7 +108,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return Response.json({ error: 'Faltan filtros obligatorios o titulo.' }, { status: 400 });
   }
 
-  const accessError = validateAccess(user, cursoId, materiaId, {
+  const accessError = await validateAccess(user, cursoId, materiaId, {
     colegio,
     turno,
     cursoNombre: String(body?.cursoNombre || '').trim(),
@@ -128,7 +130,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const now = new Date().toISOString();
 
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO actividades (
         id,
         tenant_id,
@@ -179,7 +181,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     });
 
     if (fechaVencimiento || fechaPublicacion) {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO calendario_eventos (
           id,
           tenant_id,

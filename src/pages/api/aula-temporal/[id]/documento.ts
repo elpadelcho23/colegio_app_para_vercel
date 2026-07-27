@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
 import { getDocumentoReferenciaClase } from '../../../../server/aula-temporal-service';
 
-export const GET: APIRoute = ({ locals, params }) => {
+export const GET: APIRoute = async ({ locals, params }) => {
   const user = locals.user;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
   try {
-    const doc = getDocumentoReferenciaClase(user, String(params.id || ''));
+    const doc = await getDocumentoReferenciaClase(user, String(params.id || ''));
     const filename = `${(doc.titulo || 'referencia').replace(/[^\w\-]+/g, '_').slice(0, 60)}_referencia.html`;
     return new Response(doc.html, {
       status: 200,

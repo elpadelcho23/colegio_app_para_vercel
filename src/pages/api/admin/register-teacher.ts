@@ -16,24 +16,24 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return Response.json({ error: 'Datos invalidos o contrasena debil.' }, { status: 400 });
   }
 
-  const exists = db.prepare('SELECT id FROM usuarios WHERE lower(email) = lower(?)').get(email);
+  const exists = await db.prepare('SELECT id FROM usuarios WHERE lower(email) = lower(?)').get(email);
   if (exists) return Response.json({ error: 'El email ya esta registrado.' }, { status: 409 });
 
   const id = `docente-${randomUUID()}`;
-  const tenantId = createTenant(`Cuenta de ${nombre}`);
-  const tx = db.transaction(() => {
-    db.prepare(`
+  const tenantId = await createTenant(`Cuenta de ${nombre}`);
+  const tx = db.transaction(async () => {
+    await db.prepare(`
       INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol)
       VALUES (?, ?, ?, ?, ?, 'docente')
     `).run(id, tenantId, nombre, email, bcrypt.hashSync(password, 12));
 
     const assignCourse = db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)');
-    for (const cursoId of cursoIds) assignCourse.run(tenantId, id, cursoId);
+    for (const cursoId of cursoIds) await assignCourse.run(tenantId, id, cursoId);
 
     const assignSubject = db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)');
-    for (const materiaId of materiaIds) assignSubject.run(tenantId, id, materiaId);
+    for (const materiaId of materiaIds) await assignSubject.run(tenantId, id, materiaId);
   });
-  tx();
+  await tx();
 
   return redirect('/admin/usuarios', 303);
 };

@@ -10,7 +10,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   if (!alumnoId) return Response.json({ error: 'Falta alumnoId.' }, { status: 400 });
 
   try {
-    const aula = vincularIntento(user, String(params.id || ''), alumnoId);
+    const aula = await vincularIntento(user, String(params.id || ''), alumnoId);
     return Response.json({ aula });
   } catch (error) {
     return Response.json(

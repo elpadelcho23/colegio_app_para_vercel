@@ -5,11 +5,11 @@ import {
   resumeIntento,
 } from '../../../../../server/aula-temporal-service';
 
-export const GET: APIRoute = ({ params, cookies }) => {
+export const GET: APIRoute = async ({ params, cookies }) => {
   try {
     const intentoId = String(params.id || '');
-    assertIntentoCookie(intentoId, cookies.get(INTENTO_COOKIE)?.value);
-    return Response.json(resumeIntento(intentoId));
+    await assertIntentoCookie(intentoId, cookies.get(INTENTO_COOKIE)?.value);
+    return Response.json(await resumeIntento(intentoId));
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : 'Sesión inválida.' },

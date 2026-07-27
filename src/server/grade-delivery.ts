@@ -212,7 +212,7 @@ async function callGroqCorreccion(prompt: string): Promise<CorreccionResult> {
   return parseCorreccionJson(content);
 }
 
-function upsertNota(options: {
+async function upsertNota(options: {
   user: User;
   notaId: string | null;
   alumnoId: string;
@@ -227,15 +227,15 @@ function upsertNota(options: {
   const { user, alumnoId, materiaId, titulo, tipoEvaluacion, valor, motivo, fecha, periodo } = options;
   const updatedAt = new Date().toISOString();
   const existingId = options.notaId
-    ? (db.prepare(`
+    ? ((await db.prepare(`
         SELECT id FROM notas
         WHERE id = ? AND tenant_id = ? AND (? = 1 OR docente_id = ?)
-      `).get(options.notaId, user.tenant_id, user.rol === 'admin' ? 1 : 0, user.id) as { id: string } | undefined)?.id
+      `).get(options.notaId, user.tenant_id, user.rol === 'admin' ? 1 : 0, user.id)) as { id: string } | undefined)?.id
     : null;
 
   const gradeId = existingId || `nota-${randomUUID()}`;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO notas (
       id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion,
       valor, calificacion_texto, peso, fecha, fecha_entrega, periodo, motivo, updated_at
@@ -270,7 +270,7 @@ function upsertNota(options: {
 }
 
 export async function gradeTrabajoEntrega(user: User, entregaId: string) {
-  const entrega = db.prepare(`
+  const entrega = (await db.prepare(`
     SELECT
       te.id,
       te.tenant_id,
@@ -298,7 +298,7 @@ export async function gradeTrabajoEntrega(user: User, entregaId: string) {
     entregaId,
     user.tenant_id,
     ...(user.rol === 'admin' ? [] : [user.id]),
-  ) as {
+  )) as {
     id: string;
     tenant_id: string;
     docente_id: string;
@@ -326,12 +326,12 @@ export async function gradeTrabajoEntrega(user: User, entregaId: string) {
     );
   }
 
-  const archivos = db.prepare(`
+  const archivos = (await db.prepare(`
     SELECT id, filename, mime_type, storage_path
     FROM trabajo_archivos
     WHERE entrega_id = ?
     ORDER BY created_at ASC
-  `).all(entrega.id) as Array<{
+  `).all(entrega.id)) as Array<{
     id: string;
     filename: string;
     mime_type: string;
@@ -405,7 +405,7 @@ export async function gradeTrabajoEntrega(user: User, entregaId: string) {
   const periodo = defaultPeriodo(fecha);
   const motivo = `IA: ${correccion.resumen}`.slice(0, 400);
 
-  const notaId = upsertNota({
+  const notaId = await upsertNota({
     user,
     notaId: entrega.nota_id,
     alumnoId: entrega.alumno_id,
@@ -419,7 +419,7 @@ export async function gradeTrabajoEntrega(user: User, entregaId: string) {
   });
 
   const corregidoAt = new Date().toISOString();
-  db.prepare(`
+  await db.prepare(`
     UPDATE trabajo_entregas
     SET estado = 'calificado',
         nota_id = ?,

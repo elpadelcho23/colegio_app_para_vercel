@@ -8,11 +8,11 @@ function tenantFilter(user: User, table: string) {
   };
 }
 
-export function pullClientData(user: User) {
+export async function pullClientData(user: User) {
   const { tenant_id: tenantId, id: docenteId } = user;
   const isAdmin = user.rol === 'admin';
 
-  const courses = (isAdmin
+  const courses = (await (isAdmin
     ? db.prepare(`
       SELECT id, escuela, nombre, turno, ciclo_lectivo AS cicloLectivo
       FROM cursos
@@ -24,7 +24,7 @@ export function pullClientData(user: User) {
       JOIN docente_cursos ON docente_cursos.curso_id = cursos.id AND docente_cursos.tenant_id = cursos.tenant_id
       WHERE cursos.tenant_id = ? AND docente_cursos.docente_id = ?
     `)
-  ).all(...(isAdmin ? [tenantId] : [tenantId, docenteId])) as Array<{
+  ).all(...(isAdmin ? [tenantId] : [tenantId, docenteId]))) as Array<{
     id: string;
     escuela: string;
     nombre: string;
@@ -32,7 +32,7 @@ export function pullClientData(user: User) {
     cicloLectivo: number;
   }>;
 
-  const schools = (isAdmin
+  const schools = (await (isAdmin
     ? db.prepare(`
       SELECT id, nombre, activo
       FROM escuelas
@@ -44,13 +44,13 @@ export function pullClientData(user: User) {
       JOIN docente_escuelas ON docente_escuelas.escuela_id = escuelas.id AND docente_escuelas.tenant_id = escuelas.tenant_id
       WHERE escuelas.tenant_id = ? AND docente_escuelas.docente_id = ?
     `)
-  ).all(...(isAdmin ? [tenantId] : [tenantId, docenteId])) as Array<{
+  ).all(...(isAdmin ? [tenantId] : [tenantId, docenteId]))) as Array<{
     id: string;
     nombre: string;
     activo: number;
   }>;
 
-  const subjects = (isAdmin
+  const subjects = (await (isAdmin
     ? db.prepare(`
       SELECT id, nombre, activo
       FROM materias
@@ -62,13 +62,13 @@ export function pullClientData(user: User) {
       JOIN docente_materias ON docente_materias.materia_id = materias.id AND docente_materias.tenant_id = materias.tenant_id
       WHERE materias.tenant_id = ? AND docente_materias.docente_id = ?
     `)
-  ).all(...(isAdmin ? [tenantId] : [tenantId, docenteId])) as Array<{
+  ).all(...(isAdmin ? [tenantId] : [tenantId, docenteId]))) as Array<{
     id: string;
     nombre: string;
     activo: number;
   }>;
 
-  const students = (isAdmin
+  const students = (await (isAdmin
     ? db.prepare(`
       SELECT id, nombre, dni, curso_id AS cursoId, tutor, activo
       FROM alumnos
@@ -80,7 +80,7 @@ export function pullClientData(user: User) {
       JOIN docente_cursos ON docente_cursos.curso_id = alumnos.curso_id AND docente_cursos.tenant_id = alumnos.tenant_id
       WHERE alumnos.tenant_id = ? AND docente_cursos.docente_id = ?
     `)
-  ).all(...(isAdmin ? [tenantId] : [tenantId, docenteId])) as Array<{
+  ).all(...(isAdmin ? [tenantId] : [tenantId, docenteId]))) as Array<{
     id: string;
     nombre: string;
     dni: string | null;
@@ -89,18 +89,18 @@ export function pullClientData(user: User) {
     activo: number;
   }>;
 
-  const subjectLinks = db.prepare(`
+  const subjectLinks = (await db.prepare(`
     SELECT alumno_id, materia_id
     FROM alumno_materias
     WHERE tenant_id = ?
-  `).all(tenantId) as Array<{ alumno_id: string; materia_id: string }>;
+  `).all(tenantId)) as Array<{ alumno_id: string; materia_id: string }>;
 
   const attendanceFilter = tenantFilter(user, 'asistencias');
-  const attendance = db.prepare(`
+  const attendance = (await db.prepare(`
     SELECT id, alumno_id AS studentId, materia_id AS subjectId, fecha, estado, updated_at AS updatedAt
     FROM asistencias
     ${attendanceFilter.clause}
-  `).all(attendanceFilter.params) as Array<{
+  `).all(attendanceFilter.params)) as Array<{
     id: string;
     studentId: string;
     subjectId: string;
@@ -110,7 +110,7 @@ export function pullClientData(user: User) {
   }>;
 
   const gradesFilter = tenantFilter(user, 'notas');
-  const grades = db.prepare(`
+  const grades = (await db.prepare(`
     SELECT
       id,
       alumno_id AS studentId,
@@ -127,7 +127,7 @@ export function pullClientData(user: User) {
       updated_at AS updatedAt
     FROM notas
     ${gradesFilter.clause}
-  `).all(gradesFilter.params) as Array<{
+  `).all(gradesFilter.params)) as Array<{
     id: string;
     studentId: string;
     subjectId: string;

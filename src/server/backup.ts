@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { db, dbPath } from './db';
+import { isRemoteTurso } from './db-client';
 
 const backupDir = join(dirname(dbPath), 'backups');
 const DEFAULT_INTERVAL_HOURS = 24;
@@ -15,10 +16,22 @@ export interface BackupInfo {
 
 mkdirSync(backupDir, { recursive: true });
 
-export async function createBackup(reason = 'manual') {
+/**
+ * File-based backups only make sense for the local SQLite file. When running
+ * against a remote Turso database, backups/restores are the provider's
+ * responsibility, so these operations become no-ops.
+ */
+export async function createBackup(reason = 'manual'): Promise<string | null> {
+  if (isRemoteTurso()) {
+    console.warn('[backup] Skipping file backup: using remote Turso database.');
+    return null;
+  }
+
   const stamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-');
   const file = join(backupDir, `aula-clara-${reason}-${stamp}.sqlite`);
-  await db.backup(file);
+  if (existsSync(dbPath)) {
+    copyFileSync(dbPath, file);
+  }
   return file;
 }
 
@@ -40,6 +53,10 @@ export function listBackups(): BackupInfo[] {
 }
 
 export async function restoreBackup(name: string) {
+  if (isRemoteTurso()) {
+    throw new Error('La restauración desde archivo no está disponible con la base remota (Turso).');
+  }
+
   const safeName = basename(name);
   if (!safeName.endsWith('.sqlite')) throw new Error('Backup invalido.');
 
@@ -66,32 +83,34 @@ export async function restoreBackup(name: string) {
     'tenants',
   ];
 
-  db.prepare('ATTACH DATABASE ? AS backup').run(source);
+  await db.prepare('ATTACH DATABASE ? AS backup').run(source);
   try {
-    db.pragma('foreign_keys = OFF');
-    const tx = db.transaction(() => {
-      const availableTables = restoreTables.filter((table) => {
-        const inMain = db.prepare('SELECT name FROM main.sqlite_schema WHERE type = ? AND name = ?').get('table', table);
-        const inBackup = db.prepare('SELECT name FROM backup.sqlite_schema WHERE type = ? AND name = ?').get('table', table);
-        return inMain && inBackup;
-      });
+    await db.pragma('foreign_keys = OFF');
+    const tx = db.transaction(async () => {
+      const availableTables: string[] = [];
+      for (const table of restoreTables) {
+        const inMain = await db.prepare('SELECT name FROM main.sqlite_schema WHERE type = ? AND name = ?').get('table', table);
+        const inBackup = await db.prepare('SELECT name FROM backup.sqlite_schema WHERE type = ? AND name = ?').get('table', table);
+        if (inMain && inBackup) availableTables.push(table);
+      }
 
       for (const table of availableTables) {
-        db.prepare(`DELETE FROM main.${table}`).run();
+        await db.prepare(`DELETE FROM main.${table}`).run();
       }
       for (const table of [...availableTables].reverse()) {
-        db.prepare(`INSERT INTO main.${table} SELECT * FROM backup.${table}`).run();
+        await db.prepare(`INSERT INTO main.${table} SELECT * FROM backup.${table}`).run();
       }
     });
-    tx();
+    await tx();
   } finally {
-    db.prepare('DETACH DATABASE backup').run();
-    db.pragma('foreign_keys = ON');
+    await db.prepare('DETACH DATABASE backup').run();
+    await db.pragma('foreign_keys = ON');
   }
 }
 
 export function startBackupScheduler() {
   if (schedulerStarted) return;
+  if (isRemoteTurso()) return;
   schedulerStarted = true;
 
   const hours = Number(process.env.BACKUP_INTERVAL_HOURS || DEFAULT_INTERVAL_HOURS);

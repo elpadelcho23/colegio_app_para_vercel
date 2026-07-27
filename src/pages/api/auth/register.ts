@@ -19,9 +19,9 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   }
 
   const tenantId = randomUUID();
-  createTenant(`Institución de ${nombre}`, tenantId);
+  await createTenant(`Institución de ${nombre}`, tenantId);
 
-  const user = createUser({
+  const user = await createUser({
     nombre,
     email,
     password,

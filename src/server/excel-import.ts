@@ -247,23 +247,23 @@ function worksheetToRows(worksheet: ExcelJS.Worksheet): RowRecord[] {
   return rows;
 }
 
-function ensureSchool(user: User, nombre: string, updatedAt: string) {
+async function ensureSchool(user: User, nombre: string, updatedAt: string) {
   const tenantId = user.tenant_id;
-  const existing = db.prepare(`
+  const existing = (await db.prepare(`
     SELECT id FROM escuelas
     WHERE tenant_id = ? AND LOWER(nombre) = LOWER(?)
-  `).get(tenantId, nombre) as { id: string } | undefined;
+  `).get(tenantId, nombre)) as { id: string } | undefined;
 
   const schoolId = existing?.id || `esc-${randomUUID()}`;
   if (!existing) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO escuelas (id, tenant_id, nombre, activo, updated_at)
       VALUES (?, ?, ?, 1, ?)
     `).run(schoolId, tenantId, nombre, updatedAt);
   }
 
   if (user.rol !== 'admin') {
-    db.prepare(`
+    await db.prepare(`
       INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id)
       VALUES (?, ?, ?)
     `).run(tenantId, user.id, schoolId);
@@ -272,11 +272,11 @@ function ensureSchool(user: User, nombre: string, updatedAt: string) {
   return schoolId;
 }
 
-function ensureSubject(user: User, nombre: string, updatedAt: string) {
-  const soft = findSubject(user, nombre);
+async function ensureSubject(user: User, nombre: string, updatedAt: string) {
+  const soft = await findSubject(user, nombre);
   if (soft) {
     if (user.rol !== 'admin') {
-      db.prepare(`
+      await db.prepare(`
         INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id)
         VALUES (?, ?, ?)
       `).run(user.tenant_id, user.id, soft.id);
@@ -286,13 +286,13 @@ function ensureSubject(user: User, nombre: string, updatedAt: string) {
 
   const tenantId = user.tenant_id;
   const subjectId = `mat-${randomUUID()}`;
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
     VALUES (?, ?, ?, 1, ?)
   `).run(subjectId, tenantId, nombre, updatedAt);
 
   if (user.rol !== 'admin') {
-    db.prepare(`
+    await db.prepare(`
       INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id)
       VALUES (?, ?, ?)
     `).run(tenantId, user.id, subjectId);
@@ -301,22 +301,22 @@ function ensureSubject(user: User, nombre: string, updatedAt: string) {
   return subjectId;
 }
 
-function findCourse(user: User, escuela: string, nombre: string, turno: string, cicloLectivo = new Date().getFullYear()) {
+async function findCourse(user: User, escuela: string, nombre: string, turno: string, cicloLectivo = new Date().getFullYear()) {
   const year = Number.isFinite(cicloLectivo) ? cicloLectivo : new Date().getFullYear();
-  const exact = db.prepare(`
+  const exact = (await db.prepare(`
     SELECT id FROM cursos
     WHERE tenant_id = ?
       AND LOWER(escuela) = LOWER(?)
       AND LOWER(nombre) = LOWER(?)
       AND LOWER(turno) = LOWER(?)
       AND ciclo_lectivo = ?
-  `).get(user.tenant_id, escuela, nombre, turno, year) as { id: string } | undefined;
+  `).get(user.tenant_id, escuela, nombre, turno, year)) as { id: string } | undefined;
   if (exact) return exact;
 
-  const candidates = db.prepare(`
+  const candidates = (await db.prepare(`
     SELECT id, escuela, nombre, turno FROM cursos
     WHERE tenant_id = ? AND ciclo_lectivo = ?
-  `).all(user.tenant_id, year) as Array<{ id: string; escuela: string; nombre: string; turno: string }>;
+  `).all(user.tenant_id, year)) as Array<{ id: string; escuela: string; nombre: string; turno: string }>;
 
   const targetEscuela = normalizeComparableText(escuela);
   const targetNombre = normalizeComparableText(nombre);
@@ -328,32 +328,32 @@ function findCourse(user: User, escuela: string, nombre: string, turno: string, 
   ));
 }
 
-function findStudent(user: User, courseId: string, nombre: string, dni: string | null) {
+async function findStudent(user: User, courseId: string, nombre: string, dni: string | null) {
   const normalizedDni = dni ? normalizeDniValue(dni) : null;
   if (normalizedDni) {
-    const byDni = db.prepare(`
+    const byDni = (await db.prepare(`
       SELECT id FROM alumnos
       WHERE tenant_id = ? AND curso_id = ? AND dni = ?
-    `).get(user.tenant_id, courseId, normalizedDni) as { id: string } | undefined;
+    `).get(user.tenant_id, courseId, normalizedDni)) as { id: string } | undefined;
     if (byDni) return byDni;
 
-    const byDniTenant = db.prepare(`
+    const byDniTenant = (await db.prepare(`
       SELECT id FROM alumnos
       WHERE tenant_id = ? AND dni = ?
-    `).get(user.tenant_id, normalizedDni) as { id: string } | undefined;
+    `).get(user.tenant_id, normalizedDni)) as { id: string } | undefined;
     if (byDniTenant) return byDniTenant;
   }
 
-  const exact = db.prepare(`
+  const exact = (await db.prepare(`
     SELECT id FROM alumnos
     WHERE tenant_id = ? AND curso_id = ? AND LOWER(nombre) = LOWER(?)
-  `).get(user.tenant_id, courseId, nombre) as { id: string } | undefined;
+  `).get(user.tenant_id, courseId, nombre)) as { id: string } | undefined;
   if (exact) return exact;
 
-  const candidates = db.prepare(`
+  const candidates = (await db.prepare(`
     SELECT id, nombre FROM alumnos
     WHERE tenant_id = ? AND curso_id = ? AND activo = 1
-  `).all(user.tenant_id, courseId) as Array<{ id: string; nombre: string }>;
+  `).all(user.tenant_id, courseId)) as Array<{ id: string; nombre: string }>;
   const target = normalizeComparableText(nombre);
   const soft = candidates.find((student) => normalizeComparableText(student.nombre) === target);
   if (soft) return soft;
@@ -374,27 +374,27 @@ function findStudent(user: User, courseId: string, nombre: string, dni: string |
   return undefined;
 }
 
-function findSubject(user: User, nombre: string) {
-  const exact = db.prepare(`
+async function findSubject(user: User, nombre: string) {
+  const exact = (await db.prepare(`
     SELECT id FROM materias
     WHERE tenant_id = ? AND LOWER(nombre) = LOWER(?)
-  `).get(user.tenant_id, nombre) as { id: string } | undefined;
+  `).get(user.tenant_id, nombre)) as { id: string } | undefined;
   if (exact) return exact;
 
-  const candidates = db.prepare(`
+  const candidates = (await db.prepare(`
     SELECT id, nombre FROM materias
     WHERE tenant_id = ? AND activo = 1
-  `).all(user.tenant_id) as Array<{ id: string; nombre: string }>;
+  `).all(user.tenant_id)) as Array<{ id: string; nombre: string }>;
   const target = normalizeComparableText(nombre);
   return candidates.find((subject) => normalizeComparableText(subject.nombre) === target);
 }
 
 /** Busca materia con match suave; si no existe, la crea y la asigna al docente. */
-function resolveSubject(user: User, nombre: string, updatedAt: string) {
-  const found = findSubject(user, nombre);
+async function resolveSubject(user: User, nombre: string, updatedAt: string) {
+  const found = await findSubject(user, nombre);
   if (found) {
     if (user.rol !== 'admin') {
-      db.prepare(`
+      await db.prepare(`
         INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id)
         VALUES (?, ?, ?)
       `).run(user.tenant_id, user.id, found.id);
@@ -408,7 +408,7 @@ function splitMaterias(value: string | number | null) {
   return splitMateriasValue(value);
 }
 
-function upsertStudentRow(
+async function upsertStudentRow(
   user: User,
   row: ParsedStudentRow,
   updatedAt: string,
@@ -421,7 +421,7 @@ function upsertStudentRow(
   }
 
   try {
-    const { id: courseId, created: courseCreated } = ensureCourse(
+    const { id: courseId, created: courseCreated } = await ensureCourse(
       user,
       row.escuela,
       row.curso,
@@ -431,16 +431,16 @@ function upsertStudentRow(
     );
 
     const existingByDni = row.dni
-      ? db.prepare('SELECT id FROM alumnos WHERE tenant_id = ? AND dni = ?').get(user.tenant_id, row.dni) as { id: string } | undefined
+      ? (await db.prepare('SELECT id FROM alumnos WHERE tenant_id = ? AND dni = ?').get(user.tenant_id, row.dni)) as { id: string } | undefined
       : undefined;
     const existingByName = !existingByDni
-      ? findStudent(user, courseId, row.nombre, row.dni)
+      ? await findStudent(user, courseId, row.nombre, row.dni)
       : undefined;
     const existing = existingByDni || existingByName;
     const studentId = existing?.id || `al-${randomUUID()}`;
 
     if (row.dni) {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor, activo, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, 1, ?)
         ON CONFLICT(tenant_id, dni) DO UPDATE SET
@@ -451,7 +451,7 @@ function upsertStudentRow(
           updated_at = excluded.updated_at
       `).run(studentId, user.tenant_id, courseId, row.nombre, row.dni, row.tutor, updatedAt);
     } else {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor, activo, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, 1, ?)
         ON CONFLICT(id) DO UPDATE SET
@@ -465,18 +465,18 @@ function upsertStudentRow(
     }
 
     const savedStudent = row.dni
-      ? db.prepare('SELECT id FROM alumnos WHERE tenant_id = ? AND dni = ?').get(user.tenant_id, row.dni) as { id: string } | undefined
+      ? (await db.prepare('SELECT id FROM alumnos WHERE tenant_id = ? AND dni = ?').get(user.tenant_id, row.dni)) as { id: string } | undefined
       : { id: studentId };
 
     if (row.materias.length && savedStudent?.id) {
-      db.prepare('DELETE FROM alumno_materias WHERE tenant_id = ? AND alumno_id = ?').run(user.tenant_id, savedStudent.id);
+      await db.prepare('DELETE FROM alumno_materias WHERE tenant_id = ? AND alumno_id = ?').run(user.tenant_id, savedStudent.id);
       const insert = db.prepare(`
         INSERT OR IGNORE INTO alumno_materias (tenant_id, alumno_id, materia_id)
         VALUES (?, ?, ?)
       `);
       for (const materiaNombre of row.materias) {
-        const subjectId = ensureSubject(user, materiaNombre, updatedAt);
-        insert.run(user.tenant_id, savedStudent.id, subjectId);
+        const subjectId = await ensureSubject(user, materiaNombre, updatedAt);
+        await insert.run(user.tenant_id, savedStudent.id, subjectId);
       }
     }
 
@@ -496,7 +496,7 @@ function upsertStudentRow(
   }
 }
 
-function importStudentRows(
+async function importStudentRows(
   user: User,
   rows: ParsedStudentRow[],
   errors: ImportRowError[],
@@ -515,7 +515,7 @@ function importStudentRows(
       continue;
     }
 
-    const result = upsertStudentRow(user, row, updatedAt, errors, cicloLectivo);
+    const result = await upsertStudentRow(user, row, updatedAt, errors, cicloLectivo);
     imported += result.imported;
     updated += result.updated;
     coursesCreated += result.coursesCreated;
@@ -524,34 +524,34 @@ function importStudentRows(
   return { imported, updated, skipped, coursesCreated, cicloLectivo };
 }
 
-function ensureCourse(
+async function ensureCourse(
   user: User,
   escuela: string,
   nombre: string,
   turno: string,
   updatedAt: string,
   cicloLectivo = new Date().getFullYear(),
-): { id: string; created: boolean } {
-  ensureSchool(user, escuela, updatedAt);
+): Promise<{ id: string; created: boolean }> {
+  await ensureSchool(user, escuela, updatedAt);
   const year = Number.isFinite(cicloLectivo) ? cicloLectivo : new Date().getFullYear();
-  const existing = findCourse(user, escuela, nombre, turno, year);
+  const existing = await findCourse(user, escuela, nombre, turno, year);
   const courseId = existing?.id || `curso-${randomUUID()}`;
 
   if (existing) {
-    db.prepare(`
+    await db.prepare(`
       UPDATE cursos
       SET updated_at = ?
       WHERE id = ? AND tenant_id = ?
     `).run(updatedAt, courseId, user.tenant_id);
   } else {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(courseId, user.tenant_id, escuela, nombre, turno, year, updatedAt);
   }
 
   if (user.rol !== 'admin') {
-    db.prepare(`
+    await db.prepare(`
       INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id)
       VALUES (?, ?, ?)
     `).run(user.tenant_id, user.id, courseId);
@@ -560,12 +560,12 @@ function ensureCourse(
   return { id: courseId, created: !existing };
 }
 
-function importCourses(user: User, rows: RowRecord[], errors: ImportRowError[]) {
+async function importCourses(user: User, rows: RowRecord[], errors: ImportRowError[]) {
   let imported = 0;
   let updated = 0;
   const updatedAt = new Date().toISOString();
 
-  rows.forEach((row, index) => {
+  for (const [index, row] of rows.entries()) {
     const rowNumber = index + 2;
     const escuela = String(row.escuela ?? '').trim();
     const nombre = String(row.curso ?? '').trim();
@@ -575,18 +575,18 @@ function importCourses(user: User, rows: RowRecord[], errors: ImportRowError[]) 
 
     if (!escuela || !nombre || !turno) {
       errors.push({ row: rowNumber, message: 'Escuela, Curso y Turno son obligatorios (Turno: Mañana, Tarde o Noche).' });
-      return;
+      continue;
     }
 
-    const { created } = ensureCourse(user, escuela, nombre, turno, updatedAt, cicloLectivo);
+    const { created } = await ensureCourse(user, escuela, nombre, turno, updatedAt, cicloLectivo);
     if (created) imported += 1;
     else updated += 1;
-  });
+  }
 
   return { imported, updated, skipped: 0 };
 }
 
-function importAttendanceFromParsed(user: User, rows: ParsedAttendanceRow[], errors: ImportRowError[]) {
+async function importAttendanceFromParsed(user: User, rows: ParsedAttendanceRow[], errors: ImportRowError[]) {
   const records: RowRecord[] = rows.map((row) => ({
     fecha: row.fecha,
     escuela: row.escuela,
@@ -615,13 +615,13 @@ function appendInvalidRowErrors(
   }
 }
 
-function importAttendance(user: User, rows: RowRecord[], errors: ImportRowError[]) {
+async function importAttendance(user: User, rows: RowRecord[], errors: ImportRowError[]) {
   let imported = 0;
   let updated = 0;
   const updatedAt = new Date().toISOString();
   const docenteId = user.id;
 
-  rows.forEach((row, index) => {
+  for (const [index, row] of rows.entries()) {
     const rowNumber = Number(row.rowNumber) || index + 2;
     const fecha = parseDate(row.fecha ?? null);
     const escuela = String(row.escuela ?? '').trim();
@@ -637,36 +637,36 @@ function importAttendance(user: User, rows: RowRecord[], errors: ImportRowError[
         row: rowNumber,
         message: 'Fecha, Colegio/Escuela, Curso, Turno, Materia, Alumno y Estado (Presente/Ausente) son obligatorios.',
       });
-      return;
+      continue;
     }
 
-    const course = findCourse(user, escuela, curso, turno);
+    const course = await findCourse(user, escuela, curso, turno);
     if (!course) {
       errors.push({ row: rowNumber, message: `Curso no encontrado: ${curso} (${escuela}, ${turno}).` });
-      return;
+      continue;
     }
 
-    const subjectId = resolveSubject(user, materia, updatedAt);
+    const subjectId = await resolveSubject(user, materia, updatedAt);
 
-    const student = findStudent(user, course.id, alumno, dni);
+    const student = await findStudent(user, course.id, alumno, dni);
     if (!student) {
       errors.push({ row: rowNumber, message: `Alumno no encontrado: ${alumno} en ${curso}.` });
-      return;
+      continue;
     }
 
-    if (!canAccessStudent(user, student.id) || !canAccessSubject(user, subjectId)) {
+    if (!(await canAccessStudent(user, student.id)) || !(await canAccessSubject(user, subjectId))) {
       errors.push({ row: rowNumber, message: 'No tenés permiso sobre ese alumno o materia.' });
-      return;
+      continue;
     }
 
-    const existing = db.prepare(`
+    const existing = (await db.prepare(`
       SELECT id FROM asistencias
       WHERE tenant_id = ? AND docente_id = ? AND alumno_id = ? AND materia_id = ? AND fecha = ?
-    `).get(user.tenant_id, docenteId, student.id, subjectId, fecha) as { id: string } | undefined;
+    `).get(user.tenant_id, docenteId, student.id, subjectId, fecha)) as { id: string } | undefined;
 
     const attendanceId = existing?.id || `attendance:${docenteId}:${student.id}:${subjectId}:${fecha}`;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO asistencias (id, tenant_id, docente_id, alumno_id, materia_id, fecha, estado, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (docente_id, alumno_id, materia_id, fecha)
@@ -675,12 +675,12 @@ function importAttendance(user: User, rows: RowRecord[], errors: ImportRowError[
 
     if (existing) updated += 1;
     else imported += 1;
-  });
+  }
 
   return { imported, updated, skipped: 0 };
 }
 
-function importGradesFromParsed(user: User, rows: ParsedGradeRow[], errors: ImportRowError[]) {
+async function importGradesFromParsed(user: User, rows: ParsedGradeRow[], errors: ImportRowError[]) {
   const records: RowRecord[] = rows.map((row) => ({
     rowNumber: row.rowNumber,
     fecha: row.fecha,
@@ -701,13 +701,13 @@ function importGradesFromParsed(user: User, rows: ParsedGradeRow[], errors: Impo
   return importGrades(user, records, errors);
 }
 
-function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
+async function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
   let imported = 0;
   let updated = 0;
   const updatedAt = new Date().toISOString();
   const docenteId = user.id;
 
-  rows.forEach((row, index) => {
+  for (const [index, row] of rows.entries()) {
     const rowNumber = Number(row.rowNumber) || index + 2;
     const fecha = parseDate(row.fecha ?? null);
     const escuela = String(row.escuela ?? '').trim();
@@ -729,41 +729,41 @@ function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
         row: rowNumber,
         message: 'Fecha, Colegio/Escuela, Curso, Turno, Materia, Alumno y Evaluación son obligatorios.',
       });
-      return;
+      continue;
     }
 
     if (valor === null && !calificacionTexto) {
       errors.push({ row: rowNumber, message: 'Calificación obligatoria: número del 1 al 10 o texto (ej. S/C).' });
-      return;
+      continue;
     }
 
-    const course = findCourse(user, escuela, curso, turno);
+    const course = await findCourse(user, escuela, curso, turno);
     if (!course) {
       errors.push({ row: rowNumber, message: `Curso no encontrado: ${curso} (${escuela}, ${turno}).` });
-      return;
+      continue;
     }
 
-    const subjectId = resolveSubject(user, materia, updatedAt);
+    const subjectId = await resolveSubject(user, materia, updatedAt);
 
-    const student = findStudent(user, course.id, alumno, dni);
+    const student = await findStudent(user, course.id, alumno, dni);
     if (!student) {
       errors.push({ row: rowNumber, message: `Alumno no encontrado: ${alumno} en ${curso}.` });
-      return;
+      continue;
     }
 
-    if (!canAccessStudent(user, student.id) || !canAccessSubject(user, subjectId)) {
+    if (!(await canAccessStudent(user, student.id)) || !(await canAccessSubject(user, subjectId))) {
       errors.push({ row: rowNumber, message: 'No tenés permiso sobre ese alumno o materia.' });
-      return;
+      continue;
     }
 
-    const existing = db.prepare(`
+    const existing = (await db.prepare(`
       SELECT id FROM notas
       WHERE tenant_id = ? AND docente_id = ? AND alumno_id = ? AND materia_id = ? AND titulo = ? AND fecha = ?
-    `).get(user.tenant_id, docenteId, student.id, subjectId, titulo, fecha) as { id: string } | undefined;
+    `).get(user.tenant_id, docenteId, student.id, subjectId, titulo, fecha)) as { id: string } | undefined;
 
     const gradeId = existing?.id || `nota-${randomUUID()}`;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO notas (
         id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion,
         valor, calificacion_texto, peso, fecha, fecha_entrega, periodo, motivo, updated_at
@@ -798,7 +798,7 @@ function importGrades(user: User, rows: RowRecord[], errors: ImportRowError[]) {
 
     if (existing) updated += 1;
     else imported += 1;
-  });
+  }
 
   return { imported, updated, skipped: 0 };
 }
@@ -1010,7 +1010,7 @@ export async function importExcelBuffer(
     }
 
     const errors: ImportRowError[] = [];
-    const counts = importStudentRows(user, parsed.rows, errors, cicloLectivo);
+    const counts = await importStudentRows(user, parsed.rows, errors, cicloLectivo);
     if (counts.imported + counts.updated === 0 && errors.length === 0) {
       errors.push({
         row: 0,
@@ -1055,7 +1055,7 @@ export async function importExcelBuffer(
 
     const errors: ImportRowError[] = [];
     appendInvalidRowErrors(parsed.invalidRows, errors);
-    const counts = importAttendanceFromParsed(user, parsed.validRows, errors);
+    const counts = await importAttendanceFromParsed(user, parsed.validRows, errors);
     return {
       ...counts,
       skipped: counts.skipped + parsed.invalidRows.length,
@@ -1098,7 +1098,7 @@ export async function importExcelBuffer(
 
     const errors: ImportRowError[] = [];
     appendInvalidRowErrors(parsed.invalidRows, errors);
-    const counts = importGradesFromParsed(user, parsed.validRows, errors);
+    const counts = await importGradesFromParsed(user, parsed.validRows, errors);
     return {
       ...counts,
       skipped: counts.skipped + parsed.invalidRows.length,
@@ -1126,12 +1126,12 @@ export async function importExcelBuffer(
   }
 
   const errors: ImportRowError[] = [];
-  const run = db.transaction(() => {
-    if (type === 'cursos') return importCourses(user, rows, errors);
-    return importGrades(user, rows, errors);
+  const run = db.transaction(async () => {
+    if (type === 'cursos') return await importCourses(user, rows, errors);
+    return await importGrades(user, rows, errors);
   });
 
-  const counts = run();
+  const counts = await run();
   return { ...counts, errors };
 }
 

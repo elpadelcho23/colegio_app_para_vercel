@@ -9,12 +9,12 @@ import {
 export const POST: APIRoute = async ({ params, request, cookies }) => {
   try {
     const intentoId = String(params.id || '');
-    assertIntentoCookie(intentoId, cookies.get(INTENTO_COOKIE)?.value);
+    await assertIntentoCookie(intentoId, cookies.get(INTENTO_COOKIE)?.value);
     const body = await request.json().catch(() => ({}));
     if (body?.respuestas && typeof body.respuestas === 'object') {
-      saveRespuestas(intentoId, body.respuestas as Record<string, unknown>);
+      await saveRespuestas(intentoId, body.respuestas as Record<string, unknown>);
     }
-    const result = submitIntento(intentoId, {
+    const result = await submitIntento(intentoId, {
       forceTimeout: Boolean(body?.timeout),
       reason: body?.reason ? String(body.reason) : undefined,
     });

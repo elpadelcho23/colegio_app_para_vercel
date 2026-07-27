@@ -10,7 +10,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   if (!actividadId) return Response.json({ error: 'Elegí una actividad.' }, { status: 400 });
 
   try {
-    const aula = cargarActividadExistente(user, String(params.id || ''), actividadId);
+    const aula = await cargarActividadExistente(user, String(params.id || ''), actividadId);
     return Response.json({ aula });
   } catch (error) {
     return Response.json(

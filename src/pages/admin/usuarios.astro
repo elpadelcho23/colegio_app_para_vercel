@@ -3,25 +3,25 @@ import Layout from '../../layouts/Layout.astro';
 import { listBackups } from '../../server/backup';
 import { db } from '../../server/db';
 
-const docentes = db.prepare(`
+const docentes = (await db.prepare(`
   SELECT usuarios.id, usuarios.nombre, usuarios.email, usuarios.rol, usuarios.created_at, tenants.nombre AS tenant
   FROM usuarios
   LEFT JOIN tenants ON tenants.id = usuarios.tenant_id
   ORDER BY created_at DESC
-`).all() as Array<{ id: string; nombre: string; email: string; rol: string; tenant: string; created_at: string }>;
+`).all()) as Array<{ id: string; nombre: string; email: string; rol: string; tenant: string; created_at: string }>;
 
-const cursos = db.prepare(`
+const cursos = (await db.prepare(`
   SELECT id, escuela, nombre, turno
   FROM cursos
   ORDER BY escuela, nombre
-`).all() as Array<{ id: string; escuela: string; nombre: string; turno: string }>;
+`).all()) as Array<{ id: string; escuela: string; nombre: string; turno: string }>;
 
-const materias = db.prepare(`
+const materias = (await db.prepare(`
   SELECT id, nombre
   FROM materias
   WHERE activo = 1
   ORDER BY nombre
-`).all() as Array<{ id: string; nombre: string }>;
+`).all()) as Array<{ id: string; nombre: string }>;
 
 const backups = listBackups();
 ---

@@ -105,12 +105,12 @@ function rejectPayloadTenantMismatch(user: User, payload: unknown): string | nul
 }
 
 /** Evita ON CONFLICT(id) que reescribe filas de otro tenant (PK global). */
-function rejectForeignPrimaryKey(
+async function rejectForeignPrimaryKey(
   table: 'alumnos' | 'cursos' | 'materias' | 'notas' | 'escuelas' | 'asistencias',
   id: string,
   tenantId: string,
-): string | null {
-  const row = db.prepare(`SELECT tenant_id FROM ${table} WHERE id = ?`).get(id) as
+): Promise<string | null> {
+  const row = (await db.prepare(`SELECT tenant_id FROM ${table} WHERE id = ?`).get(id)) as
     | { tenant_id: string }
     | undefined;
   if (row && row.tenant_id !== tenantId) {
@@ -119,19 +119,19 @@ function rejectForeignPrimaryKey(
   return null;
 }
 
-function resolveSyncDocenteId(user: User, payload: { docenteId: string }): string | { error: string } {
+async function resolveSyncDocenteId(user: User, payload: { docenteId: string }): Promise<string | { error: string }> {
   if (payload.docenteId !== user.id && user.rol !== 'admin') {
     return { error: 'La operacion pertenece a otro docente.' };
   }
 
   if (payload.docenteId === user.id) return user.id;
 
-  const docente = db.prepare(`
+  const docente = (await db.prepare(`
     SELECT id
     FROM usuarios
     WHERE id = ?
       AND tenant_id = ?
-  `).get(payload.docenteId, user.tenant_id) as { id: string } | undefined;
+  `).get(payload.docenteId, user.tenant_id)) as { id: string } | undefined;
 
   if (!docente) {
     return { error: 'El docente no pertenece a esta institución.' };
@@ -160,33 +160,33 @@ function hasIdAndUpdatedAt(payload: unknown): payload is { id: string; docenteId
   return typeof item.id === 'string' && typeof item.docenteId === 'string' && typeof item.updatedAt === 'string';
 }
 
-function validateAttendancePermission(user: User, payload: AttendancePayload) {
+async function validateAttendancePermission(user: User, payload: AttendancePayload) {
   if (user.rol !== 'admin' && payload.docenteId !== user.id) {
     return 'La operacion pertenece a otro docente.';
   }
 
-  if (!canAccessStudent(user, payload.studentId)) {
+  if (!(await canAccessStudent(user, payload.studentId))) {
     return 'El docente no tiene permiso sobre este alumno.';
   }
 
-  if (!canAccessSubject(user, payload.subjectId)) {
+  if (!(await canAccessSubject(user, payload.subjectId))) {
     return 'El docente no tiene permiso sobre esta materia.';
   }
 
   return null;
 }
 
-function applyAttendance(operation: PendingOperation<AttendancePayload>, user: User): SyncApplyResult {
+async function applyAttendance(operation: PendingOperation<AttendancePayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
   const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
 
   const tenantId = syncTenantId(user);
-  const docenteResult = resolveSyncDocenteId(user, payload);
+  const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
 
-  const existing = db.prepare(`
+  const existing = (await db.prepare(`
     SELECT id, updated_at
     FROM asistencias
     WHERE tenant_id = ?
@@ -194,16 +194,16 @@ function applyAttendance(operation: PendingOperation<AttendancePayload>, user: U
       AND alumno_id = ?
       AND materia_id = ?
       AND fecha = ?
-  `).get(tenantId, docenteId, payload.studentId, payload.subjectId, payload.fecha) as { id: string; updated_at: string } | undefined;
+  `).get(tenantId, docenteId, payload.studentId, payload.subjectId, payload.fecha)) as { id: string; updated_at: string } | undefined;
 
   if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
     return { status: 'synced' as const, ignoredOlderWrite: true };
   }
 
-  const foreignId = rejectForeignPrimaryKey('asistencias', payload.id, tenantId);
+  const foreignId = await rejectForeignPrimaryKey('asistencias', payload.id, tenantId);
   if (foreignId) return { status: 'error', message: foreignId };
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO asistencias (id, tenant_id, docente_id, alumno_id, materia_id, fecha, estado, updated_at)
     VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @fecha, @estado, @updated_at)
     ON CONFLICT (docente_id, alumno_id, materia_id, fecha)
@@ -225,31 +225,31 @@ function applyAttendance(operation: PendingOperation<AttendancePayload>, user: U
   return { status: 'synced' as const };
 }
 
-function validateDocentePayload(user: User, payload: { docenteId: string }) {
-  const docenteResult = resolveSyncDocenteId(user, payload);
+async function validateDocentePayload(user: User, payload: { docenteId: string }) {
+  const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return docenteResult.error;
   return null;
 }
 
-function applyStudent(operation: PendingOperation<StudentPayload>, user: User): SyncApplyResult {
+async function applyStudent(operation: PendingOperation<StudentPayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
   const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
 
   const tenantId = syncTenantId(user);
-  const docenteResult = resolveSyncDocenteId(user, payload);
+  const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
 
   if (operation.action === 'delete') {
-    const existing = db.prepare('SELECT id FROM alumnos WHERE id = ? AND tenant_id = ?')
+    const existing = await db.prepare('SELECT id FROM alumnos WHERE id = ? AND tenant_id = ?')
       .get(payload.id, tenantId);
     if (!existing) return { status: 'error', message: 'Alumno no encontrado en esta institución.' };
-    if (user.rol !== 'admin' && !canAccessStudent(user, payload.id)) {
+    if (user.rol !== 'admin' && !(await canAccessStudent(user, payload.id))) {
       return { status: 'error', message: 'El docente no tiene permiso sobre este alumno.' };
     }
 
-    const hasDependencies = db.prepare(`
+    const hasDependencies = await db.prepare(`
       SELECT 1 FROM asistencias WHERE tenant_id = ? AND alumno_id = ?
       UNION
       SELECT 1 FROM notas WHERE tenant_id = ? AND alumno_id = ?
@@ -257,49 +257,49 @@ function applyStudent(operation: PendingOperation<StudentPayload>, user: User): 
     `).get(tenantId, payload.id, tenantId, payload.id);
 
     if (hasDependencies) {
-      db.prepare('UPDATE alumnos SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
+      await db.prepare('UPDATE alumnos SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
     } else {
-      db.prepare('DELETE FROM alumno_materias WHERE tenant_id = ? AND alumno_id = ?').run(tenantId, payload.id);
-      db.prepare('DELETE FROM alumnos WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
+      await db.prepare('DELETE FROM alumno_materias WHERE tenant_id = ? AND alumno_id = ?').run(tenantId, payload.id);
+      await db.prepare('DELETE FROM alumnos WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
     }
     return { status: 'synced' };
   }
 
   if (!payload.nombre || !payload.cursoId) return { status: 'error', message: 'Datos de alumno incompletos.' };
 
-  const courseInTenant = db.prepare('SELECT id FROM cursos WHERE id = ? AND tenant_id = ?')
+  const courseInTenant = await db.prepare('SELECT id FROM cursos WHERE id = ? AND tenant_id = ?')
     .get(payload.cursoId, tenantId);
   if (!courseInTenant) return { status: 'error', message: 'El curso no pertenece a esta institución.' };
 
-  const existing = db.prepare('SELECT updated_at FROM alumnos WHERE id = ? AND tenant_id = ?')
-    .get(payload.id, tenantId) as { updated_at: string } | undefined;
+  const existing = (await db.prepare('SELECT updated_at FROM alumnos WHERE id = ? AND tenant_id = ?')
+    .get(payload.id, tenantId)) as { updated_at: string } | undefined;
   if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
     return { status: 'synced', ignoredOlderWrite: true };
   }
-  if (existing && user.rol !== 'admin' && !canAccessStudent(user, payload.id)) {
+  if (existing && user.rol !== 'admin' && !(await canAccessStudent(user, payload.id))) {
     return { status: 'error', message: 'El docente no tiene permiso sobre este alumno.' };
   }
 
   if (user.rol !== 'admin') {
-    const course = db.prepare('SELECT curso_id FROM docente_cursos WHERE tenant_id = ? AND docente_id = ? AND curso_id = ?').get(tenantId, docenteId, payload.cursoId);
+    const course = await db.prepare('SELECT curso_id FROM docente_cursos WHERE tenant_id = ? AND docente_id = ? AND curso_id = ?').get(tenantId, docenteId, payload.cursoId);
     if (!course) return { status: 'error', message: 'El docente no tiene permiso sobre el curso.' };
   }
 
   const subjectIds = Array.isArray(payload.subjectIds) ? [...new Set(payload.subjectIds.filter(Boolean))] : null;
   if (subjectIds) {
     for (const subjectId of subjectIds) {
-      const subjectInTenant = db.prepare('SELECT id FROM materias WHERE id = ? AND tenant_id = ?').get(subjectId, tenantId);
+      const subjectInTenant = await db.prepare('SELECT id FROM materias WHERE id = ? AND tenant_id = ?').get(subjectId, tenantId);
       if (!subjectInTenant) return { status: 'error', message: 'Una materia no pertenece a esta institución.' };
-      if (user.rol !== 'admin' && !canAccessSubject(user, subjectId)) {
+      if (user.rol !== 'admin' && !(await canAccessSubject(user, subjectId))) {
         return { status: 'error', message: 'El docente no tiene permiso sobre una materia del alumno.' };
       }
     }
   }
 
-  const foreignId = rejectForeignPrimaryKey('alumnos', payload.id, tenantId);
+  const foreignId = await rejectForeignPrimaryKey('alumnos', payload.id, tenantId);
   if (foreignId) return { status: 'error', message: foreignId };
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor, activo, updated_at)
     VALUES (@id, @tenant_id, @curso_id, @nombre, @dni, @tutor, @activo, @updated_at)
     ON CONFLICT(id) DO UPDATE SET
@@ -322,36 +322,36 @@ function applyStudent(operation: PendingOperation<StudentPayload>, user: User): 
   });
 
   if (subjectIds) {
-    db.prepare('DELETE FROM alumno_materias WHERE tenant_id = ? AND alumno_id = ?').run(tenantId, payload.id);
+    await db.prepare('DELETE FROM alumno_materias WHERE tenant_id = ? AND alumno_id = ?').run(tenantId, payload.id);
     const insert = db.prepare('INSERT OR IGNORE INTO alumno_materias (tenant_id, alumno_id, materia_id) VALUES (?, ?, ?)');
-    for (const subjectId of subjectIds) insert.run(tenantId, payload.id, subjectId);
+    for (const subjectId of subjectIds) await insert.run(tenantId, payload.id, subjectId);
   }
 
   return { status: 'synced' };
 }
 
-function applyCourse(operation: PendingOperation<CoursePayload>, user: User): SyncApplyResult {
+async function applyCourse(operation: PendingOperation<CoursePayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
   const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
 
   const tenantId = syncTenantId(user);
-  const docenteResult = resolveSyncDocenteId(user, payload);
+  const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
 
   if (operation.action === 'delete') {
-    const existing = db.prepare('SELECT id FROM cursos WHERE id = ? AND tenant_id = ?')
+    const existing = await db.prepare('SELECT id FROM cursos WHERE id = ? AND tenant_id = ?')
       .get(payload.id, tenantId);
     if (!existing) return { status: 'error', message: 'Curso no encontrado en esta institución.' };
-    if (user.rol !== 'admin' && !canAccessCourse(user, payload.id)) {
+    if (user.rol !== 'admin' && !(await canAccessCourse(user, payload.id))) {
       return { status: 'error', message: 'El docente no tiene permiso sobre este curso.' };
     }
 
-    const hasStudents = db.prepare('SELECT 1 FROM alumnos WHERE tenant_id = ? AND curso_id = ? LIMIT 1').get(tenantId, payload.id);
+    const hasStudents = await db.prepare('SELECT 1 FROM alumnos WHERE tenant_id = ? AND curso_id = ? LIMIT 1').get(tenantId, payload.id);
     if (hasStudents) return { status: 'error', message: 'El curso tiene alumnos vinculados.' };
-    db.prepare('DELETE FROM docente_cursos WHERE tenant_id = ? AND curso_id = ?').run(tenantId, payload.id);
-    db.prepare('DELETE FROM cursos WHERE tenant_id = ? AND id = ?').run(tenantId, payload.id);
+    await db.prepare('DELETE FROM docente_cursos WHERE tenant_id = ? AND curso_id = ?').run(tenantId, payload.id);
+    await db.prepare('DELETE FROM cursos WHERE tenant_id = ? AND id = ?').run(tenantId, payload.id);
     return { status: 'synced' };
   }
 
@@ -359,19 +359,19 @@ function applyCourse(operation: PendingOperation<CoursePayload>, user: User): Sy
     return { status: 'error', message: 'Datos de curso incompletos.' };
   }
 
-  const existing = db.prepare('SELECT updated_at FROM cursos WHERE id = ? AND tenant_id = ?')
-    .get(payload.id, tenantId) as { updated_at: string } | undefined;
+  const existing = (await db.prepare('SELECT updated_at FROM cursos WHERE id = ? AND tenant_id = ?')
+    .get(payload.id, tenantId)) as { updated_at: string } | undefined;
   if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
     return { status: 'synced', ignoredOlderWrite: true };
   }
-  if (existing && user.rol !== 'admin' && !canAccessCourse(user, payload.id)) {
+  if (existing && user.rol !== 'admin' && !(await canAccessCourse(user, payload.id))) {
     return { status: 'error', message: 'El docente no tiene permiso sobre este curso.' };
   }
 
-  const foreignId = rejectForeignPrimaryKey('cursos', payload.id, tenantId);
+  const foreignId = await rejectForeignPrimaryKey('cursos', payload.id, tenantId);
   if (foreignId) return { status: 'error', message: foreignId };
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo, updated_at)
     VALUES (@id, @tenant_id, @escuela, @nombre, @turno, @ciclo_lectivo, @updated_at)
     ON CONFLICT(id) DO UPDATE SET
@@ -390,26 +390,26 @@ function applyCourse(operation: PendingOperation<CoursePayload>, user: User): Sy
     ciclo_lectivo: payload.cicloLectivo || new Date().getFullYear(),
     updated_at: payload.updatedAt,
   });
-  db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
+  await db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
 
   return { status: 'synced' };
 }
 
-function applyGrade(operation: PendingOperation<GradePayload>, user: User): SyncApplyResult {
+async function applyGrade(operation: PendingOperation<GradePayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
   const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
 
   const tenantId = syncTenantId(user);
-  const docenteResult = resolveSyncDocenteId(user, payload);
+  const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
 
   if (operation.action === 'delete') {
-    const existing = db.prepare('SELECT id FROM notas WHERE id = ? AND tenant_id = ?')
+    const existing = await db.prepare('SELECT id FROM notas WHERE id = ? AND tenant_id = ?')
       .get(payload.id, tenantId);
     if (!existing) return { status: 'error', message: 'Nota no encontrada en esta institución.' };
-    db.prepare('DELETE FROM notas WHERE id = ? AND tenant_id = ? AND (? = 1 OR docente_id = ?)').run(payload.id, tenantId, user.rol === 'admin' ? 1 : 0, docenteId);
+    await db.prepare('DELETE FROM notas WHERE id = ? AND tenant_id = ? AND (? = 1 OR docente_id = ?)').run(payload.id, tenantId, user.rol === 'admin' ? 1 : 0, docenteId);
     return { status: 'synced' };
   }
 
@@ -418,7 +418,7 @@ function applyGrade(operation: PendingOperation<GradePayload>, user: User): Sync
   if (!payload.studentId || !payload.subjectId || !payload.titulo || !payload.fecha || (!hasNumericGrade && !hasTextGrade)) {
     return { status: 'error' as const, message: 'Datos de nota incompletos.' };
   }
-  const permissionError = validateAttendancePermission(user, {
+  const permissionError = await validateAttendancePermission(user, {
     id: payload.id,
     docenteId,
     studentId: payload.studentId,
@@ -429,16 +429,16 @@ function applyGrade(operation: PendingOperation<GradePayload>, user: User): Sync
   });
   if (permissionError) return { status: 'error' as const, message: permissionError };
 
-  const existing = db.prepare('SELECT updated_at FROM notas WHERE id = ? AND tenant_id = ?')
-    .get(payload.id, tenantId) as { updated_at: string } | undefined;
+  const existing = (await db.prepare('SELECT updated_at FROM notas WHERE id = ? AND tenant_id = ?')
+    .get(payload.id, tenantId)) as { updated_at: string } | undefined;
   if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
     return { status: 'synced', ignoredOlderWrite: true };
   }
 
-  const foreignId = rejectForeignPrimaryKey('notas', payload.id, tenantId);
+  const foreignId = await rejectForeignPrimaryKey('notas', payload.id, tenantId);
   if (foreignId) return { status: 'error', message: foreignId };
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO notas (id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion, valor, calificacion_texto, peso, fecha, fecha_entrega, periodo, motivo, updated_at)
     VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @titulo, @tipo_evaluacion, @valor, @calificacion_texto, @peso, @fecha, @fecha_entrega, @periodo, @motivo, @updated_at)
     ON CONFLICT(id) DO UPDATE SET
@@ -474,25 +474,25 @@ function applyGrade(operation: PendingOperation<GradePayload>, user: User): Sync
   return { status: 'synced' };
 }
 
-function applySubject(operation: PendingOperation<SubjectPayload>, user: User): SyncApplyResult {
+async function applySubject(operation: PendingOperation<SubjectPayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
   const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
 
   const tenantId = syncTenantId(user);
-  const docenteResult = resolveSyncDocenteId(user, payload);
+  const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
 
   if (operation.action === 'delete') {
-    const existing = db.prepare('SELECT id FROM materias WHERE id = ? AND tenant_id = ?')
+    const existing = await db.prepare('SELECT id FROM materias WHERE id = ? AND tenant_id = ?')
       .get(payload.id, tenantId);
     if (!existing) return { status: 'error', message: 'Materia no encontrada en esta institución.' };
-    if (user.rol !== 'admin' && !canAccessSubject(user, payload.id)) {
+    if (user.rol !== 'admin' && !(await canAccessSubject(user, payload.id))) {
       return { status: 'error', message: 'El docente no tiene permiso sobre esta materia.' };
     }
 
-    const hasDependencies = db.prepare(`
+    const hasDependencies = await db.prepare(`
       SELECT 1 FROM asistencias WHERE tenant_id = ? AND materia_id = ?
       UNION
       SELECT 1 FROM notas WHERE tenant_id = ? AND materia_id = ?
@@ -500,28 +500,28 @@ function applySubject(operation: PendingOperation<SubjectPayload>, user: User): 
     `).get(tenantId, payload.id, tenantId, payload.id);
 
     if (hasDependencies) {
-      db.prepare('UPDATE materias SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
+      await db.prepare('UPDATE materias SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
     } else {
-      db.prepare('DELETE FROM docente_materias WHERE tenant_id = ? AND materia_id = ?').run(tenantId, payload.id);
-      db.prepare('DELETE FROM materias WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
+      await db.prepare('DELETE FROM docente_materias WHERE tenant_id = ? AND materia_id = ?').run(tenantId, payload.id);
+      await db.prepare('DELETE FROM materias WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
     }
     return { status: 'synced' };
   }
 
   if (!payload.nombre) return { status: 'error', message: 'Nombre de materia requerido.' };
-  const existing = db.prepare('SELECT updated_at FROM materias WHERE id = ? AND tenant_id = ?')
-    .get(payload.id, tenantId) as { updated_at: string } | undefined;
+  const existing = (await db.prepare('SELECT updated_at FROM materias WHERE id = ? AND tenant_id = ?')
+    .get(payload.id, tenantId)) as { updated_at: string } | undefined;
   if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
     return { status: 'synced', ignoredOlderWrite: true };
   }
-  if (existing && user.rol !== 'admin' && !canAccessSubject(user, payload.id)) {
+  if (existing && user.rol !== 'admin' && !(await canAccessSubject(user, payload.id))) {
     return { status: 'error', message: 'El docente no tiene permiso sobre esta materia.' };
   }
 
-  const foreignId = rejectForeignPrimaryKey('materias', payload.id, tenantId);
+  const foreignId = await rejectForeignPrimaryKey('materias', payload.id, tenantId);
   if (foreignId) return { status: 'error', message: foreignId };
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
     VALUES (@id, @tenant_id, @nombre, @activo, @updated_at)
     ON CONFLICT(id) DO UPDATE SET
@@ -536,43 +536,43 @@ function applySubject(operation: PendingOperation<SubjectPayload>, user: User): 
     activo: payload.activo === false ? 0 : 1,
     updated_at: payload.updatedAt,
   });
-  db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
+  await db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
 
   return { status: 'synced' };
 }
 
-function applySchool(operation: PendingOperation<SchoolPayload>, user: User) {
+async function applySchool(operation: PendingOperation<SchoolPayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
   const docenteId = user.rol === 'admin' ? payload.docenteId : user.id;
   const tenantId = user.rol === 'admin'
-    ? (db.prepare('SELECT tenant_id FROM usuarios WHERE id = ?').get(docenteId) as { tenant_id: string } | undefined)?.tenant_id || user.tenant_id
+    ? ((await db.prepare('SELECT tenant_id FROM usuarios WHERE id = ?').get(docenteId)) as { tenant_id: string } | undefined)?.tenant_id || user.tenant_id
     : user.tenant_id;
 
   if (operation.action === 'delete') {
-    const school = db.prepare('SELECT nombre FROM escuelas WHERE id = ? AND tenant_id = ?').get(payload.id, tenantId) as { nombre: string } | undefined;
+    const school = (await db.prepare('SELECT nombre FROM escuelas WHERE id = ? AND tenant_id = ?').get(payload.id, tenantId)) as { nombre: string } | undefined;
     if (school) {
-      const hasCourses = db.prepare('SELECT 1 FROM cursos WHERE tenant_id = ? AND escuela = ? LIMIT 1').get(tenantId, school.nombre);
+      const hasCourses = await db.prepare('SELECT 1 FROM cursos WHERE tenant_id = ? AND escuela = ? LIMIT 1').get(tenantId, school.nombre);
       if (hasCourses) {
-        db.prepare('UPDATE escuelas SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
+        await db.prepare('UPDATE escuelas SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
         return { status: 'synced' as const };
       }
     }
-    db.prepare('DELETE FROM docente_escuelas WHERE tenant_id = ? AND escuela_id = ?').run(tenantId, payload.id);
-    db.prepare('DELETE FROM escuelas WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
+    await db.prepare('DELETE FROM docente_escuelas WHERE tenant_id = ? AND escuela_id = ?').run(tenantId, payload.id);
+    await db.prepare('DELETE FROM escuelas WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
     return { status: 'synced' as const };
   }
 
   if (!payload.nombre) return { status: 'error' as const, message: 'Nombre de escuela requerido.' };
-  const existing = db.prepare('SELECT tenant_id, updated_at FROM escuelas WHERE id = ?').get(payload.id) as { tenant_id: string; updated_at: string } | undefined;
+  const existing = (await db.prepare('SELECT tenant_id, updated_at FROM escuelas WHERE id = ?').get(payload.id)) as { tenant_id: string; updated_at: string } | undefined;
   if (existing && existing.tenant_id !== tenantId) return { status: 'error' as const, message: 'La escuela pertenece a otra cuenta.' };
   if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
     return { status: 'synced' as const, ignoredOlderWrite: true };
   }
 
-  const foreignId = rejectForeignPrimaryKey('escuelas', payload.id, tenantId);
+  const foreignId = await rejectForeignPrimaryKey('escuelas', payload.id, tenantId);
   if (foreignId) return { status: 'error' as const, message: foreignId };
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO escuelas (id, tenant_id, nombre, activo, updated_at)
     VALUES (@id, @tenant_id, @nombre, @activo, @updated_at)
     ON CONFLICT(id) DO UPDATE SET
@@ -587,7 +587,7 @@ function applySchool(operation: PendingOperation<SchoolPayload>, user: User) {
     activo: payload.activo === false ? 0 : 1,
     updated_at: payload.updatedAt,
   });
-  db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
+  await db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
 
   return { status: 'synced' as const };
 }
@@ -604,14 +604,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const results: SyncResult[] = [];
-  const tx = db.transaction((items: PendingOperation[]) => {
-    for (const operation of items) {
+  const tx = db.transaction(async () => {
+    for (const operation of operations) {
       if (!operation.clientMutationId) {
         results.push({ clientMutationId: '', status: 'error', message: 'Falta clientMutationId.' });
         continue;
       }
 
-      const duplicate = db.prepare(`
+      const duplicate = await db.prepare(`
         SELECT client_mutation_id
         FROM sync_log
         WHERE client_mutation_id = ?
@@ -651,7 +651,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         continue;
       }
 
-      const docenteError = validateDocentePayload(user, payload);
+      const docenteError = await validateDocentePayload(user, payload);
       if (docenteError) {
         results.push({
           clientMutationId: operation.clientMutationId,
@@ -667,21 +667,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
         if (!isAttendancePayload(payload) || operation.action !== 'upsert') {
           applied = { status: 'error', message: 'Payload de asistencia invalido.' };
         } else {
-          const permissionError = validateAttendancePermission(user, payload);
+          const permissionError = await validateAttendancePermission(user, payload);
           applied = permissionError
             ? { status: 'error', message: permissionError }
-            : applyAttendance(operation as PendingOperation<AttendancePayload>, user);
+            : await applyAttendance(operation as PendingOperation<AttendancePayload>, user);
         }
       } else if (operation.entity === 'student') {
-        applied = applyStudent(operation as PendingOperation<StudentPayload>, user);
+        applied = await applyStudent(operation as PendingOperation<StudentPayload>, user);
       } else if (operation.entity === 'course') {
-        applied = applyCourse(operation as PendingOperation<CoursePayload>, user);
+        applied = await applyCourse(operation as PendingOperation<CoursePayload>, user);
       } else if (operation.entity === 'grade') {
-        applied = applyGrade(operation as PendingOperation<GradePayload>, user);
+        applied = await applyGrade(operation as PendingOperation<GradePayload>, user);
       } else if (operation.entity === 'school') {
-        applied = applySchool(operation as PendingOperation<SchoolPayload>, user);
+        applied = await applySchool(operation as PendingOperation<SchoolPayload>, user);
       } else {
-        applied = applySubject(operation as PendingOperation<SubjectPayload>, user);
+        applied = await applySubject(operation as PendingOperation<SubjectPayload>, user);
       }
 
       if (applied.status === 'error') {
@@ -693,10 +693,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
         continue;
       }
 
-      const loggedDocenteId = resolveSyncDocenteId(user, payload);
+      const loggedDocenteId = await resolveSyncDocenteId(user, payload);
       const docenteIdForLog = typeof loggedDocenteId === 'string' ? loggedDocenteId : user.id;
 
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO sync_log (client_mutation_id, tenant_id, docente_id, entity, operation_id, status)
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(operation.clientMutationId, user.tenant_id, docenteIdForLog, operation.entity, operation.id, 'synced');
@@ -709,7 +709,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
   });
 
-  tx(operations);
+  await tx();
 
   return Response.json({ results });
 };

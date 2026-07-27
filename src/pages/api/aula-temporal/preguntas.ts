@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
 import { replaceActividadPreguntas, preguntasForTeacher, type PreguntaInput } from '../../../server/aula-temporal-service';
 
-export const GET: APIRoute = ({ locals, url }) => {
+export const GET: APIRoute = async ({ locals, url }) => {
   const user = locals.user;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
   const actividadId = String(url.searchParams.get('actividadId') || '').trim();
   if (!actividadId) return Response.json({ error: 'Falta actividadId.' }, { status: 400 });
-  return Response.json({ preguntas: preguntasForTeacher(actividadId) });
+  return Response.json({ preguntas: await preguntasForTeacher(actividadId) });
 };
 
 export const PUT: APIRoute = async ({ locals, request }) => {
@@ -21,7 +21,7 @@ export const PUT: APIRoute = async ({ locals, request }) => {
   }
 
   try {
-    const preguntas = replaceActividadPreguntas(user, actividadId, body.preguntas as PreguntaInput[]);
+    const preguntas = await replaceActividadPreguntas(user, actividadId, body.preguntas as PreguntaInput[]);
     return Response.json({
       preguntas: preguntas.map((row) => ({
         id: row.id,

@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { db } from '../../../server/db';
 
-function ensureSubscriptionsTable() {
-  db.exec(`
+async function ensureSubscriptionsTable() {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS subscriptions (
       tenant_id TEXT PRIMARY KEY,
       plan TEXT NOT NULL DEFAULT 'trial' CHECK (plan IN ('free', 'trial', 'pro')),
@@ -13,22 +13,22 @@ function ensureSubscriptionsTable() {
   `);
 }
 
-export const GET: APIRoute = ({ locals }) => {
+export const GET: APIRoute = async ({ locals }) => {
   const user = locals.user;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
-  ensureSubscriptionsTable();
+  await ensureSubscriptionsTable();
 
-  const row = db.prepare(`
+  const row = (await db.prepare(`
     SELECT plan, trial_ends_at AS trialEndsAt, updated_at AS updatedAt
     FROM subscriptions
     WHERE tenant_id = ?
-  `).get(user.tenant_id) as { plan: string; trialEndsAt: string | null; updatedAt: string } | undefined;
+  `).get(user.tenant_id)) as { plan: string; trialEndsAt: string | null; updatedAt: string } | undefined;
 
   if (!row) {
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + 30);
     const trialEndsAt = trialEnd.toISOString().slice(0, 10);
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO subscriptions (tenant_id, plan, trial_ends_at)
       VALUES (?, 'trial', ?)
     `).run(user.tenant_id, trialEndsAt);
@@ -41,7 +41,7 @@ export const GET: APIRoute = ({ locals }) => {
 export const POST: APIRoute = async ({ locals, request }) => {
   const user = locals.user;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
-  ensureSubscriptionsTable();
+  await ensureSubscriptionsTable();
 
   const body = await request.json().catch(() => ({}));
   const plan = body.plan === 'pro' || body.plan === 'free' || body.plan === 'trial' ? body.plan : null;
@@ -55,7 +55,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   }
   if (plan === 'pro' || plan === 'free') trialEndsAt = null;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO subscriptions (tenant_id, plan, trial_ends_at, updated_at)
     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(tenant_id) DO UPDATE SET

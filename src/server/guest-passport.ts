@@ -105,10 +105,10 @@ export const readGuestPassport = readSessionPassport;
  * Si la cookie de sesión existe pero la fila no está en esta instancia,
  * recreamos tenant/usuario/sesión desde el passport firmado.
  */
-export function rehydrateUserFromPassport(
+export async function rehydrateUserFromPassport(
   sessionToken: string | undefined,
   passportCookie: string | undefined,
-): User | null {
+): Promise<User | null> {
   if (!sessionToken) return null;
   const passport = verifyPassport(passportCookie);
   if (!passport) return null;
@@ -117,8 +117,8 @@ export function rehydrateUserFromPassport(
   const expiresAt = new Date(passport.exp).toISOString();
   const isGuest = Boolean(passport.isGuest);
 
-  const tx = db.transaction(() => {
-    db.prepare(`
+  const tx = db.transaction(async () => {
+    await db.prepare(`
       INSERT OR IGNORE INTO tenants (id, nombre)
       VALUES (?, ?)
     `).run(
@@ -128,7 +128,7 @@ export function rehydrateUserFromPassport(
         : `Cuenta ${passport.nombre || passport.email}`,
     );
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
@@ -147,8 +147,8 @@ export function rehydrateUserFromPassport(
       isGuest ? 1 : 0,
     );
 
-    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(passport.userId);
-    db.prepare(`
+    await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(passport.userId);
+    await db.prepare(`
       INSERT INTO sessions (id, user_id, token_hash, expires_at)
       VALUES (?, ?, ?, ?)
     `).run(
@@ -159,7 +159,7 @@ export function rehydrateUserFromPassport(
     );
   });
 
-  tx();
+  await tx();
 
   const user: User = {
     id: passport.userId,
@@ -172,7 +172,7 @@ export function rehydrateUserFromPassport(
 
   if (isGuest) {
     try {
-      seedGuestDemoData(user);
+      await seedGuestDemoData(user);
     } catch {
       // best-effort
     }

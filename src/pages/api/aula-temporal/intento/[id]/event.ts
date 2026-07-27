@@ -8,10 +8,10 @@ import {
 export const POST: APIRoute = async ({ params, request, cookies }) => {
   try {
     const intentoId = String(params.id || '');
-    assertIntentoCookie(intentoId, cookies.get(INTENTO_COOKIE)?.value);
+    await assertIntentoCookie(intentoId, cookies.get(INTENTO_COOKIE)?.value);
     const body = await request.json().catch(() => ({}));
     const type = String(body?.type || '').trim() || 'unknown';
-    const result = appendIntentoEvent(intentoId, type, body?.detail || undefined);
+    const result = await appendIntentoEvent(intentoId, type, body?.detail || undefined);
     return Response.json(result);
   } catch (error) {
     return Response.json(

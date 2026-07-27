@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { db, dbPath } from './db.ts';
+import { isRemoteTurso } from './db-client.ts';
 
 const qaDir = join(dirname(dbPath), 'backup-qa');
 const restorePath = join(qaDir, 'restore-check.sqlite');
@@ -23,22 +24,39 @@ const tables = [
   'sync_log',
 ];
 
-function tableExists(database: Database.Database, table: string) {
+/** `restored` is a standalone better-sqlite3 handle over its own file, never the shared async db. */
+function tableExistsSync(database: Database.Database, table: string) {
   return Boolean(database.prepare('SELECT name FROM sqlite_schema WHERE type = ? AND name = ?').get('table', table));
 }
 
-function countRows(database: Database.Database, table: string) {
+function countRowsSync(database: Database.Database, table: string) {
   return (database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count;
 }
 
+async function tableExistsAsync(table: string) {
+  return Boolean(await db.prepare('SELECT name FROM sqlite_schema WHERE type = ? AND name = ?').get('table', table));
+}
+
+async function countRowsAsync(table: string) {
+  const row = (await db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()) as { count: number };
+  return row.count;
+}
+
 async function main() {
+  if (isRemoteTurso()) {
+    throw new Error('backup:qa solo funciona con la base de datos SQLite local (no con Turso remoto).');
+  }
+
   mkdirSync(qaDir, { recursive: true });
   if (existsSync(restorePath)) rmSync(restorePath, { force: true });
 
   const stamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-');
   const backupPath = join(dirname(dbPath), 'backups', `aula-clara-qa-${stamp}.sqlite`);
   mkdirSync(dirname(backupPath), { recursive: true });
-  await db.backup(backupPath);
+  if (!existsSync(dbPath)) {
+    throw new Error(`No se encontró la base de datos local en ${dbPath}.`);
+  }
+  copyFileSync(dbPath, backupPath);
   copyFileSync(backupPath, restorePath);
 
   const restored = new Database(restorePath, { readonly: true });
@@ -50,9 +68,9 @@ async function main() {
 
     const mismatches: string[] = [];
     for (const table of tables) {
-      if (!tableExists(db, table) || !tableExists(restored, table)) continue;
-      const sourceCount = countRows(db, table);
-      const restoredCount = countRows(restored, table);
+      if (!(await tableExistsAsync(table)) || !tableExistsSync(restored, table)) continue;
+      const sourceCount = await countRowsAsync(table);
+      const restoredCount = countRowsSync(restored, table);
       if (sourceCount !== restoredCount) {
         mismatches.push(`${table}: origen=${sourceCount}, backup=${restoredCount}`);
       }
