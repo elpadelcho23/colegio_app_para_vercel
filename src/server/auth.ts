@@ -3,12 +3,12 @@ import { createHash, randomBytes } from 'node:crypto';
 import { CLIENT_DATA_STORAGE, PULL_FIELD_BY_KEY } from '../lib/client-storage-keys';
 import { db, getUserById, type User } from './db';
 import {
-  createGuestPassportCookieValue,
-  GUEST_PASSPORT_COOKIE,
+  createSessionPassportCookieValue,
+  SESSION_PASSPORT_COOKIE,
 } from './guest-passport';
 
 export const SESSION_COOKIE = 'aula_clara_session';
-export { GUEST_PASSPORT_COOKIE };
+export { SESSION_PASSPORT_COOKIE, SESSION_PASSPORT_COOKIE as GUEST_PASSPORT_COOKIE };
 const SESSION_DAYS = 7;
 /** TTL de seguridad en SQLite para invitados (cookie de navegador sin expires). */
 const GUEST_SESSION_HOURS = 12;
@@ -125,7 +125,12 @@ function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: '
         return response.ok ? response.json() : null;
       })
       .then(function (data) {
-        if (data) applyServerData(data, true);
+        var hasRows = data && (
+          (Array.isArray(data.courses) && data.courses.length > 0)
+          || (Array.isArray(data.students) && data.students.length > 0)
+          || (Array.isArray(data.subjects) && data.subjects.length > 0)
+        );
+        if (hasRows) applyServerData(data, true);
         else initMissingEmpty();
         finish();
       })
@@ -259,21 +264,17 @@ function respondWithSessionHtml(
 
   cookies.set(SESSION_COOKIE, session.token, cookieProps);
 
-  if (options.sessionOnly) {
-    const user = getUserById(userId);
-    if (user?.is_guest) {
-      cookies.set(
-        GUEST_PASSPORT_COOKIE,
-        createGuestPassportCookieValue({
-          user,
-          sessionToken: session.token,
-          expiresAt: session.expiresAt,
-        }),
-        cookieProps,
-      );
-    }
-  } else {
-    cookies.delete(GUEST_PASSPORT_COOKIE, cookieOptions(url));
+  const user = getUserById(userId);
+  if (user) {
+    cookies.set(
+      SESSION_PASSPORT_COOKIE,
+      createSessionPassportCookieValue({
+        user,
+        sessionToken: session.token,
+        expiresAt: session.expiresAt,
+      }),
+      cookieProps,
+    );
   }
 
   return new Response(html, {

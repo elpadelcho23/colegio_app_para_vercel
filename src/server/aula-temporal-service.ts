@@ -433,22 +433,24 @@ export function createClaseVirtual(input: {
     throw new Error('Completá escuela, turno, curso, materia y título de la clase.');
   }
 
-  ensureTeachingContextRows({
+  const teaching = ensureTeachingContextRows({
     user: input.user,
     cursoId,
     materiaId,
     colegio,
     turno,
   });
+  const resolvedCursoId = teaching.cursoId || cursoId;
+  const resolvedMateriaId = teaching.materiaId || materiaId;
 
   const curso = db.prepare(`
     SELECT id, tenant_id FROM cursos WHERE id = ? AND tenant_id = ?
-  `).get(cursoId, input.user.tenant_id) as { id: string; tenant_id: string } | undefined;
+  `).get(resolvedCursoId, input.user.tenant_id) as { id: string; tenant_id: string } | undefined;
   if (!curso) throw new Error('Curso no encontrado. Elegí un curso en “Curso actual” o crealo en Cursos.');
 
   const materia = db.prepare(`
     SELECT id FROM materias WHERE id = ? AND tenant_id = ?
-  `).get(materiaId, input.user.tenant_id) as { id: string } | undefined;
+  `).get(resolvedMateriaId, input.user.tenant_id) as { id: string } | undefined;
   if (!materia) throw new Error('Materia no encontrada. Elegí una materia en “Curso actual”.');
 
   const actividadId = `act-${randomUUID()}`;
@@ -467,8 +469,8 @@ export function createClaseVirtual(input: {
     docente_id: input.user.id,
     colegio,
     turno,
-    curso_id: cursoId,
-    materia_id: materiaId,
+    curso_id: resolvedCursoId,
+    materia_id: resolvedMateriaId,
     titulo,
     contenido_json: JSON.stringify({
       template: `aula-online-${input.modo}`,

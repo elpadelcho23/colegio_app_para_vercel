@@ -2,18 +2,23 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { User } from './db';
 import { db, seedGuestDemoData } from './db';
 
-export const GUEST_PASSPORT_COOKIE = 'aula_clara_guest_passport';
+/** Cookie firmada para rehidratar usuario+sesión en otra instancia de Vercel (/tmp SQLite). */
+export const SESSION_PASSPORT_COOKIE = 'aula_clara_session_passport';
+/** Alias legacy (invitados viejos). */
+export const GUEST_PASSPORT_COOKIE = SESSION_PASSPORT_COOKIE;
 
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
 
-type GuestPassportPayload = {
+type SessionPassportPayload = {
   v: 1;
   userId: string;
   tenantId: string;
   email: string;
   nombre: string;
+  rol: 'admin' | 'docente';
+  isGuest: boolean;
   tokenHash: string;
   exp: number;
 };
@@ -31,17 +36,19 @@ function sign(payloadB64: string) {
   return createHmac('sha256', authSecret()).update(payloadB64).digest('base64url');
 }
 
-export function createGuestPassportCookieValue(input: {
+export function createSessionPassportCookieValue(input: {
   user: User;
   sessionToken: string;
   expiresAt: Date;
 }) {
-  const payload: GuestPassportPayload = {
+  const payload: SessionPassportPayload = {
     v: 1,
     userId: input.user.id,
     tenantId: input.user.tenant_id,
     email: input.user.email,
     nombre: input.user.nombre,
+    rol: input.user.rol,
+    isGuest: Boolean(input.user.is_guest),
     tokenHash: hashToken(input.sessionToken),
     exp: input.expiresAt.getTime(),
   };
@@ -49,7 +56,10 @@ export function createGuestPassportCookieValue(input: {
   return `${payloadB64}.${sign(payloadB64)}`;
 }
 
-function verifyPassport(raw?: string): GuestPassportPayload | null {
+/** @deprecated use createSessionPassportCookieValue */
+export const createGuestPassportCookieValue = createSessionPassportCookieValue;
+
+function verifyPassport(raw?: string): SessionPassportPayload | null {
   if (!raw) return null;
   const dot = raw.lastIndexOf('.');
   if (dot <= 0) return null;
@@ -65,9 +75,10 @@ function verifyPassport(raw?: string): GuestPassportPayload | null {
   }
 
   try {
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as GuestPassportPayload;
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as SessionPassportPayload;
     if (payload?.v !== 1 || !payload.userId || !payload.tenantId || !payload.tokenHash) return null;
     if (!Number.isFinite(payload.exp) || payload.exp <= Date.now()) return null;
+    if (payload.rol !== 'admin' && payload.rol !== 'docente') return null;
     return payload;
   } catch {
     return null;
@@ -75,10 +86,10 @@ function verifyPassport(raw?: string): GuestPassportPayload | null {
 }
 
 /** Lee el passport sin tocar la DB (útil en logout). */
-export function readGuestPassport(
+export function readSessionPassport(
   sessionToken: string | undefined,
   passportCookie: string | undefined,
-): GuestPassportPayload | null {
+): SessionPassportPayload | null {
   if (!sessionToken) return null;
   const passport = verifyPassport(passportCookie);
   if (!passport) return null;
@@ -86,12 +97,15 @@ export function readGuestPassport(
   return passport;
 }
 
+/** @deprecated use readSessionPassport */
+export const readGuestPassport = readSessionPassport;
+
 /**
  * En Vercel el SQLite de /tmp no se comparte entre instancias.
  * Si la cookie de sesión existe pero la fila no está en esta instancia,
- * recreamos tenant/usuario/sesión desde el passport firmado del invitado.
+ * recreamos tenant/usuario/sesión desde el passport firmado.
  */
-export function rehydrateGuestFromPassport(
+export function rehydrateUserFromPassport(
   sessionToken: string | undefined,
   passportCookie: string | undefined,
 ): User | null {
@@ -101,28 +115,36 @@ export function rehydrateGuestFromPassport(
   if (passport.tokenHash !== hashToken(sessionToken)) return null;
 
   const expiresAt = new Date(passport.exp).toISOString();
+  const isGuest = Boolean(passport.isGuest);
 
   const tx = db.transaction(() => {
     db.prepare(`
       INSERT OR IGNORE INTO tenants (id, nombre)
       VALUES (?, ?)
-    `).run(passport.tenantId, `Invitado ${passport.userId.replace(/^guest-/, '')}`);
+    `).run(
+      passport.tenantId,
+      isGuest
+        ? `Invitado ${passport.userId.replace(/^guest-/, '')}`
+        : `Cuenta ${passport.nombre || passport.email}`,
+    );
 
     db.prepare(`
       INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
-      VALUES (?, ?, ?, ?, ?, 'docente', 1)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         tenant_id = excluded.tenant_id,
         nombre = excluded.nombre,
         email = excluded.email,
-        is_guest = 1
+        rol = excluded.rol,
+        is_guest = excluded.is_guest
     `).run(
       passport.userId,
       passport.tenantId,
-      passport.nombre || 'Invitado',
+      passport.nombre || (isGuest ? 'Invitado' : 'Docente'),
       passport.email,
-      // placeholder: guests never password-login
-      '$guest$',
+      isGuest ? '$guest$' : '$passport$',
+      passport.rol,
+      isGuest ? 1 : 0,
     );
 
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(passport.userId);
@@ -142,17 +164,22 @@ export function rehydrateGuestFromPassport(
   const user: User = {
     id: passport.userId,
     tenant_id: passport.tenantId,
-    nombre: passport.nombre || 'Invitado',
+    nombre: passport.nombre || (isGuest ? 'Invitado' : 'Docente'),
     email: passport.email,
-    rol: 'docente',
-    is_guest: true,
+    rol: passport.rol,
+    is_guest: isGuest,
   };
 
-  try {
-    seedGuestDemoData(user);
-  } catch {
-    // best-effort: auth must still succeed
+  if (isGuest) {
+    try {
+      seedGuestDemoData(user);
+    } catch {
+      // best-effort
+    }
   }
 
   return user;
 }
+
+/** @deprecated use rehydrateUserFromPassport */
+export const rehydrateGuestFromPassport = rehydrateUserFromPassport;

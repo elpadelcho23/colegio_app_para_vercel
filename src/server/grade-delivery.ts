@@ -247,6 +247,7 @@ function upsertNota(options: {
       calificacion_texto = excluded.calificacion_texto,
       motivo = excluded.motivo,
       updated_at = excluded.updated_at
+    WHERE notas.tenant_id = excluded.tenant_id
   `).run(
     gradeId,
     user.tenant_id,

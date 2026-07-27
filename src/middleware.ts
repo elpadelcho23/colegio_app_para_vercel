@@ -1,6 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { getUserFromToken, SESSION_COOKIE } from './server/auth';
-import { GUEST_PASSPORT_COOKIE, rehydrateGuestFromPassport } from './server/guest-passport';
+import { SESSION_PASSPORT_COOKIE, rehydrateUserFromPassport } from './server/guest-passport';
 import { startBackupScheduler } from './server/backup';
 
 const publicApiRoutes = new Set([
@@ -22,14 +22,29 @@ function isPublicPage(path: string) {
   return path === '/login' || path === '/register' || path.startsWith('/s/');
 }
 
-const protectedPagePrefixes = ['/asistencia', '/notas', '/actividades', '/cursos', '/materias', '/registro', '/admin'];
-startBackupScheduler();
+const protectedPagePrefixes = [
+  '/asistencia',
+  '/notas',
+  '/actividades',
+  '/cursos',
+  '/materias',
+  '/registro',
+  '/admin',
+  '/herramientas',
+];
+
+if (!process.env.VERCEL) {
+  startBackupScheduler();
+}
 
 export const onRequest = defineMiddleware((context, next) => {
   const token = context.cookies.get(SESSION_COOKIE)?.value;
   let user = getUserFromToken(token);
   if (!user && token) {
-    user = rehydrateGuestFromPassport(token, context.cookies.get(GUEST_PASSPORT_COOKIE)?.value);
+    const passport =
+      context.cookies.get(SESSION_PASSPORT_COOKIE)?.value
+      || context.cookies.get('aula_clara_guest_passport')?.value;
+    user = rehydrateUserFromPassport(token, passport);
   }
   context.locals.user = user;
 

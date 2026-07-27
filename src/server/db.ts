@@ -208,7 +208,11 @@ export function seedGuestDemoData(user: User) {
   tx();
 }
 
-/** Asegura curso/materia/vínculos del docente (p. ej. datos solo en localStorage del invitado). */
+/**
+ * Asegura curso/materia/vínculos del docente (p. ej. datos solo en localStorage).
+ * Si el id ya existe en otro tenant (PK global en SQLite compartido/ephemeral),
+ * remapea a un id scoped al tenant para no corromper ni fallar en silencio.
+ */
 export function ensureTeachingContextRows(input: {
   user: User;
   cursoId: string;
@@ -217,12 +221,29 @@ export function ensureTeachingContextRows(input: {
   turno: string;
   cursoNombre?: string;
   materiaNombre?: string;
-}) {
+}): { cursoId: string; materiaId: string } {
   const tenantId = input.user.tenant_id;
   const now = new Date().toISOString();
-  const cursoId = String(input.cursoId || '').trim();
-  const materiaId = String(input.materiaId || '').trim();
-  if (!cursoId || !materiaId) return;
+  const desiredCursoId = String(input.cursoId || '').trim();
+  const desiredMateriaId = String(input.materiaId || '').trim();
+  if (!desiredCursoId || !desiredMateriaId) return { cursoId: '', materiaId: '' };
+
+  function resolveOwnedId(table: 'cursos' | 'materias', desiredId: string): string {
+    const row = db.prepare(`SELECT tenant_id FROM ${table} WHERE id = ?`).get(desiredId) as
+      | { tenant_id: string }
+      | undefined;
+    if (!row || row.tenant_id === tenantId) return desiredId;
+
+    const remapped = `${desiredId}~${tenantId}`;
+    const again = db.prepare(`SELECT tenant_id FROM ${table} WHERE id = ?`).get(remapped) as
+      | { tenant_id: string }
+      | undefined;
+    if (!again || again.tenant_id === tenantId) return remapped;
+    return `${desiredId}~${tenantId}~${randomBytes(4).toString('hex')}`;
+  }
+
+  const cursoId = resolveOwnedId('cursos', desiredCursoId);
+  const materiaId = resolveOwnedId('materias', desiredMateriaId);
 
   const tx = db.transaction(() => {
     db.prepare(`
@@ -238,7 +259,7 @@ export function ensureTeachingContextRows(input: {
       cursoId,
       tenantId,
       String(input.colegio || 'Escuela').trim() || 'Escuela',
-      String(input.cursoNombre || cursoId).trim() || cursoId,
+      String(input.cursoNombre || desiredCursoId).trim() || desiredCursoId,
       String(input.turno || 'Manana').trim() || 'Manana',
       2026,
       now,
@@ -255,7 +276,7 @@ export function ensureTeachingContextRows(input: {
     `).run(
       materiaId,
       tenantId,
-      String(input.materiaNombre || materiaId).trim() || materiaId,
+      String(input.materiaNombre || desiredMateriaId).trim() || desiredMateriaId,
       now,
     );
 
@@ -272,6 +293,7 @@ export function ensureTeachingContextRows(input: {
   });
 
   tx();
+  return { cursoId, materiaId };
 }
 
 export function getUserById(userId: string): User | null {

@@ -104,6 +104,21 @@ function rejectPayloadTenantMismatch(user: User, payload: unknown): string | nul
   return null;
 }
 
+/** Evita ON CONFLICT(id) que reescribe filas de otro tenant (PK global). */
+function rejectForeignPrimaryKey(
+  table: 'alumnos' | 'cursos' | 'materias' | 'notas' | 'escuelas' | 'asistencias',
+  id: string,
+  tenantId: string,
+): string | null {
+  const row = db.prepare(`SELECT tenant_id FROM ${table} WHERE id = ?`).get(id) as
+    | { tenant_id: string }
+    | undefined;
+  if (row && row.tenant_id !== tenantId) {
+    return 'El id ya pertenece a otra cuenta.';
+  }
+  return null;
+}
+
 function resolveSyncDocenteId(user: User, payload: { docenteId: string }): string | { error: string } {
   if (payload.docenteId !== user.id && user.rol !== 'admin') {
     return { error: 'La operacion pertenece a otro docente.' };
@@ -185,6 +200,9 @@ function applyAttendance(operation: PendingOperation<AttendancePayload>, user: U
     return { status: 'synced' as const, ignoredOlderWrite: true };
   }
 
+  const foreignId = rejectForeignPrimaryKey('asistencias', payload.id, tenantId);
+  if (foreignId) return { status: 'error', message: foreignId };
+
   db.prepare(`
     INSERT INTO asistencias (id, tenant_id, docente_id, alumno_id, materia_id, fecha, estado, updated_at)
     VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @fecha, @estado, @updated_at)
@@ -192,6 +210,7 @@ function applyAttendance(operation: PendingOperation<AttendancePayload>, user: U
     DO UPDATE SET
       estado = excluded.estado,
       updated_at = excluded.updated_at
+    WHERE asistencias.tenant_id = excluded.tenant_id
   `).run({
     id: payload.id,
     tenant_id: tenantId,
@@ -277,6 +296,9 @@ function applyStudent(operation: PendingOperation<StudentPayload>, user: User): 
     }
   }
 
+  const foreignId = rejectForeignPrimaryKey('alumnos', payload.id, tenantId);
+  if (foreignId) return { status: 'error', message: foreignId };
+
   db.prepare(`
     INSERT INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor, activo, updated_at)
     VALUES (@id, @tenant_id, @curso_id, @nombre, @dni, @tutor, @activo, @updated_at)
@@ -287,6 +309,7 @@ function applyStudent(operation: PendingOperation<StudentPayload>, user: User): 
       tutor = excluded.tutor,
       activo = excluded.activo,
       updated_at = excluded.updated_at
+    WHERE alumnos.tenant_id = excluded.tenant_id
   `).run({
     id: payload.id,
     tenant_id: tenantId,
@@ -345,6 +368,9 @@ function applyCourse(operation: PendingOperation<CoursePayload>, user: User): Sy
     return { status: 'error', message: 'El docente no tiene permiso sobre este curso.' };
   }
 
+  const foreignId = rejectForeignPrimaryKey('cursos', payload.id, tenantId);
+  if (foreignId) return { status: 'error', message: foreignId };
+
   db.prepare(`
     INSERT INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo, updated_at)
     VALUES (@id, @tenant_id, @escuela, @nombre, @turno, @ciclo_lectivo, @updated_at)
@@ -354,6 +380,7 @@ function applyCourse(operation: PendingOperation<CoursePayload>, user: User): Sy
       turno = excluded.turno,
       ciclo_lectivo = excluded.ciclo_lectivo,
       updated_at = excluded.updated_at
+    WHERE cursos.tenant_id = excluded.tenant_id
   `).run({
     id: payload.id,
     tenant_id: tenantId,
@@ -408,6 +435,9 @@ function applyGrade(operation: PendingOperation<GradePayload>, user: User): Sync
     return { status: 'synced', ignoredOlderWrite: true };
   }
 
+  const foreignId = rejectForeignPrimaryKey('notas', payload.id, tenantId);
+  if (foreignId) return { status: 'error', message: foreignId };
+
   db.prepare(`
     INSERT INTO notas (id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion, valor, calificacion_texto, peso, fecha, fecha_entrega, periodo, motivo, updated_at)
     VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @titulo, @tipo_evaluacion, @valor, @calificacion_texto, @peso, @fecha, @fecha_entrega, @periodo, @motivo, @updated_at)
@@ -422,6 +452,7 @@ function applyGrade(operation: PendingOperation<GradePayload>, user: User): Sync
       periodo = excluded.periodo,
       motivo = excluded.motivo,
       updated_at = excluded.updated_at
+    WHERE notas.tenant_id = excluded.tenant_id
   `).run({
     id: payload.id,
     tenant_id: tenantId,
@@ -487,6 +518,9 @@ function applySubject(operation: PendingOperation<SubjectPayload>, user: User): 
     return { status: 'error', message: 'El docente no tiene permiso sobre esta materia.' };
   }
 
+  const foreignId = rejectForeignPrimaryKey('materias', payload.id, tenantId);
+  if (foreignId) return { status: 'error', message: foreignId };
+
   db.prepare(`
     INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
     VALUES (@id, @tenant_id, @nombre, @activo, @updated_at)
@@ -494,6 +528,7 @@ function applySubject(operation: PendingOperation<SubjectPayload>, user: User): 
       nombre = excluded.nombre,
       activo = excluded.activo,
       updated_at = excluded.updated_at
+    WHERE materias.tenant_id = excluded.tenant_id
   `).run({
     id: payload.id,
     tenant_id: tenantId,
@@ -534,6 +569,9 @@ function applySchool(operation: PendingOperation<SchoolPayload>, user: User) {
     return { status: 'synced' as const, ignoredOlderWrite: true };
   }
 
+  const foreignId = rejectForeignPrimaryKey('escuelas', payload.id, tenantId);
+  if (foreignId) return { status: 'error' as const, message: foreignId };
+
   db.prepare(`
     INSERT INTO escuelas (id, tenant_id, nombre, activo, updated_at)
     VALUES (@id, @tenant_id, @nombre, @activo, @updated_at)
@@ -541,6 +579,7 @@ function applySchool(operation: PendingOperation<SchoolPayload>, user: User) {
       nombre = excluded.nombre,
       activo = excluded.activo,
       updated_at = excluded.updated_at
+    WHERE escuelas.tenant_id = excluded.tenant_id
   `).run({
     id: payload.id,
     tenant_id: tenantId,
