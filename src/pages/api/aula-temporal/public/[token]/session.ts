@@ -3,8 +3,8 @@ import {
   INTENTO_COOKIE,
   getAulaByToken,
   resumeIntento,
-} from '../../../../server/aula-temporal-service';
-import { db } from '../../../../server/db';
+} from '../../../../../server/aula-temporal-service';
+import { db } from '../../../../../server/db';
 
 export const GET: APIRoute = ({ params, cookies }) => {
   const token = String(params.token || '');
