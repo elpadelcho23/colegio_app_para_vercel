@@ -3,6 +3,7 @@ import {
   type ActivityGenerationKind,
   type GeneratedActivityPayload,
 } from './activity-document-html';
+import { requireGroqApiKey } from './groq-env';
 import { groqQueue } from './groq-queue';
 
 const MODEL = 'llama-3.3-70b-versatile';
@@ -55,11 +56,7 @@ Esquema JSON:
 }`;
 
 function getApiKey() {
-  const key = import.meta.env.GROQ_API_KEY || process.env.GROQ_API_KEY;
-  if (!key) {
-    throw new Error('GROQ_API_KEY no está configurada. Agregala en el archivo .env del servidor.');
-  }
-  return key;
+  return requireGroqApiKey();
 }
 
 function kindInstructions(kind: ActivityGenerationKind, materia: string) {

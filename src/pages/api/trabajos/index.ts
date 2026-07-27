@@ -185,3 +185,56 @@ export const POST: APIRoute = async ({ locals, request }) => {
     },
   }, { status: 201 });
 };
+
+/** Vincula un alumno a una entrega ya cargada (necesario para Corregir con IA). */
+export const PATCH: APIRoute = async ({ locals, request }) => {
+  const user = locals.user;
+  if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+
+  const body = await request.json().catch(() => null);
+  const entregaId = String(body?.entregaId || '').trim();
+  const alumnoId = String(body?.alumnoId || '').trim();
+
+  if (!entregaId || !alumnoId) {
+    return Response.json({ error: 'Indicá la entrega y el alumno.' }, { status: 400 });
+  }
+
+  const entrega = db.prepare(`
+    SELECT id, curso_id, materia_id
+    FROM trabajo_entregas
+    WHERE id = ?
+      AND tenant_id = ?
+      ${user.rol === 'admin' ? '' : 'AND docente_id = ?'}
+  `).get(
+    entregaId,
+    user.tenant_id,
+    ...(user.rol === 'admin' ? [] : [user.id]),
+  ) as { id: string; curso_id: string; materia_id: string } | undefined;
+
+  if (!entrega) {
+    return Response.json({ error: 'Entrega no encontrada.' }, { status: 404 });
+  }
+
+  const alumno = db.prepare(`
+    SELECT id, curso_id
+    FROM alumnos
+    WHERE id = ? AND tenant_id = ? AND activo = 1
+  `).get(alumnoId, user.tenant_id) as { id: string; curso_id: string } | undefined;
+
+  if (!alumno) {
+    return Response.json({ error: 'Alumno no encontrado.' }, { status: 404 });
+  }
+
+  if (alumno.curso_id !== entrega.curso_id) {
+    return Response.json({ error: 'El alumno no pertenece al curso de esta entrega.' }, { status: 400 });
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE trabajo_entregas
+    SET alumno_id = ?, updated_at = ?
+    WHERE id = ? AND tenant_id = ?
+  `).run(alumnoId, now, entregaId, user.tenant_id);
+
+  return Response.json({ ok: true, entregaId, alumnoId });
+};

@@ -7,6 +7,7 @@ import {
   type GradeMappingField,
   type StudentMappingField,
 } from '../lib/excel-column-map';
+import { requireGroqApiKey } from './groq-env';
 import { groqQueue } from './groq-queue';
 
 const MODEL = ACTIVITY_AI_LIMITS.groqModelLight;
@@ -15,11 +16,7 @@ const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 export type ExcelAiMapType = 'alumnos' | 'asistencias' | 'notas';
 
 function getApiKey() {
-  const key = import.meta.env.GROQ_API_KEY || process.env.GROQ_API_KEY;
-  if (!key) {
-    throw new Error('GROQ_API_KEY no está configurada. Agregala en el archivo .env del servidor.');
-  }
-  return key;
+  return requireGroqApiKey();
 }
 
 function fieldsForType(type: ExcelAiMapType) {

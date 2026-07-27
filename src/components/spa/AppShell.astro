@@ -20,7 +20,7 @@ const { initialView = 'panel' } = Astro.props;
       <div class="onboarding-header">
         <p class="eyebrow">Primeros pasos</p>
         <h2 id="onboarding-title">Configurá tu aula</h2>
-        <p class="onboarding-progress" data-onboarding-progress aria-live="polite">Paso 1 de 3</p>
+        <p class="onboarding-progress" data-onboarding-progress aria-live="polite">Paso 1 de 5</p>
       </div>
 
       <ol class="onboarding-steps" data-onboarding-steps aria-label="Pasos de configuración inicial"></ol>
@@ -39,26 +39,23 @@ const { initialView = 'panel' } = Astro.props;
       Completar configuración
     </button>
 
-    <section class="panel product-tour-invite is-hidden" data-product-tour-invite hidden>
-      <div class="section-title">
-        <h2>¿Un minuto?</h2>
-        <p>Te mostramos Asistencia y Notas. Es opcional.</p>
-      </div>
-      <div class="button-row">
-        <button type="button" class="btn btn-primary" data-product-tour-start>Ver tour</button>
-        <button type="button" class="btn btn-ghost" data-product-tour-skip>Ahora no</button>
-      </div>
-    </section>
-
     <section class="hero-card" data-panel-hero>
       <p class="eyebrow">Hoy</p>
       <h1 data-panel-today-title>Hoy: elegí curso arriba</h1>
-      <p class="hero-help">Tareas del curso actual del encabezado.</p>
+      <p class="hero-help">Todo usa el Curso actual del encabezado. Si faltan alumnos, importá un Excel.</p>
+
+      <div class="schedule-suggestion is-hidden" data-schedule-suggestion hidden>
+        <p>
+          Sugerencia por horario:
+          <strong data-schedule-suggestion-label></strong>
+        </p>
+        <button type="button" class="btn btn-secondary btn-sm" data-schedule-suggestion-apply>Usar ahora</button>
+      </div>
 
       <div class="hero-actions hero-actions--triple">
         <button type="button" data-spa-nav="asistencia" class="btn btn-primary hero-cta">Asistencia</button>
-        <button type="button" data-spa-nav="notas" class="btn btn-secondary hero-cta">Notas</button>
-        <button type="button" data-spa-nav="actividades" class="btn btn-secondary hero-cta">Actividades de hoy</button>
+        <button type="button" data-spa-nav="actividades" class="btn btn-secondary hero-cta">Actividades</button>
+        <button type="button" data-spa-nav="herramientas" class="btn btn-secondary hero-cta">Importar alumnos</button>
       </div>
     </section>
 
@@ -82,11 +79,11 @@ const { initialView = 'panel' } = Astro.props;
       <div class="list" data-seguimiento-list></div>
     </section>
 
-    <details class="panel panel-collapsible" data-teacher-context>
+    <details class="panel panel-collapsible panel-collapsible--quiet" data-teacher-context>
       <summary class="panel-collapsible-summary">
         <span class="section-title">
-          <h2>Mi horario</h2>
-          <p>Bloques habituales para sugerir el curso del día.</p>
+          <h2>Horario (opcional)</h2>
+          <p>Solo sugiere el curso del día. No hace falta configurarlo para usar la app.</p>
         </span>
       </summary>
       <form class="form-grid" data-context-form>
@@ -211,6 +208,65 @@ const { initialView = 'panel' } = Astro.props;
         </button>
       </p>
     </section>
+
+    <dialog class="modal modal--wide" data-student-profile-dialog>
+      <form class="panel form-grid" data-student-profile-form novalidate>
+        <div class="section-title">
+          <h2 data-student-profile-title>Perfil del alumno</h2>
+          <p>Revisá y modificá los datos del alumno.</p>
+        </div>
+
+        <input type="hidden" name="studentId" />
+
+        <div class="input-group full-width">
+          <label>
+            <span>Nombre completo</span>
+            <input name="nombre" autocomplete="name" required />
+            <small class="field-error" hidden></small>
+          </label>
+          <label>
+            <span>DNI opcional</span>
+            <input name="dni" inputmode="numeric" />
+          </label>
+        </div>
+
+        <label class="full-width">
+          <span>Escuela</span>
+          <select name="escuela" data-student-profile-school required></select>
+          <small class="field-error" hidden></small>
+        </label>
+
+        <label class="full-width">
+          <span>Curso</span>
+          <select name="cursoId" data-student-profile-curso required></select>
+          <small class="field-error" hidden></small>
+        </label>
+
+        <fieldset class="subject-picker">
+          <legend>Materias del alumno</legend>
+          <div class="subject-search" data-student-profile-subjects></div>
+          <div class="inline-form">
+            <input name="nuevaMateria" data-student-profile-new-subject placeholder="Escribí el nombre de la materia..." aria-label="Nueva materia" />
+            <button class="btn btn-secondary" type="button" data-student-profile-add-subject>Agregar materia</button>
+          </div>
+        </fieldset>
+
+        <label class="full-width">
+          <span>Tutor o contacto</span>
+          <input name="tutor" />
+        </label>
+
+        <label class="full-width checkbox-row">
+          <input type="checkbox" name="activo" value="1" checked />
+          <span>Alumno activo</span>
+        </label>
+
+        <div class="button-row full-width">
+          <button class="btn btn-primary" type="submit">Guardar cambios</button>
+          <button class="btn btn-secondary" type="button" data-student-profile-close>Cerrar</button>
+        </div>
+      </form>
+    </dialog>
   </section>
 
   <section class="spa-view page page-stack spa-view--hidden" data-spa-view="cursos" data-spa-title="Cursos" data-courses>
@@ -314,14 +370,29 @@ const { initialView = 'panel' } = Astro.props;
       <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block">Ir a calificaciones</button>
     </header>
 
+    <div class="context-gate is-hidden" data-context-gate hidden>
+      <p>Elegí <strong>curso</strong> y <strong>materia</strong> en Curso actual para continuar.</p>
+      <button type="button" class="btn btn-primary btn-sm" data-gtc-open>Elegir curso</button>
+    </div>
+
     <p class="activity-context-hint" data-activity-context-hint>Elegí curso y materia en “Curso actual” arriba.</p>
+
+    <ol class="activity-flow-stepper" data-activity-flow-stepper aria-label="Pasos del flujo de actividades">
+      <li data-flow-step="contenido" class="is-current"><span>1</span> Crear</li>
+      <li data-flow-step="clase"><span>2</span> Clase virtual</li>
+      <li data-flow-step="entregas"><span>3</span> Recibir</li>
+      <li data-flow-step="corregir"><span>4</span> Corregir</li>
+    </ol>
 
     <div class="activity-flow-tabs" role="tablist" aria-label="Flujo de actividades" data-activity-flow-tabs>
       <button type="button" class="activity-flow-tab is-active" role="tab" data-activity-flow-tab="contenido" aria-selected="true" aria-controls="activity-flow-contenido" id="activity-tab-contenido">
-        Contenido
+        Crear
+      </button>
+      <button type="button" class="activity-flow-tab" role="tab" data-activity-flow-tab="clase" aria-selected="false" aria-controls="activity-flow-clase" id="activity-tab-clase">
+        Clase virtual
       </button>
       <button type="button" class="activity-flow-tab" role="tab" data-activity-flow-tab="entregas" aria-selected="false" aria-controls="activity-flow-entregas" id="activity-tab-entregas">
-        Entregas
+        Recibir entregas
       </button>
       <button type="button" class="activity-flow-tab" role="tab" data-activity-flow-tab="corregir" aria-selected="false" aria-controls="activity-flow-corregir" id="activity-tab-corregir">
         Corregir
@@ -336,12 +407,12 @@ const { initialView = 'panel' } = Astro.props;
             <p>Evaluación o TP a mano; IA más abajo.</p>
           </div>
 
-          <form class="form-grid" data-activity-form>
+          <form class="form-grid" data-activity-form novalidate>
             <div class="input-group full-width activity-local-context">
-              <label><span>Escuela</span><select name="colegio" required></select><small class="field-error" hidden></small></label>
-              <label><span>Turno</span><select name="turno" required></select><small class="field-error" hidden></small></label>
-              <label><span>Curso</span><select name="cursoId" required></select><small class="field-error" hidden></small></label>
-              <label><span>Materia</span><select name="materiaId" required></select><small class="field-error" hidden></small></label>
+              <label><span>Escuela</span><select name="colegio"></select><small class="field-error" hidden></small></label>
+              <label><span>Turno</span><select name="turno"></select><small class="field-error" hidden></small></label>
+              <label><span>Curso</span><select name="cursoId"></select><small class="field-error" hidden></small></label>
+              <label><span>Materia</span><select name="materiaId"></select><small class="field-error" hidden></small></label>
             </div>
 
             <label class="full-width">
@@ -356,7 +427,7 @@ const { initialView = 'panel' } = Astro.props;
             </div>
 
             <div class="activity-mode-panel full-width" data-activity-mode-panel="manual">
-              <div class="activity-template-picker full-width" role="radiogroup">
+              <div class="activity-template-picker full-width" role="radiogroup" aria-label="Tipo de actividad">
                 <label class="template-card"><input type="radio" name="tipo" value="evaluacion" checked /> <strong>Evaluación</strong></label>
                 <label class="template-card"><input type="radio" name="tipo" value="tp" /> <strong>TP</strong></label>
               </div>
@@ -366,7 +437,7 @@ const { initialView = 'panel' } = Astro.props;
               <div class="button-row full-width">
                 <button class="btn btn-secondary" type="button" id="btn-descargar-word">Word</button>
                 <button class="btn btn-secondary" type="button" id="btn-descargar-pdf">PDF</button>
-                <button class="btn btn-primary" type="submit">Guardar actividad</button>
+                <button class="btn btn-primary" type="submit" data-activity-save-label>Guardar actividad</button>
               </div>
             </div>
           </form>
@@ -375,13 +446,151 @@ const { initialView = 'panel' } = Astro.props;
         <section class="panel">
           <div class="section-title">
             <h2>Actividades preparadas</h2>
-            <p>Enviá un TP o examen ya cargado a otro curso o turno.</p>
+            <p>Del curso actual. Enviá un TP o examen a otro curso si hace falta.</p>
           </div>
+          <label class="activity-list-scope">
+            <input type="checkbox" data-activity-list-all />
+            <span>Ver todas las actividades (otros cursos)</span>
+          </label>
           <div class="list" data-activity-list></div>
         </section>
       </section>
 
       <ActivityAiPanel />
+    </section>
+
+    <section class="activity-flow-panel is-hidden" id="activity-flow-clase" role="tabpanel" aria-labelledby="activity-tab-clase" data-activity-flow-panel="clase" data-clase-virtual-root hidden>
+      <section class="panel clase-virtual-workspace">
+        <div class="section-title">
+          <h2>Clase virtual</h2>
+          <p>Los alumnos responden todo en digital por un link. Así se puede corregir en automático (MC) y con IA (abiertas).</p>
+        </div>
+
+        <ol class="clase-virtual-steps" data-clase-steps aria-label="Pasos de la clase virtual">
+          <li data-clase-step="1" class="is-current"><span>1</span> Crear clase</li>
+          <li data-clase-step="2"><span>2</span> Añadir actividad</li>
+          <li data-clase-step="3"><span>3</span> Compartir link</li>
+        </ol>
+
+        <form class="form-grid" data-clase-form novalidate>
+          <section data-clase-panel="1">
+            <div class="input-group full-width activity-local-context">
+              <label><span>Escuela</span><select name="colegio" data-clase-colegio></select></label>
+              <label><span>Turno</span><select name="turno" data-clase-turno></select></label>
+              <label><span>Curso</span><select name="cursoId" data-clase-curso></select></label>
+              <label><span>Materia</span><select name="materiaId" data-clase-materia></select></label>
+            </div>
+
+            <label class="full-width">
+              <span>Título de la clase</span>
+              <input name="titulo" placeholder="Ej: Prueba digital — funciones" required />
+            </label>
+
+            <div class="activity-template-picker full-width" role="radiogroup" aria-label="Tipo de clase digital">
+              <label class="template-card"><input type="radio" name="modo" value="multiple_choice" checked /> <strong>Opción múltiple</strong><small>Corrección automática</small></label>
+              <label class="template-card"><input type="radio" name="modo" value="actividad_preguntas" /> <strong>Actividad con preguntas</strong><small>MC + abiertas (IA)</small></label>
+              <label class="template-card"><input type="radio" name="modo" value="examen" /> <strong>Examen / prueba</strong><small>Timer + anti-trampas</small></label>
+            </div>
+
+            <div class="input-group full-width">
+              <label><span>Tiempo límite (min)</span><input type="number" name="duracionMinutos" min="5" max="240" value="40" /></label>
+              <label><span>Link válido (horas)</span><input type="number" name="expiresInHours" min="1" max="72" value="24" /></label>
+            </div>
+
+            <label class="full-width aula-temp-check">
+              <input type="checkbox" name="mostrarNota" checked />
+              <span>Mostrar nota al alumno al entregar</span>
+            </label>
+
+            <fieldset class="aula-temp-antitrampa full-width">
+              <legend>Disminuir trampas</legend>
+              <label><input type="checkbox" name="atShuffleQuestions" checked /> Mezclar preguntas</label>
+              <label><input type="checkbox" name="atShuffleOptions" checked /> Mezclar opciones</label>
+              <label><input type="checkbox" name="atOneAtATime" /> Una pregunta a la vez</label>
+              <label><input type="checkbox" name="atLockNav" /> Sin volver atrás</label>
+              <label><input type="checkbox" name="atClipboard" checked /> Bloquear copiar/pegar</label>
+              <label><input type="checkbox" name="atWatermark" checked /> Marca de agua con nombre</label>
+              <label><input type="checkbox" name="atHideResults" /> Ocultar nota hasta cerrar</label>
+              <label><span>Salidas de pestaña máx.</span><input type="number" name="atMaxFocus" min="0" max="20" value="3" /></label>
+              <label>
+                <span>Si supera el límite</span>
+                <select name="atFocusAction">
+                  <option value="flag">Solo alerta</option>
+                  <option value="autosubmit">Entregar automático</option>
+                  <option value="block">Bloquear</option>
+                </select>
+              </label>
+            </fieldset>
+
+            <div class="button-row full-width">
+              <button type="button" class="btn btn-primary" data-clase-crear>Crear clase</button>
+            </div>
+          </section>
+
+          <section data-clase-panel="2" hidden>
+            <p class="muted">Respuestas 100% digitales. Al <strong>cerrar la clase</strong> se auto-corrige todo (MC + abiertas con IA) y se cargan las notas.</p>
+
+            <div class="clase-ai-panel full-width">
+              <div class="section-title">
+                <h3>Generar con IA desde una referencia</h3>
+                <p>Elegí una actividad ya hecha y/o un documento, pedí el formato (MC, preguntas o examen según el modo de la clase) y se carga solo.</p>
+              </div>
+              <label>
+                <span>Actividad de referencia</span>
+                <select data-clase-ai-ref>
+                  <option value="">— Opcional —</option>
+                </select>
+              </label>
+              <label>
+                <span>Documento de referencia (PDF/DOCX/TXT)</span>
+                <input type="file" data-clase-ai-files accept=".pdf,.docx,.txt,application/pdf" multiple />
+              </label>
+              <label>
+                <span>Qué querés que haga la IA</span>
+                <textarea data-clase-ai-prompt rows="3" placeholder="Ej: Armá 10 multiple choice sobre funciones lineales, nivel 3º, con clave"></textarea>
+              </label>
+              <div class="button-row">
+                <button type="button" class="btn btn-primary" data-clase-ai-generar>Generar y cargar automático</button>
+              </div>
+              <p class="muted" data-clase-ai-status hidden></p>
+            </div>
+
+            <div class="clase-load-existing full-width">
+              <label>
+                <span>O cargar actividad ya hecha (sin IA)</span>
+                <select data-clase-actividad-existente>
+                  <option value="">— Elegí una actividad guardada —</option>
+                </select>
+              </label>
+              <button type="button" class="btn btn-secondary" data-clase-cargar-existente>Usar esta actividad</button>
+            </div>
+
+            <p><strong>O armá / revisá preguntas a mano</strong></p>
+            <div data-clase-questions-editor></div>
+            <div class="button-row full-width">
+              <button type="button" class="btn btn-secondary" data-clase-back-1>Volver</button>
+              <button type="button" class="btn btn-primary" data-clase-guardar-actividad>Guardar actividad y continuar</button>
+            </div>
+          </section>
+
+          <section data-clase-panel="3" hidden>
+            <div class="aula-temp-link-box">
+              <strong>Compartí este link con el curso</strong>
+              <p class="muted">Al cerrar la clase se auto-corrigen las entregas (MC + IA en abiertas) y se cargan las notas.</p>
+              <p class="aula-temp-link-url" data-clase-url></p>
+              <div class="button-row">
+                <button type="button" class="btn btn-primary btn-sm" data-clase-copy>Copiar link</button>
+                <a class="btn btn-secondary btn-sm" data-clase-open target="_blank" rel="noopener">Abrir</a>
+                <button type="button" class="btn btn-secondary btn-sm" data-clase-doc>Documento referencia</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-clase-refresh>Ver intentos</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-clase-close>Cerrar clase y corregir</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-clase-nueva>Nueva clase</button>
+              </div>
+            </div>
+            <div class="list" data-clase-intentos></div>
+          </section>
+        </form>
+      </section>
     </section>
 
     <section class="activity-flow-panel is-hidden" id="activity-flow-entregas" role="tabpanel" aria-labelledby="activity-tab-entregas" data-activity-flow-panel="entregas" data-entregas-root hidden>
@@ -392,10 +601,12 @@ const { initialView = 'panel' } = Astro.props;
       <TrabajosEntregasPanel mode="corregir" />
     </section>
 
-    <section class="calendar-wrapper">
+    <details class="calendar-wrapper calendar-details" data-calendar-details>
+      <summary class="calendar-details-summary">Calendario (opcional)</summary>
       <div class="panel calendar-panel">
         <div class="section-title">
           <h2>Calendario</h2>
+          <p>Eventos del curso actual. Podés filtrar abajo si hace falta.</p>
         </div>
         <div class="filters">
           <input type="month" data-calendar-month aria-label="Mes" />
@@ -415,10 +626,10 @@ const { initialView = 'panel' } = Astro.props;
           <div class="list" data-calendar-day-events></div>
         </aside>
       </div>
-    </section>
+    </details>
 
     <dialog class="modal" data-activity-enviar-dialog>
-      <form method="dialog" class="panel form-grid" data-activity-enviar-form>
+      <form class="panel form-grid" data-activity-enviar-form novalidate>
         <div class="section-title">
           <h2>Enviar actividad a un curso</h2>
           <p id="activity-enviar-source-label">Duplicá el material a otro curso, turno o materia.</p>
@@ -453,7 +664,7 @@ const { initialView = 'panel' } = Astro.props;
 
         <div class="button-row full-width">
           <button class="btn btn-primary" type="submit" value="confirm">Enviar al curso</button>
-          <button class="btn btn-secondary" type="submit" value="cancel">Cancelar</button>
+          <button class="btn btn-secondary" type="button" data-enviar-cancel>Cancelar</button>
         </div>
       </form>
     </dialog>

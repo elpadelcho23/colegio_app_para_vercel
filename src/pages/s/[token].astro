@@ -1,0 +1,85 @@
+---
+import '../styles/global.css';
+const token = Astro.params.token || '';
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#226c5f" />
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>Aula temporal | Aula Clara</title>
+  </head>
+  <body class="aula-temp-body" data-aula-token={token}>
+    <main class="aula-temp-shell" data-aula-root>
+      <header class="aula-temp-header">
+        <p class="aula-temp-brand">Aula Clara</p>
+        <h1 data-aula-title>Cargando…</h1>
+        <p class="muted" data-aula-meta></p>
+      </header>
+
+      <section class="aula-temp-panel" data-aula-join hidden>
+        <h2>Ingresá a la actividad</h2>
+        <p class="muted">Respondé todo en digital acá (sin papel). Escribí tu nombre y apellido como figuran en el curso.</p>
+        <form class="aula-temp-form" data-aula-join-form>
+          <label>
+            <span>Nombre</span>
+            <input name="nombre" autocomplete="given-name" required />
+          </label>
+          <label>
+            <span>Apellido</span>
+            <input name="apellido" autocomplete="family-name" required />
+          </label>
+          <button class="btn btn-primary btn-block" type="submit">Empezar</button>
+          <p class="field-error" data-aula-join-error hidden></p>
+        </form>
+      </section>
+
+      <section class="aula-temp-panel" data-aula-exam hidden>
+        <div class="aula-temp-toolbar">
+          <div>
+            <strong data-aula-student></strong>
+            <p class="muted" data-aula-progress></p>
+          </div>
+          <div class="aula-temp-timer" data-aula-timer aria-live="polite">--:--</div>
+        </div>
+        <div class="aula-temp-watermark" data-aula-watermark aria-hidden="true"></div>
+        <div class="aula-temp-questions" data-aula-questions></div>
+        <div class="aula-temp-nav">
+          <button type="button" class="btn btn-secondary" data-aula-prev hidden>Anterior</button>
+          <button type="button" class="btn btn-secondary" data-aula-next hidden>Siguiente</button>
+          <button type="button" class="btn btn-primary" data-aula-submit>Entregar</button>
+        </div>
+        <p class="muted" data-aula-status></p>
+      </section>
+
+      <section class="aula-temp-panel" data-aula-done hidden>
+        <h2>Entrega registrada</h2>
+        <p data-aula-done-msg></p>
+        <p class="aula-temp-grade" data-aula-grade hidden></p>
+      </section>
+
+      <section class="aula-temp-panel" data-aula-closed hidden>
+        <h2>Aula no disponible</h2>
+        <p class="muted" data-aula-closed-msg>Este link expiró o el docente cerró la sesión.</p>
+      </section>
+
+      <section class="aula-temp-panel" data-aula-preparando hidden>
+        <h2>La clase se está preparando</h2>
+        <p class="muted">El docente todavía está cargando la actividad digital. Probá de nuevo en unos minutos.</p>
+      </section>
+    </main>
+    <script>
+      import '../scripts/aula-temporal-student.js';
+    </script>
+  </body>
+</html>

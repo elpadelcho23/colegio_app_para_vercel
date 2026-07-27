@@ -127,88 +127,94 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const id = `act-${randomUUID()}`;
   const now = new Date().toISOString();
 
-  db.prepare(`
-    INSERT INTO actividades (
-      id,
-      tenant_id,
-      docente_id,
-      colegio,
-      turno,
-      curso_id,
-      materia_id,
-      tipo,
-      titulo,
-      estado,
-      fecha_publicacion,
-      fecha_vencimiento,
-      contenido_json,
-      updated_at
-    )
-    VALUES (
-      @id,
-      @tenant_id,
-      @docente_id,
-      @colegio,
-      @turno,
-      @curso_id,
-      @materia_id,
-      @tipo,
-      @titulo,
-      @estado,
-      @fecha_publicacion,
-      @fecha_vencimiento,
-      @contenido_json,
-      @updated_at
-    )
-  `).run({
-    id,
-    tenant_id: user.tenant_id,
-    docente_id: user.id,
-    colegio,
-    turno,
-    curso_id: cursoId,
-    materia_id: materiaId,
-    tipo,
-    titulo,
-    estado: 'borrador',
-    fecha_publicacion: fechaPublicacion,
-    fecha_vencimiento: fechaVencimiento,
-    contenido_json: JSON.stringify(contenido),
-    updated_at: now,
-  });
-
-  if (fechaVencimiento || fechaPublicacion) {
+  try {
     db.prepare(`
-      INSERT INTO calendario_eventos (
+      INSERT INTO actividades (
         id,
         tenant_id,
         docente_id,
+        colegio,
+        turno,
         curso_id,
         materia_id,
         tipo,
         titulo,
-        descripcion,
-        fecha_inicio,
-        fecha_fin,
-        source_type,
-        source_id,
+        estado,
+        fecha_publicacion,
+        fecha_vencimiento,
+        contenido_json,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'actividades', ?, ?)
-    `).run(
-      `cal-${id}`,
-      user.tenant_id,
-      user.id,
-      cursoId,
-      materiaId,
-      tipo === 'tp' ? 'cierre_tp' : 'evaluacion',
-      titulo,
-      tipo === 'tp' ? 'Fecha de entrega de TP' : 'Aviso de evaluacion',
-      fechaVencimiento || fechaPublicacion,
-      fechaVencimiento,
+      VALUES (
+        @id,
+        @tenant_id,
+        @docente_id,
+        @colegio,
+        @turno,
+        @curso_id,
+        @materia_id,
+        @tipo,
+        @titulo,
+        @estado,
+        @fecha_publicacion,
+        @fecha_vencimiento,
+        @contenido_json,
+        @updated_at
+      )
+    `).run({
       id,
-      now,
-    );
+      tenant_id: user.tenant_id,
+      docente_id: user.id,
+      colegio,
+      turno,
+      curso_id: cursoId,
+      materia_id: materiaId,
+      tipo,
+      titulo,
+      estado: 'borrador',
+      fecha_publicacion: fechaPublicacion,
+      fecha_vencimiento: fechaVencimiento,
+      contenido_json: JSON.stringify(contenido),
+      updated_at: now,
+    });
+
+    if (fechaVencimiento || fechaPublicacion) {
+      db.prepare(`
+        INSERT INTO calendario_eventos (
+          id,
+          tenant_id,
+          docente_id,
+          curso_id,
+          materia_id,
+          tipo,
+          titulo,
+          descripcion,
+          fecha_inicio,
+          fecha_fin,
+          source_type,
+          source_id,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'actividades', ?, ?)
+      `).run(
+        `cal-${id}`,
+        user.tenant_id,
+        user.id,
+        cursoId,
+        materiaId,
+        tipo === 'tp' ? 'cierre_tp' : 'evaluacion',
+        titulo,
+        tipo === 'tp' ? 'Fecha de entrega de TP' : 'Aviso de evaluacion',
+        fechaVencimiento || fechaPublicacion,
+        fechaVencimiento,
+        id,
+        now,
+      );
+    }
+  } catch (error) {
+    console.error('[actividades POST]', error);
+    const message = error instanceof Error ? error.message : 'No se pudo guardar la actividad.';
+    return Response.json({ error: message }, { status: 500 });
   }
 
   return Response.json({ ok: true, actividad: { id, tipo, titulo } }, { status: 201 });

@@ -15,8 +15,8 @@ const isCorregir = mode === 'corregir';
     <p>
       {
         isCorregir
-          ? 'Usá Corregir con IA en entregas digitales (PDF, DOCX o TXT) del curso actual.'
-          : 'Subí trabajos entregados (PDF, Word, TXT o imágenes) vinculados a una actividad del curso actual.'
+          ? 'Para Corregir con IA la entrega debe tener alumno vinculado y un archivo PDF, DOCX o TXT. Si falta el alumno, vinculalo en la tarjeta.'
+          : 'Subí trabajos entregados (PDF, Word, TXT o imágenes) vinculados a una actividad y a un alumno del curso actual.'
       }
     </p>
   </div>
@@ -46,10 +46,11 @@ const isCorregir = mode === 'corregir';
         </label>
 
         <label class="full-width">
-          <span>Alumno (opcional)</span>
-          <select name="alumnoId" data-trabajo-alumno-select>
-            <option value="">Sin alumno específico</option>
+          <span>Alumno</span>
+          <select name="alumnoId" data-trabajo-alumno-select required>
+            <option value="">Elegí un alumno</option>
           </select>
+          <small class="muted">Obligatorio para poder usar Corregir con IA y guardar la nota.</small>
         </label>
 
         <label class="full-width">
@@ -68,7 +69,8 @@ const isCorregir = mode === 'corregir';
             data-trabajo-files
           />
           <small class="muted">
-            Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} archivos · {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u
+            Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} archivos · {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u.
+            Para Corregir con IA usá PDF, DOCX o TXT (las fotos todavía no).
           </small>
         </label>
 

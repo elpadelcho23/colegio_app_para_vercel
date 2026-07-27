@@ -9,20 +9,19 @@ const { spaMode = false } = Astro.props;
 <header class="page-header">
   <div class="header-content">
     <p class="eyebrow">Calificaciones</p>
-    <h1>Carga de notas</h1>
-    <p>Calificá al curso elegido arriba.</p>
+    <h1>Notas</h1>
+    <p>Cargá notas y mirá el detalle del curso elegido arriba.</p>
   </div>
   <div class="actions-group">
-    <button class="btn btn-secondary btn-block" type="button" data-grades-view-toggle>Ver calificaciones</button>
     <button class="btn btn-ghost btn-block" type="button" data-print-course-notes>Imprimir notas del curso</button>
   </div>
 </header>
 
 <div data-grades-take-view>
   <section class="panel context-workbar">
-    <div>
-      <strong>Contexto</strong>
-      <p data-grade-context-text>Seleccioná escuela, curso y materia.</p>
+    <div class="section-title">
+      <strong>Curso actual</strong>
+      <p data-grade-context-text>Seleccioná escuela, curso y materia arriba.</p>
     </div>
     <div class="filters-grid">
       <select data-grade-school-filter aria-label="Escuela">
@@ -33,6 +32,11 @@ const { spaMode = false } = Astro.props;
         <select data-grade-subject-filter aria-label="Materia"></select>
         <small class="field-error" data-grade-subject-error hidden></small>
       </div>
+    </div>
+    <p class="muted filter-context-note">Sigue el Curso actual. Podés ajustarlo acá o con Cambiar en el encabezado.</p>
+    <div class="context-gate is-hidden" data-context-gate hidden>
+      <p>Elegí <strong>curso</strong> y <strong>materia</strong> para cargar notas.</p>
+      <button type="button" class="btn btn-primary btn-sm" data-gtc-open>Elegir curso</button>
     </div>
   </section>
 
@@ -158,9 +162,9 @@ const { spaMode = false } = Astro.props;
   </section>
 </div>
 
-<section class="panel is-hidden" data-grades-detail-view>
+<section class="panel" data-grades-detail-view>
   <div class="section-title">
-    <h2>Detalle de calificaciones</h2>
+    <h2>Detalle por período</h2>
     <p>Actividades realizadas por alumno con nota y promedio según el período elegido.</p>
   </div>
 

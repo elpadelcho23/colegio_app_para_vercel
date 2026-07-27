@@ -11,35 +11,41 @@ const { spaMode = false } = Astro.props;
 <header class="page-header">
   <div class="header-content">
     <p class="eyebrow">Control diario</p>
-    <h1>Toma de asistencia</h1>
-    <p>Pasá lista del curso elegido arriba.</p>
+    <h1>Asistencia</h1>
+    <p>Pasá lista y revisá el historial del curso elegido arriba.</p>
   </div>
   <div class="actions-group">
-    <button class="btn btn-secondary btn-block" type="button" data-attendance-view-toggle>Ver asistencias</button>
     {spaMode ? (
-      <button type="button" data-spa-nav="notas" class="btn btn-ghost btn-block">Ver notas</button>
+      <button type="button" data-spa-nav="notas" class="btn btn-ghost btn-block">Ir a notas</button>
     ) : (
-      <a class="btn btn-ghost btn-block" href="/notas">Ver notas</a>
+      <a class="btn btn-ghost btn-block" href="/notas">Ir a notas</a>
     )}
   </div>
 </header>
 
+<div class="context-gate is-hidden" data-context-gate hidden>
+  <p>Elegí <strong>curso</strong> y <strong>materia</strong> en Curso actual para pasar lista.</p>
+  <button type="button" class="btn btn-primary btn-sm" data-gtc-open>Elegir curso</button>
+</div>
+
 <section class="panel" data-attendance-take-view>
+  <div class="section-title">
+    <h2>Pasar lista</h2>
+    <p>Presente o ausente, y después Guardar.</p>
+  </div>
+
   <div class="filters-grid">
     <input type="date" data-attendance-date aria-label="Fecha" />
-    <select data-filter-course aria-label="Curso"></select>
+    <select data-filter-course aria-label="Curso (curso actual)"></select>
     <div class="filter-field">
-      <select data-filter-subject aria-label="Materia"></select>
+      <select data-filter-subject aria-label="Materia (curso actual)"></select>
       <small class="field-error" data-attendance-subject-error hidden></small>
     </div>
   </div>
+  <p class="muted filter-context-note">Los filtros siguen el Curso actual del encabezado.</p>
 
   <section class="summary-strip" data-attendance-summary></section>
 
-  <div class="section-title">
-    <h2>Alumnos</h2>
-    <p>Presente o ausente, y después Guardar.</p>
-  </div>
   <div class="list" data-attendance-list></div>
 
   <div class="attendance-save-bar" data-attendance-save-bar>
@@ -52,10 +58,10 @@ const { spaMode = false } = Astro.props;
   </div>
 </section>
 
-<section class="panel is-hidden" data-attendance-history-view>
+<section class="panel" data-attendance-history-view>
   <div class="section-title">
-    <h2>Registro de asistencias</h2>
-    <p>Historial filtrado. Acredita con ≥75%.</p>
+    <h2>Registro e historial</h2>
+    <p>Detalle por fecha, promedios y planilla. Acredita con ≥75% por defecto.</p>
   </div>
 
   <div class="filters-grid">

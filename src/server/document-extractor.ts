@@ -31,10 +31,14 @@ export function assertSupportedUpload(file: File) {
 }
 
 async function extractPdf(buffer: Buffer) {
-  const pdfParseModule = await import('pdf-parse');
-  const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
-  const parsed = await pdfParse(buffer);
-  return String(parsed.text || '').trim();
+  const { PDFParse } = await import('pdf-parse');
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    return String(result?.text || '').trim();
+  } finally {
+    await parser.destroy?.();
+  }
 }
 
 async function extractDocx(buffer: Buffer) {

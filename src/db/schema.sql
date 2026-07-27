@@ -247,3 +247,75 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS actividad_preguntas (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  actividad_id TEXT NOT NULL,
+  orden INTEGER NOT NULL DEFAULT 0,
+  tipo TEXT NOT NULL CHECK (tipo IN ('mc_single', 'mc_multi', 'corta', 'abierta')),
+  enunciado TEXT NOT NULL,
+  opciones_json TEXT,
+  correctas_json TEXT,
+  puntaje REAL NOT NULL DEFAULT 1,
+  explicacion TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  FOREIGN KEY (actividad_id) REFERENCES actividades(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS aulas_temporales (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  docente_id TEXT NOT NULL,
+  actividad_id TEXT NOT NULL,
+  curso_id TEXT NOT NULL,
+  join_token TEXT NOT NULL UNIQUE,
+  modo TEXT NOT NULL CHECK (modo IN ('multiple_choice', 'actividad_preguntas', 'examen')),
+  duracion_minutos INTEGER NOT NULL DEFAULT 40,
+  expires_at TEXT NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'abierta' CHECK (estado IN ('abierta', 'cerrada')),
+  anti_trampa_json TEXT NOT NULL DEFAULT '{}',
+  mostrar_nota_al_alumno INTEGER NOT NULL DEFAULT 1,
+  titulo TEXT,
+  publicada INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  FOREIGN KEY (docente_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+  FOREIGN KEY (actividad_id) REFERENCES actividades(id) ON DELETE CASCADE,
+  FOREIGN KEY (curso_id) REFERENCES cursos(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS aula_intentos (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  aula_id TEXT NOT NULL,
+  alumno_id TEXT,
+  nombre TEXT NOT NULL,
+  apellido TEXT NOT NULL,
+  nombre_key TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  ends_at TEXT NOT NULL,
+  submitted_at TEXT,
+  respuestas_json TEXT NOT NULL DEFAULT '{}',
+  pregunta_order_json TEXT,
+  opciones_order_json TEXT,
+  puntaje REAL,
+  nota_10 REAL,
+  nota_id TEXT,
+  flags_json TEXT NOT NULL DEFAULT '[]',
+  estado TEXT NOT NULL DEFAULT 'en_curso' CHECK (estado IN ('en_curso', 'entregado', 'vencido', 'bloqueado')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (aula_id, nombre_key),
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  FOREIGN KEY (aula_id) REFERENCES aulas_temporales(id) ON DELETE CASCADE,
+  FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_actividad_preguntas_actividad ON actividad_preguntas(actividad_id, orden);
+CREATE INDEX IF NOT EXISTS idx_aulas_temporales_token ON aulas_temporales(join_token);
+CREATE INDEX IF NOT EXISTS idx_aulas_temporales_docente ON aulas_temporales(tenant_id, docente_id);
+CREATE INDEX IF NOT EXISTS idx_aula_intentos_aula ON aula_intentos(aula_id);

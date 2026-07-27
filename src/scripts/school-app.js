@@ -40,6 +40,7 @@ const currentUser = window.__AULA_CLARA_USER__ || null;
 const panelRefreshers = [];
 let appReady = false;
 let toolsEntregasApi = { refresh: async () => {}, openForActividad: () => {}, setContext: () => {} };
+let knownHasActivity = false;
 
 function onPanelRefresh(fn) {
   panelRefreshers.push(fn);
@@ -681,6 +682,45 @@ function describeTeachingContext(ctx = getTeachingContext()) {
   return [ctx.escuela || course?.escuela, course?.nombre, subject?.nombre].filter(Boolean).join(' · ') || 'Elegí curso y materia';
 }
 
+function teachingContextIsReady(ctx = getTeachingContext()) {
+  return Boolean(ctx.cursoId && ctx.materiaId);
+}
+
+function openTeachingContextPicker() {
+  const root = document.querySelector('[data-global-teaching-context]');
+  const form = root?.querySelector('[data-gtc-form]');
+  if (!root || !form) return;
+  form.classList.remove('is-hidden');
+  form.hidden = false;
+  refreshGlobalTeachingContextUi({ keepOpen: true });
+  root.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  root.querySelector('[data-gtc-course]')?.focus?.();
+}
+
+function syncContextGateBanners() {
+  const ready = teachingContextIsReady();
+  const gtc = document.querySelector('[data-global-teaching-context]');
+  gtc?.classList.toggle('gtc--needs-context', !ready);
+
+  const gtcGate = document.querySelector('[data-gtc-gate]');
+  if (gtcGate) {
+    gtcGate.classList.toggle('is-hidden', ready);
+    gtcGate.hidden = ready;
+  }
+
+  const hint = document.querySelector('[data-gtc-hint]');
+  if (hint) {
+    hint.classList.toggle('is-hidden', !ready);
+    hint.hidden = !ready;
+  }
+
+  document.querySelectorAll('[data-context-gate]').forEach((gate) => {
+    if (gate.hasAttribute('data-gtc-gate')) return;
+    gate.classList.toggle('is-hidden', ready);
+    gate.hidden = ready;
+  });
+}
+
 function setTeachingContext({ escuela, cursoId, materiaId } = {}, { notify = true, keepOpen = false } = {}) {
   const course = courseById(cursoId);
   const next = {
@@ -716,8 +756,13 @@ function refreshGlobalTeachingContextUi({ keepOpen = false } = {}) {
   const courseSelect = root.querySelector('[data-gtc-course]');
   const subjectSelect = root.querySelector('[data-gtc-subject]');
   const ctx = getTeachingContext();
+  const ready = teachingContextIsReady(ctx);
 
-  if (summary) summary.textContent = describeTeachingContext(ctx);
+  if (summary) {
+    summary.textContent = ready
+      ? describeTeachingContext(ctx)
+      : (ctx.cursoId ? 'Falta elegir la materia' : 'Elegí curso y materia');
+  }
 
   const schools = schoolNamesForSelect();
   if (schoolSelect) {
@@ -739,10 +784,20 @@ function refreshGlobalTeachingContextUi({ keepOpen = false } = {}) {
   }
 
   document.querySelectorAll('[data-activity-context-hint]').forEach((hint) => {
-    hint.textContent = ctx.cursoId
-      ? `Curso actual: ${describeTeachingContext(ctx)}`
-      : 'Elegí curso y materia en “Curso actual” arriba.';
+    hint.textContent = ready
+      ? `Trabajando en: ${describeTeachingContext(ctx)}`
+      : 'Elegí curso y materia en “Curso actual” arriba para continuar.';
+    hint.classList.toggle('activity-context-hint--warn', !ready);
   });
+
+  document.querySelectorAll('[data-grade-context-text]').forEach((node) => {
+    node.textContent = ready
+      ? describeTeachingContext(ctx)
+      : 'Elegí curso y materia en Curso actual (encabezado).';
+  });
+
+  syncContextGateBanners();
+  refreshScheduleSuggestion();
 }
 
 function initGlobalTeachingContext() {
@@ -786,6 +841,12 @@ function initGlobalTeachingContext() {
     form.classList.toggle('is-hidden', !open);
     form.hidden = !open;
     if (open) refreshGlobalTeachingContextUi({ keepOpen: true });
+  });
+
+  document.addEventListener('click', (event) => {
+    const trigger = event.target?.closest?.('[data-gtc-open]');
+    if (!trigger) return;
+    openTeachingContextPicker();
   });
 
   schoolSelect?.addEventListener('change', () => {
@@ -840,10 +901,52 @@ function applySuggestedContextTo(selects = {}, options = {}) {
 }
 
 function describeContext(context) {
-  if (!context) return 'Configurá tu horario para ver sugerencias automáticas.';
+  if (!context) return 'Sin sugerencia de horario ahora.';
   const course = courseById(context.cursoId);
   const subject = subjectById(context.materiaId);
-  return `${context.escuela || course?.escuela || 'Escuela'} - ${course?.nombre || 'Curso'} - ${subject?.nombre || 'Materia'} (${context.desde || '--:--'} a ${context.hasta || '--:--'})`;
+  return [course?.nombre || 'Curso', subject?.nombre || 'Materia', context.desde && context.hasta ? `${context.desde}–${context.hasta}` : '']
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function refreshScheduleSuggestion() {
+  const box = document.querySelector('[data-schedule-suggestion]');
+  const label = document.querySelector('[data-schedule-suggestion-label]');
+  if (!box) return;
+
+  const suggested = currentSuggestedContext();
+  const current = getTeachingContext();
+  const matchesCurrent = Boolean(
+    suggested
+    && suggested.cursoId === current.cursoId
+    && suggested.materiaId === current.materiaId,
+  );
+  const show = Boolean(suggested && !matchesCurrent);
+
+  if (label) label.textContent = describeContext(suggested);
+  box.classList.toggle('is-hidden', !show);
+  box.hidden = !show;
+}
+
+function initScheduleSuggestion() {
+  document.querySelector('[data-schedule-suggestion-apply]')?.addEventListener('click', () => {
+    const suggested = currentSuggestedContext();
+    if (!suggested?.cursoId) {
+      showAppToast('No hay sugerencia de horario para este momento.', 'warning');
+      return;
+    }
+    setTeachingContext({
+      escuela: suggested.escuela,
+      cursoId: suggested.cursoId,
+      materiaId: suggested.materiaId,
+    });
+    showAppToast('Curso actual actualizado según tu horario.', 'ok');
+    refreshScheduleSuggestion();
+  });
+
+  window.addEventListener('aula-clara:teaching-context-changed', refreshScheduleSuggestion);
+  onPanelRefresh(refreshScheduleSuggestion);
+  refreshScheduleSuggestion();
 }
 
 function attendanceRate(studentId, subjectId = '') {
@@ -1035,10 +1138,8 @@ function initTeacherContext() {
     write(KEYS.teacherContext, [...read(KEYS.teacherContext), item]);
     form.reset();
     renderTeacherContextList(list);
-    document.querySelectorAll('[data-context-summary]').forEach((node) => {
-      node.textContent = describeContext(currentSuggestedContext());
-    });
-    showAppToast('Bloque de horario guardado.', 'ok');
+    refreshScheduleSuggestion();
+    showAppToast('Bloque de horario guardado. Se usará solo como sugerencia.', 'ok');
   });
 
   list.addEventListener('click', (event) => {
@@ -1049,11 +1150,13 @@ function initTeacherContext() {
     if (!previous) return;
     write(KEYS.teacherContext, read(KEYS.teacherContext).filter((item) => item.id !== blockId));
     renderTeacherContextList(list);
+    refreshScheduleSuggestion();
     showAppToast('Bloque de horario eliminado.', 'ok', {
       actionLabel: 'Deshacer',
       onAction: () => {
         write(KEYS.teacherContext, [...read(KEYS.teacherContext), previous]);
         renderTeacherContextList(list);
+        refreshScheduleSuggestion();
         showAppToast('Bloque restaurado.', 'ok');
       },
     });
@@ -1065,9 +1168,7 @@ function initTeacherContext() {
     fillSelect(courseSelect, visibleCourses(), 'Curso', 'id', courseLabel);
     fillSelect(subjectSelect, activeSubjects(), 'Materia');
     renderTeacherContextList(list);
-    document.querySelectorAll('[data-context-summary]').forEach((node) => {
-      node.textContent = describeContext(currentSuggestedContext());
-    });
+    refreshScheduleSuggestion();
   });
 }
 
@@ -1077,7 +1178,7 @@ function renderTeacherContextList(list) {
     return itemCiclo === activeCicloLectivo();
   });
   if (!items.length) {
-    replaceContent(list, emptyState('Sin horario cargado', 'Agregá tus clases habituales arriba.', {
+    replaceContent(list, emptyState('Sin bloques', 'Opcional: agregá horarios para sugerir el curso del día.', {
       ctaLabel: 'Ir al Panel',
       spaNav: 'panel',
     }));
@@ -1125,6 +1226,15 @@ function initStudents() {
   const subjectContainer = document.querySelector('[data-student-subjects]');
   const newSubjectInput = form?.querySelector('[data-student-new-subject]');
   const addSubjectButton = form?.querySelector('[data-student-add-subject]');
+  const profileDialog = root?.querySelector('[data-student-profile-dialog]');
+  const profileForm = profileDialog?.querySelector('[data-student-profile-form]');
+  const profileTitle = profileDialog?.querySelector('[data-student-profile-title]');
+  const profileSchoolSelect = profileForm?.querySelector('[name="escuela"]');
+  const profileCourseSelect = profileForm?.querySelector('[name="cursoId"]');
+  const profileSubjectContainer = profileForm?.querySelector('[data-student-profile-subjects]');
+  const profileNewSubjectInput = profileForm?.querySelector('[data-student-profile-new-subject]');
+  const profileAddSubjectButton = profileForm?.querySelector('[data-student-profile-add-subject]');
+  const profileCloseButton = profileDialog?.querySelector('[data-student-profile-close]');
   if (!form || !list) return;
 
   const modeInputs = root.querySelectorAll('[data-student-mode-input]');
@@ -1157,12 +1267,74 @@ function initStudents() {
     refreshCourseOptions(schoolSelect?.value || '', selectedCourseId);
   };
 
+  const refreshProfileCourseOptions = (school = '', selectedCourseId = '') => {
+    if (!profileCourseSelect) return;
+    const courses = visibleCourses(school);
+    const previousValue = selectedCourseId || profileCourseSelect.value || '';
+    fillSelect(profileCourseSelect, courses, school ? 'Seleccionar curso' : 'Elegí una escuela primero', 'id', courseLabel);
+    if (previousValue && courses.some((course) => course.id === previousValue)) {
+      profileCourseSelect.value = previousValue;
+    } else if (courses.length === 1) {
+      profileCourseSelect.value = courses[0].id;
+    }
+    profileCourseSelect.disabled = !school || courses.length === 0;
+  };
+
+  const refreshProfileSchoolOptions = (selectedSchool = '', selectedCourseId = '') => {
+    if (!profileSchoolSelect) return;
+    fillSchoolSelect(profileSchoolSelect, 'Seleccionar escuela', selectedSchool);
+    refreshProfileCourseOptions(profileSchoolSelect.value || '', selectedCourseId);
+  };
+
+  const refreshStudentPanel = () => {
+    refreshSchoolOptions();
+    renderStudentSubjectPicker(subjectContainer);
+    renderStudents(list);
+  };
+
+  const fillProfileForm = (student) => {
+    if (!profileForm || !student) return;
+    clearFieldErrors(profileForm);
+    profileForm.studentId.value = student.id;
+    profileForm.nombre.value = student.nombre || '';
+    profileForm.dni.value = student.dni || '';
+    profileForm.tutor.value = student.tutor || '';
+    if (profileForm.activo) profileForm.activo.checked = student.activo !== false;
+    const course = courseById(student.cursoId);
+    refreshProfileSchoolOptions(course?.escuela || '', student.cursoId);
+    if (profileCourseSelect) profileCourseSelect.value = student.cursoId || '';
+    renderStudentSubjectPicker(profileSubjectContainer, studentSubjectIds(student));
+    if (profileTitle) profileTitle.textContent = student.nombre || 'Perfil del alumno';
+  };
+
+  const openStudentProfile = (studentId) => {
+    if (!profileDialog || !profileForm) return;
+    const student = read(KEYS.students).find((item) => item.id === studentId);
+    if (!student) {
+      showAppToast('No se encontró el alumno.', 'error');
+      return;
+    }
+    fillProfileForm(student);
+    if (typeof profileDialog.showModal === 'function') profileDialog.showModal();
+  };
+
+  const closeStudentProfile = () => {
+    if (!profileDialog) return;
+    if (typeof profileDialog.close === 'function') profileDialog.close();
+  };
+
   schoolSelect?.addEventListener('change', () => {
     refreshCourseOptions(schoolSelect.value);
   });
 
+  profileSchoolSelect?.addEventListener('change', () => {
+    refreshProfileCourseOptions(profileSchoolSelect.value);
+  });
+
   window.addEventListener('aula-clara:schools-changed', (event) => {
-    refreshSchoolOptions(event.detail?.selected || schoolSelect?.value || '');
+    const selected = event.detail?.selected || schoolSelect?.value || '';
+    refreshSchoolOptions(selected);
+    refreshProfileSchoolOptions(event.detail?.selected || profileSchoolSelect?.value || '');
   });
 
   refreshSchoolOptions();
@@ -1213,11 +1385,86 @@ function initStudents() {
     }
   });
 
+  const addProfileSubjectFromInput = async () => {
+    if (!profileForm) return;
+    const subjectPayload = await upsertSubjectByName(profileNewSubjectInput?.value);
+    if (!subjectPayload) {
+      profileNewSubjectInput?.focus();
+      return;
+    }
+    const currentSelected = Array.from(profileForm.querySelectorAll('[name="subjectIds"]')).map((input) => input.value);
+    if (!currentSelected.includes(subjectPayload.id)) currentSelected.push(subjectPayload.id);
+    renderStudentSubjectPicker(profileSubjectContainer, currentSelected);
+    if (profileNewSubjectInput) profileNewSubjectInput.value = '';
+  };
+
+  profileAddSubjectButton?.addEventListener('click', () => { addProfileSubjectFromInput(); });
+  profileNewSubjectInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addProfileSubjectFromInput();
+    }
+  });
+
+  profileCloseButton?.addEventListener('click', () => {
+    closeStudentProfile();
+  });
+
+  profileForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearFieldErrors(profileForm);
+    const data = Object.fromEntries(new FormData(profileForm));
+    const studentId = String(data.studentId || '').trim();
+    if (!studentId) {
+      showAppToast('No se pudo identificar al alumno.', 'error');
+      return;
+    }
+    const students = read(KEYS.students);
+    const selectedSubjects = Array.from(profileForm.querySelectorAll('[name="subjectIds"]')).map((input) => input.value);
+    const pendingSubject = await upsertSubjectByName(data.nuevaMateria);
+    if (pendingSubject) selectedSubjects.push(pendingSubject.id);
+    const course = courseById(data.cursoId);
+    if (!String(data.nombre || '').trim()) {
+      setFieldError(profileForm.nombre, 'Ingresá el nombre completo.');
+      focusFirstInvalid(profileForm);
+      return;
+    }
+    if (!data.escuela) {
+      setFieldError(profileForm.escuela, 'Elegí una escuela.');
+      focusFirstInvalid(profileForm);
+      return;
+    }
+    if (!data.cursoId) {
+      setFieldError(profileForm.cursoId, 'Elegí un curso.');
+      focusFirstInvalid(profileForm);
+      return;
+    }
+    if (course && course.escuela !== data.escuela) {
+      setFieldError(profileForm.cursoId, 'El curso no pertenece a la escuela elegida.');
+      focusFirstInvalid(profileForm);
+      return;
+    }
+    const payload = {
+      id: studentId,
+      nombre: data.nombre.trim(),
+      dni: String(data.dni || '').trim(),
+      cursoId: data.cursoId,
+      tutor: String(data.tutor || '').trim(),
+      subjectIds: [...new Set(selectedSubjects)],
+      activo: Boolean(profileForm.activo?.checked),
+      updatedAt: nowIso(),
+    };
+    const next = students.map((student) => student.id === studentId ? payload : student);
+    write(KEYS.students, next);
+    await persistAndRefresh('student', 'upsert', payload, refreshStudentPanel);
+    closeStudentProfile();
+    showAppToast(payload.activo ? 'Perfil actualizado.' : 'Alumno desactivado.', 'ok');
+  });
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     clearFieldErrors(form);
     const data = Object.fromEntries(new FormData(form));
-    const editingId = form.dataset.editingId;
     const students = read(KEYS.students);
     const selectedSubjects = Array.from(form.querySelectorAll('[name="subjectIds"]')).map((input) => input.value);
     const pendingSubject = await upsertSubjectByName(data.nuevaMateria);
@@ -1244,7 +1491,7 @@ function initStudents() {
       return;
     }
     const payload = {
-      id: editingId || uid('al'),
+      id: uid('al'),
       nombre: data.nombre.trim(),
       dni: String(data.dni || '').trim(),
       cursoId: data.cursoId,
@@ -1253,38 +1500,21 @@ function initStudents() {
       activo: true,
       updatedAt: nowIso(),
     };
-    const next = editingId ? students.map((student) => student.id === editingId ? payload : student) : [...students, payload];
-    write(KEYS.students, next);
+    write(KEYS.students, [...students, payload]);
     form.reset();
-    delete form.dataset.editingId;
-    form.querySelector('button[type="submit"]').textContent = 'Guardar alumno';
-    const refreshStudentPanel = () => {
-      refreshSchoolOptions();
-      renderStudentSubjectPicker(subjectContainer);
-      renderStudents(list, form);
-    };
     await persistAndRefresh('student', 'upsert', payload, refreshStudentPanel);
-    showAppToast(editingId ? 'Alumno actualizado.' : 'Alumno guardado.', 'ok');
+    showAppToast('Alumno guardado.', 'ok');
   });
 
   list.addEventListener('click', async (event) => {
-    const edit = event.target.closest('[data-edit-student]');
+    const openProfile = event.target.closest('[data-open-student-profile], [data-edit-student]');
     const remove = event.target.closest('[data-delete-student]');
     const students = read(KEYS.students);
 
-    if (edit) {
-      activateStudentMode('manual');
-      const student = students.find((item) => item.id === edit.dataset.editStudent);
-      if (!student) return;
-      form.dataset.editingId = student.id;
-      form.nombre.value = student.nombre;
-      form.dni.value = student.dni || '';
-      const course = courseById(student.cursoId);
-      refreshSchoolOptions(course?.escuela || '', student.cursoId);
-      form.cursoId.value = student.cursoId;
-      form.tutor.value = student.tutor || '';
-      renderStudentSubjectPicker(subjectContainer, studentSubjectIds(student));
-      form.querySelector('button[type="submit"]').textContent = 'Actualizar alumno';
+    if (openProfile) {
+      const studentId = openProfile.dataset.openStudentProfile || openProfile.dataset.editStudent;
+      if (studentId) openStudentProfile(studentId);
+      return;
     }
 
     if (remove) {
@@ -1293,7 +1523,7 @@ function initStudents() {
       if (!previous) return;
       const next = students.map((student) => student.id === id ? { ...student, activo: false, updatedAt: nowIso() } : student);
       write(KEYS.students, next);
-      await persistAndRefresh('student', 'delete', { id, updatedAt: nowIso() }, () => renderStudents(list, form));
+      await persistAndRefresh('student', 'delete', { id, updatedAt: nowIso() }, () => renderStudents(list));
       showAppToast('Alumno desactivado.', 'ok', {
         actionLabel: 'Deshacer',
         onAction: async () => {
@@ -1305,17 +1535,17 @@ function initStudents() {
             ...previous,
             activo: true,
             updatedAt: nowIso(),
-          }, () => renderStudents(list, form));
+          }, () => renderStudents(list));
           showAppToast('Alumno restaurado.', 'ok');
         },
       });
     }
   });
 
-  renderStudents(list, form);
+  renderStudents(list);
   onPanelRefresh(() => {
     refreshSchoolOptions();
-    renderStudents(list, form);
+    renderStudents(list);
   });
 }
 
@@ -1408,6 +1638,7 @@ function renderStudents(list) {
       ),
       el('div', { className: 'row-actions' },
         tag(`Promedio ${avg === null ? '-' : avg.toFixed(1)}`, `tag ${avg !== null && avg < 6 ? 'danger' : 'ok'}`),
+        el('button', { className: 'btn btn-ghost', dataset: { openStudentProfile: student.id } }, 'Ver perfil'),
         el('button', { className: 'btn btn-ghost', dataset: { editStudent: student.id } }, 'Editar'),
         el('button', { className: 'btn btn-danger', dataset: { deleteStudent: student.id } }, 'Eliminar'),
       ),
@@ -1422,9 +1653,6 @@ function attendanceDraftKey(studentId, subjectId, date) {
 function initAttendance() {
   const root = document.querySelector('[data-attendance]');
   if (!root) return;
-  const takeView = root.querySelector('[data-attendance-take-view]');
-  const historyView = root.querySelector('[data-attendance-history-view]');
-  const viewToggle = root.querySelector('[data-attendance-view-toggle]');
   const courseSelect = root.querySelector('[data-filter-course]');
   const subjectSelect = root.querySelector('[data-filter-subject]');
   const dateInput = root.querySelector('[data-attendance-date]');
@@ -1437,7 +1665,6 @@ function initAttendance() {
   const historySubject = root.querySelector('[data-history-filter-subject]');
   const historyFrom = root.querySelector('[data-history-filter-from]');
   const historyTo = root.querySelector('[data-history-filter-to]');
-  let showingHistory = false;
   const draftAttendance = new Map();
 
   const attendanceContext = () => ({
@@ -1493,6 +1720,13 @@ function initAttendance() {
     }
   };
 
+  const syncHistoryFiltersFromTake = () => {
+    const course = courseById(courseSelect?.value);
+    if (historySchool && course?.escuela) historySchool.value = course.escuela;
+    if (historyCourse && courseSelect?.value) historyCourse.value = courseSelect.value;
+    if (historySubject && subjectSelect?.value) historySubject.value = subjectSelect.value;
+  };
+
   dateInput.value = today();
   fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
   fillSelect(subjectSelect, activeSubjects(), 'Materia');
@@ -1507,19 +1741,11 @@ function initAttendance() {
   applyTeachingContextTo({ course: courseSelect, subject: subjectSelect });
   applySuggestedContextTo({ course: courseSelect, subject: subjectSelect });
   if (!subjectSelect.value && activeSubjects()[0]) subjectSelect.value = activeSubjects()[0].id;
+  syncHistoryFiltersFromTake();
 
   const renderHistory = () => renderAttendanceHistory(root);
   [historySchool, historyCourse, historySubject, historyFrom, historyTo].forEach((control) => {
     control?.addEventListener('change', renderHistory);
-  });
-
-  viewToggle?.addEventListener('click', () => {
-    if (!showingHistory && !confirmDiscardAttendanceDraft()) return;
-    showingHistory = !showingHistory;
-    takeView?.classList.toggle('is-hidden', showingHistory);
-    historyView?.classList.toggle('is-hidden', !showingHistory);
-    viewToggle.textContent = showingHistory ? 'Tomar asistencia' : 'Ver asistencias';
-    if (showingHistory) renderHistory();
   });
 
   let lastAttendanceContext = attendanceContext();
@@ -1542,6 +1768,8 @@ function initAttendance() {
           materiaId: subjectSelect.value,
         }, { notify: false });
         refreshGlobalTeachingContextUi();
+        syncHistoryFiltersFromTake();
+        renderHistory();
       }
       renderAttendance();
     });
@@ -1550,7 +1778,9 @@ function initAttendance() {
   window.addEventListener('aula-clara:teaching-context-changed', () => {
     applyTeachingContextTo({ course: courseSelect, subject: subjectSelect });
     lastAttendanceContext = attendanceContext();
+    syncHistoryFiltersFromTake();
     renderAttendance();
+    renderHistory();
   });
 
   [courseSelect, subjectSelect, dateInput].forEach(handleAttendanceFilterChange);
@@ -1657,13 +1887,15 @@ function initAttendance() {
   }
 
   renderAttendance();
+  renderHistory();
   onPanelRefresh(() => {
     fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
     fillSelect(subjectSelect, activeSubjects(), 'Materia');
     fillSelect(historyCourse, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
     fillSelect(historySubject, activeSubjects(), 'Todas las materias');
+    syncHistoryFiltersFromTake();
     renderAttendance();
-    if (showingHistory) renderHistory();
+    renderHistory();
   });
 }
 
@@ -1850,9 +2082,6 @@ async function commitGradesDraft(draftGrades, meta) {
 function initGrades() {
   const root = document.querySelector('[data-grades]');
   if (!root) return;
-  const takeView = root.querySelector('[data-grades-take-view]');
-  const detailView = root.querySelector('[data-grades-detail-view]');
-  const viewToggle = root.querySelector('[data-grades-view-toggle]');
   const metaForm = root.querySelector('[data-grade-meta-form]');
   const subjectHidden = metaForm?.querySelector('[name="subjectId"]');
   const typeSelect = root.querySelector('[data-evaluation-type]');
@@ -1880,7 +2109,6 @@ function initGrades() {
   const detailCourseFilter = root.querySelector('[data-detail-course-filter]');
   const detailSubjectFilter = root.querySelector('[data-detail-subject-filter]');
   const detailPeriodFilter = root.querySelector('[data-detail-period-filter]');
-  let showingDetail = false;
   const draftGrades = new Map();
 
   const currentMeta = () => gradeEvaluationMeta(metaForm, subjectFilter?.value || '');
@@ -2131,21 +2359,12 @@ function initGrades() {
   }
 
   const renderDetail = () => renderGradesDetail(root);
+  const syncDetailFiltersFromTake = () => {
+    if (detailCourseFilter && courseFilter?.value) detailCourseFilter.value = courseFilter.value;
+    if (detailSubjectFilter && subjectFilter?.value) detailSubjectFilter.value = subjectFilter.value;
+  };
   [detailCourseFilter, detailSubjectFilter, detailPeriodFilter].forEach((control) => {
     control?.addEventListener('change', renderDetail);
-  });
-
-  viewToggle?.addEventListener('click', () => {
-    if (!showingDetail && !confirmDiscardGradesDraft()) return;
-    showingDetail = !showingDetail;
-    takeView?.classList.toggle('is-hidden', showingDetail);
-    detailView?.classList.toggle('is-hidden', !showingDetail);
-    viewToggle.textContent = showingDetail ? 'Cargar notas' : 'Ver calificaciones';
-    if (showingDetail) {
-      if (detailCourseFilter && courseFilter?.value) detailCourseFilter.value = courseFilter.value;
-      if (detailSubjectFilter && subjectFilter?.value) detailSubjectFilter.value = subjectFilter.value;
-      renderDetail();
-    }
   });
 
   const deliveryFilters = () => ({
@@ -2157,6 +2376,7 @@ function initGrades() {
 
   const renderAll = async () => {
     if (subjectHidden) subjectHidden.value = subjectFilter?.value || '';
+    syncDetailFiltersFromTake();
     renderGrades(table, subjectFilter?.value || '', courseFilter?.value || '');
     renderBulkGrades();
 
@@ -2185,6 +2405,8 @@ function initGrades() {
         },
       },
     );
+
+    renderDetail();
 
     if (contextText) {
       const course = courseById(courseFilter?.value);
@@ -2413,7 +2635,6 @@ function initGrades() {
     fillSelect(detailCourseFilter, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
     refreshSubjectOptions(subjectFilter?.value || '');
     void renderAll();
-    if (showingDetail) renderDetail();
   });
 }
 
@@ -2684,15 +2905,24 @@ async function renderTrabajoHistory(list, courseId = '', subjectId = '', estado 
   }
 
   if (!entregas.length) {
-    replaceContent(list, emptyState('Sin trabajos cargados', 'Subí la entrega del alumno en Entregas.', {
-      ctaLabel: 'Ir a Entregas',
-      onClick: () => {
-        showSpaView('actividades');
-        window.dispatchEvent(new CustomEvent('aula-clara:open-activity-flow', { detail: { tab: 'entregas' } }));
+    replaceContent(list, emptyState(
+      'Sin trabajos cargados',
+      'En Recibir entregas: elegí actividad, alumno y un PDF/DOCX/TXT.',
+      {
+        ctaLabel: 'Ir a recibir entregas',
+        onClick: () => {
+          showSpaView('actividades');
+          openActivityFlowTab('entregas');
+          document.querySelector('[data-entregas-root] [data-trabajo-upload-form]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
       },
-    }));
+    ));
     return entregas;
   }
+
+  const students = studentsInCiclo('', courseId).filter((student) =>
+    studentHasSubject(student, subjectId)
+  );
 
   replaceContent(list, ...entregas.map((item) => {
     const archivos = Array.isArray(item.archivos) ? item.archivos : [];
@@ -2728,9 +2958,33 @@ async function renderTrabajoHistory(list, courseId = '', subjectId = '', estado 
       );
     }
 
+    if (!item.alumno_id) {
+      feedbackNodes.push(
+        el('p', { className: 'muted' }, 'Falta vincular un alumno para habilitar Corregir con IA.'),
+      );
+    } else if (!tieneDigital) {
+      feedbackNodes.push(
+        el('p', { className: 'muted' }, 'Para Corregir con IA hace falta un PDF, DOCX o TXT (las fotos no se corrigen aún).'),
+      );
+    }
+
     const actions = [
       el('button', { className: 'btn btn-secondary btn-sm', type: 'button', dataset: { reenviarTrabajo: item.id } }, 'Reenviar'),
     ];
+
+    if (!item.alumno_id && students.length) {
+      actions.push(
+        el('select', {
+          className: 'input-inline',
+          dataset: { vincularAlumnoEntrega: item.id },
+          attrs: { 'aria-label': 'Vincular alumno' },
+        },
+          el('option', { value: '' }, 'Vincular alumno…'),
+          ...students.map((student) => el('option', { value: student.id }, student.nombre || student.id)),
+        ),
+      );
+    }
+
     if (puedeCorregir) {
       actions.push(
         el('button', {
@@ -2739,12 +2993,21 @@ async function renderTrabajoHistory(list, courseId = '', subjectId = '', estado 
           dataset: { corregirTrabajo: item.id },
         }, calificado || correccion ? 'Re-corregir con IA' : 'Corregir con IA'),
       );
+    } else if (tieneDigital && !item.alumno_id) {
+      actions.push(
+        el('button', {
+          className: 'btn btn-primary btn-sm',
+          type: 'button',
+          disabled: true,
+          title: 'Primero vinculá un alumno con el selector de esta tarjeta',
+        }, 'Corregir con IA'),
+      );
     }
 
     return el('article', { className: 'student-row' },
       el('div', {},
         el('strong', {}, item.titulo),
-        el('small', {}, [item.curso, item.materia, item.alumno].filter(Boolean).join(' · ')),
+        el('small', {}, [item.curso, item.materia, item.alumno || 'Sin alumno'].filter(Boolean).join(' · ')),
         el('small', {}, `${item.submitted_at?.slice(0, 10) || ''} · ${trabajoEstadoLabel(item)}`),
         ...feedbackNodes,
       ),
@@ -2807,7 +3070,8 @@ function initTrabajosEntregas(root, context = {}) {
     const students = studentsInCiclo('', getCourseId()).filter((student) =>
       studentHasSubject(student, getMateriaId())
     );
-    fillSelect(trabajoAlumnoSelect, students, 'Sin alumno específico');
+    fillSelect(trabajoAlumnoSelect, students, 'Elegí un alumno');
+    trabajoAlumnoSelect.required = true;
   };
 
   const refresh = async () => {
@@ -2828,11 +3092,8 @@ function initTrabajosEntregas(root, context = {}) {
     }
 
     refreshStudentOptions();
-    let actividades = getActividades();
-    if (!actividades.length) {
-      actividades = await fetchActividadesForContext(cursoId, materiaId);
-      context.setActividades?.(actividades);
-    }
+    const actividades = await fetchActividadesForContext(cursoId, materiaId);
+    context.setActividades?.(actividades);
     if (trabajoActividadSelect) {
       fillActividadSelect(trabajoActividadSelect, actividades, {
         cursoId,
@@ -2897,6 +3158,10 @@ function initTrabajosEntregas(root, context = {}) {
         showAppToast('Elegí la actividad del curso a la que corresponde la entrega.', 'warning');
         return;
       }
+      if (!data.alumnoId) {
+        showAppToast('Elegí el alumno de la entrega para poder corregir con IA.', 'warning');
+        return;
+      }
 
       const payload = new FormData();
       payload.set('cursoId', cursoId);
@@ -2934,6 +3199,31 @@ function initTrabajosEntregas(root, context = {}) {
       }
     });
   }
+
+  trabajoHistory?.addEventListener('change', async (event) => {
+    const select = event.target.closest('[data-vincular-alumno-entrega]');
+    if (!select || !select.value) return;
+    const entregaId = select.dataset.vincularAlumnoEntrega;
+    const alumnoId = select.value;
+    select.disabled = true;
+    try {
+      const response = await fetch('/api/trabajos', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entregaId, alumnoId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'No se pudo vincular el alumno.');
+      showAppToast('Alumno vinculado. Ya podés corregir con IA.', 'ok');
+      await refresh();
+      context.onUploaded?.();
+    } catch (error) {
+      showAppToast(error instanceof Error ? error.message : 'Error al vincular alumno.', 'error');
+      select.value = '';
+    } finally {
+      select.disabled = false;
+    }
+  });
 
   trabajoHistory?.addEventListener('click', async (event) => {
     const corregirBtn = event.target.closest('[data-corregir-trabajo]');
@@ -3021,13 +3311,26 @@ function initTrabajosEntregas(root, context = {}) {
   return {
     refresh,
     openForActividad(actividadId) {
-      if (trabajoActividadSelect) {
-        trabajoActividadSelect.value = actividadId;
-        trabajoActividadSelect.dispatchEvent(new Event('change'));
+      const id = String(actividadId || '');
+      if (!id || !trabajoActividadSelect) return false;
+
+      const actividad = getActividades().find((item) => String(item.id) === id);
+      if (!actividad) {
+        showAppToast('No se encontró la actividad en el curso actual. Revisá “Curso actual”.', 'warning');
+        return false;
       }
-      const actividad = getActividades().find((item) => item.id === actividadId);
+
+      if (![...trabajoActividadSelect.options].some((option) => option.value === id)) {
+        trabajoActividadSelect.appendChild(
+          new Option(`${actividad.titulo} (${activityTipoLabel(actividad)})`, id),
+        );
+      }
+      trabajoActividadSelect.value = id;
+      trabajoActividadSelect.dispatchEvent(new Event('change'));
+
       const tituloInput = trabajoForm?.querySelector('[name="titulo"]');
-      if (actividad && tituloInput) tituloInput.value = actividad.titulo;
+      if (tituloInput) tituloInput.value = actividad.titulo || '';
+      return true;
     },
   };
 }
@@ -3419,6 +3722,7 @@ function initCalendar() {
 
   applySelectFromUrl(courseSelect, 'curso');
   applySelectFromUrl(subjectSelect, 'materia');
+  applyTeachingContextTo({ course: courseSelect, subject: subjectSelect });
   applySuggestedContextTo({ course: courseSelect, subject: subjectSelect });
 
   if (eventTypeSelect) {
@@ -3427,6 +3731,11 @@ function initCalendar() {
 
   const load = () => loadCalendar(root, monthInput.value, courseSelect.value, subjectSelect.value);
   [monthInput, courseSelect, subjectSelect].forEach((control) => control.addEventListener('change', load));
+
+  window.addEventListener('aula-clara:teaching-context-changed', () => {
+    applyTeachingContextTo({ course: courseSelect, subject: subjectSelect });
+    load();
+  });
 
   eventForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -3761,7 +4070,7 @@ function downloadActivityPdf(html, titulo) {
 function openActivityFlowTab(tabId = 'contenido') {
   const root = document.querySelector('[data-activities]');
   if (!root) return;
-  const allowed = new Set(['contenido', 'entregas', 'corregir']);
+  const allowed = new Set(['contenido', 'clase', 'entregas', 'corregir']);
   const next = allowed.has(tabId) ? tabId : 'contenido';
 
   root.querySelectorAll('[data-activity-flow-tab]').forEach((tab) => {
@@ -3776,9 +4085,54 @@ function openActivityFlowTab(tabId = 'contenido') {
     panel.hidden = !active;
   });
 
+  root.querySelectorAll('[data-flow-step]').forEach((step) => {
+    const id = step.getAttribute('data-flow-step');
+    step.classList.toggle('is-current', id === next);
+  });
+
   if (next === 'entregas' || next === 'corregir') {
     void toolsEntregasApi.refresh?.();
   }
+
+  void updateActivityFlowStepper(next);
+}
+
+async function updateActivityFlowStepper(activeTab = 'contenido') {
+  const root = document.querySelector('[data-activities]');
+  const stepper = root?.querySelector('[data-activity-flow-stepper]');
+  if (!stepper) return;
+
+  const ctx = getTeachingContext();
+  let hasActividad = false;
+  let hasEntregas = false;
+  let hasPendientes = false;
+
+  if (ctx.cursoId && ctx.materiaId) {
+    try {
+      const [actividades, entregas] = await Promise.all([
+        fetchActividadesForContext(ctx.cursoId, ctx.materiaId),
+        fetchTrabajosForContext(ctx.cursoId, ctx.materiaId),
+      ]);
+      hasActividad = actividades.length > 0;
+      hasEntregas = entregas.length > 0;
+      hasPendientes = entregas.some((item) => !trabajoTieneCalificacion(item));
+    } catch {
+      // ignore network errors for stepper chrome
+    }
+  }
+
+  const doneByStep = {
+    contenido: hasActividad,
+    clase: hasActividad,
+    entregas: hasEntregas,
+    corregir: hasEntregas && !hasPendientes,
+  };
+
+  stepper.querySelectorAll('[data-flow-step]').forEach((step) => {
+    const id = step.getAttribute('data-flow-step');
+    step.classList.toggle('is-done', Boolean(doneByStep[id]));
+    step.classList.toggle('is-current', id === activeTab);
+  });
 }
 
 function initActivityFlowTabs() {
@@ -3801,6 +4155,13 @@ function initActivityFlowTabs() {
   window.addEventListener('aula-clara:open-activity-flow', (event) => {
     openActivityFlowTab(event.detail?.tab || 'contenido');
   });
+
+  window.addEventListener('aula-clara:teaching-context-changed', () => {
+    const active = root.querySelector('[data-activity-flow-tab].is-active')?.getAttribute('data-activity-flow-tab') || 'contenido';
+    void updateActivityFlowStepper(active);
+  });
+
+  void updateActivityFlowStepper('contenido');
 }
 
 function initToolsEntregas() {
@@ -3834,13 +4195,15 @@ function initToolsEntregas() {
     refresh: async () => {
       await Promise.all([entregasApi.refresh(), corregirApi.refresh()]);
     },
-    openForActividad(actividadId) {
+    async openForActividad(actividadId) {
       openActivityFlowTab('entregas');
-      entregasApi.openForActividad?.(actividadId);
+      await Promise.all([entregasApi.refresh(), corregirApi.refresh()]);
+      return entregasApi.openForActividad?.(actividadId);
     },
-    setContext({ colegio, cursoId, materiaId } = {}) {
+    setContext({ colegio, turno, cursoId, materiaId } = {}) {
       setTeachingContext({
         escuela: colegio,
+        turno,
         cursoId,
         materiaId,
       });
@@ -3893,11 +4256,8 @@ function initActivities() {
   const getActivityMode = () => 'manual';
 
   const refreshActividadesContext = async () => {
-    const cursoId = courseSelect?.value || getTeachingContext().cursoId || '';
-    const materiaId = subjectSelect?.value || getTeachingContext().materiaId || '';
-    if (cursoId && materiaId) {
-      cachedActividadesList = await fetchActividadesForContext(cursoId, materiaId);
-    }
+    // No reemplazar la lista de tarjetas: esa cache la mantiene renderActivitiesList
+    // y los botones "Cargar entrega" / "Enviar a curso" dependen de ella.
   };
 
   const goToActivitiesWorkspace = () => {
@@ -4014,6 +4374,7 @@ function initActivities() {
 
   const applyGeneratedToForm = (generated) => {
     if (!generated) return;
+    refreshActivityContextSelects();
     if (generated.titulo) form.titulo.value = generated.titulo;
     const tipoInput = form.querySelector(`[name="tipo"][value="${generated.tipo}"]`);
     if (tipoInput) {
@@ -4105,12 +4466,17 @@ function initActivities() {
       if (extraPrompt) sessionStorage.removeItem('aula_clara_ai_extra_prompt');
       Array.from(files).forEach((file) => payload.append('documentos', file));
 
-      setAiLoading(true, 'Sincronizando cursos y generando material con IA…');
-      await syncPendingOperations();
+      setAiLoading(true, 'Leyendo el material y generando con IA… Esto puede tardar 1–3 minutos con PDFs largos.');
+      try {
+        await syncPendingOperations();
+      } catch (syncError) {
+        console.warn('[aula-clara] sync antes de IA falló', syncError);
+      }
       aiPreview?.classList.add('is-hidden');
       aiSourceReport?.classList.add('is-hidden');
 
       try {
+        setAiLoading(true, 'Generando material didáctico con IA…');
         const response = await fetch('/api/actividades/generar', {
           method: 'POST',
           body: payload,
@@ -4125,6 +4491,7 @@ function initActivities() {
         if (aiPreviewBody) setTrustedHtml(aiPreviewBody, data.html || '');
         aiPreview?.classList.remove('is-hidden');
         setAiLoading(false, '');
+        showAppToast('Actividad generada. Revisá la vista previa.', 'ok');
       } catch (error) {
         setAiLoading(false, '');
         showAppToast(error instanceof Error ? error.message : 'Error al generar la actividad.', 'error');
@@ -4354,25 +4721,42 @@ function initActivities() {
     event.preventDefault();
     if (getActivityMode() !== 'manual') return;
     clearFieldErrors(form);
+
+    // Los selects de escuela/curso están ocultos (usan “Curso actual”); sincronizarlos antes de validar.
+    refreshActivityContextSelects();
+    const ctx = getTeachingContext();
+    const selectedCourse = courseById(courseSelect?.value || ctx.cursoId);
+    const selectedSubject = subjectById(subjectSelect?.value || ctx.materiaId);
+    const colegio = String(schoolSelect?.value || ctx.escuela || selectedCourse?.escuela || '').trim();
+    const turno = String(shiftSelect?.value || ctx.turno || selectedCourse?.turno || '').trim();
+    const cursoId = String(courseSelect?.value || ctx.cursoId || '').trim();
+    const materiaId = String(subjectSelect?.value || ctx.materiaId || '').trim();
+
+    ensureSelectOption(schoolSelect, colegio, colegio);
+    ensureSelectOption(shiftSelect, turno, turno);
+    ensureSelectOption(courseSelect, cursoId, selectedCourse?.nombre || cursoId);
+    ensureSelectOption(subjectSelect, materiaId, selectedSubject?.nombre || materiaId);
+
     const data = Object.fromEntries(new FormData(form));
+    data.colegio = colegio;
+    data.turno = turno;
+    data.cursoId = cursoId;
+    data.materiaId = materiaId;
+
     if (!data.colegio) {
-      setFieldError(form.colegio, 'Elegí un colegio.');
-      focusFirstInvalid(form);
+      showAppToast('Elegí escuela y curso en “Curso actual” arriba.', 'warning');
       return;
     }
     if (!data.turno) {
-      setFieldError(form.turno, 'Elegí un turno.');
-      focusFirstInvalid(form);
+      showAppToast('Falta el turno del curso. Revisá “Curso actual”.', 'warning');
       return;
     }
     if (!data.cursoId) {
-      setFieldError(form.cursoId, 'Elegí un curso.');
-      focusFirstInvalid(form);
+      showAppToast('Elegí un curso en “Curso actual” arriba.', 'warning');
       return;
     }
     if (!data.materiaId) {
-      setFieldError(form.materiaId, 'Elegí una materia.');
-      focusFirstInvalid(form);
+      showAppToast('Elegí una materia en “Curso actual” arriba.', 'warning');
       return;
     }
     if (!String(data.titulo || '').trim()) {
@@ -4380,63 +4764,107 @@ function initActivities() {
       focusFirstInvalid(form);
       return;
     }
-    const tipo = data.tipo;
+    const tipo = data.tipo === 'tp' ? 'tp' : 'evaluacion';
     const files = Array.from(editor.querySelector('[data-activity-images]')?.files || []);
-    const contenido = tipo === 'evaluacion'
+    const fromAi = lastGenerated
+      && lastGenerated.tipo === tipo
+      && lastGenerated.contenido
+      && typeof lastGenerated.contenido === 'object';
+    const contenido = fromAi
       ? {
-          template: 'evaluacion-v1',
-          bloques: String(editor.querySelector('[data-activity-questions]')?.value || '')
-            .split('\n')
-            .map((texto) => texto.trim())
-            .filter(Boolean)
-            .map((texto, index) => ({ type: 'pregunta', texto, puntaje: index + 1 })),
+          ...lastGenerated.contenido,
+          editor: lastGenerated.contenido.editor || undefined,
           imagenes: files.map((file) => ({ name: file.name, type: file.type, size: file.size })),
-          seguimiento: { criterios: ['Resolucion', 'Proceso', 'Presentacion'] },
         }
-      : {
-          template: 'tp-v1',
-          bloques: [{ type: 'consigna', texto: String(editor.querySelector('[data-activity-brief]')?.value || '').trim() }],
-          seguimiento: {
-            criterios: String(editor.querySelector('[data-activity-criteria]')?.value || '')
-              .split(',')
-              .map((item) => item.trim())
-              .filter(Boolean),
-          },
-        };
+      : tipo === 'evaluacion'
+        ? {
+            template: 'evaluacion-v1',
+            bloques: String(editor.querySelector('[data-activity-questions]')?.value || '')
+              .split('\n')
+              .map((texto) => texto.trim())
+              .filter(Boolean)
+              .map((texto, index) => ({ type: 'pregunta', texto, puntaje: index + 1 })),
+            imagenes: files.map((file) => ({ name: file.name, type: file.type, size: file.size })),
+            seguimiento: { criterios: ['Resolucion', 'Proceso', 'Presentacion'] },
+          }
+        : {
+            template: 'tp-v1',
+            bloques: [{ type: 'consigna', texto: String(editor.querySelector('[data-activity-brief]')?.value || '').trim() }],
+            seguimiento: {
+              criterios: String(editor.querySelector('[data-activity-criteria]')?.value || '')
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean),
+            },
+          };
 
-    const selectedCourse = courseById(data.cursoId);
-    const selectedSubject = subjectById(data.materiaId);
-    await syncPendingOperations();
-
-    const response = await fetch('/api/actividades', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tipo,
-        colegio: data.colegio,
-        turno: data.turno,
-        cursoId: data.cursoId,
-        materiaId: data.materiaId,
-        cursoNombre: selectedCourse?.nombre || '',
-        materiaNombre: selectedSubject?.nombre || '',
-        titulo: data.titulo,
-        fechaPublicacion: data.fechaPublicacion,
-        fechaVencimiento: data.fechaVencimiento,
-        contenido,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      showAppToast(error.error || 'No se pudo guardar la actividad.', 'error');
-      return;
+    if (tipo === 'tp') {
+      const consigna = fromAi
+        ? String(lastGenerated?.contenido?.editor?.brief || editor.querySelector('[data-activity-brief]')?.value || '').trim()
+        : String(editor.querySelector('[data-activity-brief]')?.value || '').trim();
+      if (!consigna && !(fromAi && Array.isArray(lastGenerated?.contenido?.bloques) && lastGenerated.contenido.bloques.length)) {
+        showAppToast('Completá la consigna del TP antes de guardar.', 'warning');
+        return;
+      }
     }
 
-    form.reset();
-    showAppToast('Actividad guardada con éxito.', 'ok');
-    root.querySelector('[name="fechaPublicacion"]').value = today();
-    renderEditor();
-    await renderActivitiesList(list, (items) => { cachedActividadesList = items; });
+    const saveBtn = form.querySelector('button[type="submit"]');
+    const previousLabel = saveBtn?.textContent || 'Guardar actividad';
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Guardando…';
+    }
+
+    try {
+      try {
+        await syncPendingOperations();
+      } catch (syncError) {
+        console.warn('[aula-clara] sync antes de guardar actividad falló', syncError);
+      }
+
+      const response = await fetch('/api/actividades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          tipo,
+          colegio: data.colegio,
+          turno: data.turno,
+          cursoId: data.cursoId,
+          materiaId: data.materiaId,
+          cursoNombre: selectedCourse?.nombre || courseById(data.cursoId)?.nombre || '',
+          materiaNombre: selectedSubject?.nombre || subjectById(data.materiaId)?.nombre || '',
+          titulo: String(data.titulo || '').trim(),
+          fechaPublicacion: data.fechaPublicacion,
+          fechaVencimiento: data.fechaVencimiento,
+          contenido,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        showAppToast(error.error || 'No se pudo guardar la actividad.', 'error');
+        return;
+      }
+
+      form.reset();
+      showAppToast('Actividad guardada con éxito.', 'ok');
+      knownHasActivity = true;
+      sessionStorage.setItem('aula_clara_has_activity', '1');
+      window.dispatchEvent(new CustomEvent('aula-clara:local-data-changed'));
+      root.querySelector('[name="fechaPublicacion"]').value = today();
+      refreshActivityContextSelects();
+      renderEditor();
+      await renderActivitiesList(list, (items) => { cachedActividadesList = items; });
+    } catch (error) {
+      console.error('[aula-clara] guardar actividad failed', error);
+      showAppToast(error instanceof Error ? error.message : 'No se pudo guardar la actividad.', 'error');
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = previousLabel;
+      }
+    }
   });
 
   const enviarDialog = root.querySelector('[data-activity-enviar-dialog]');
@@ -4447,42 +4875,70 @@ function initActivities() {
   const enviarCurso = root.querySelector('[data-enviar-curso]');
   const enviarMateria = root.querySelector('[data-enviar-materia]');
 
-  const schoolsForEnviar = schoolNamesForSelect();
-  const shiftsForEnviar = [...new Set(visibleCourses().map((course) => course.turno).filter(Boolean))];
-  fillSelect(enviarColegio, schoolsForEnviar.map((school) => ({ id: school, nombre: school })), 'Escuela');
-  fillSelect(enviarTurno, shiftsForEnviar.map((shift) => ({ id: shift, nombre: shift })), 'Turno');
-  fillSelect(enviarCurso, visibleCourses(), 'Curso', 'id', courseLabel);
-  fillSelect(enviarMateria, activeSubjects(), 'Materia');
+  const refreshEnviarDestinationSelects = () => {
+    const schoolsForEnviar = schoolNamesForSelect();
+    const courses = visibleCourses();
+    const shiftsForEnviar = [...new Set(courses.map((course) => course.turno).filter(Boolean))];
+    fillSelect(enviarColegio, schoolsForEnviar.map((school) => ({ id: school, nombre: school })), 'Escuela');
+    fillSelect(enviarTurno, shiftsForEnviar.map((shift) => ({ id: shift, nombre: shift })), 'Turno');
+    fillSelect(enviarCurso, courses, 'Curso', 'id', courseLabel);
+    fillSelect(enviarMateria, activeSubjects(), 'Materia');
+  };
+
+  refreshEnviarDestinationSelects();
 
   const syncEnviarCourseFields = () => {
     const course = courseById(enviarCurso?.value);
     if (!course || !enviarColegio || !enviarTurno) return;
-    enviarColegio.value = course.escuela || enviarColegio.value;
-    enviarTurno.value = course.turno || enviarTurno.value;
+    ensureSelectOption(enviarColegio, course.escuela, course.escuela);
+    ensureSelectOption(enviarTurno, course.turno, course.turno);
   };
 
   enviarCurso?.addEventListener('change', syncEnviarCourseFields);
 
   const openEnviarDialog = (actividadId) => {
-    const actividad = cachedActividadesList.find((item) => item.id === actividadId);
-    if (!actividad || !enviarForm || !enviarDialog) return;
+    const actividad = cachedActividadesList.find((item) => String(item.id) === String(actividadId));
+    if (!actividad) {
+      showAppToast('No se encontró la actividad. Recargá la lista e intentá de nuevo.', 'warning');
+      return;
+    }
+    if (!enviarForm || !enviarDialog) {
+      showAppToast('No se pudo abrir el diálogo de envío.', 'error');
+      return;
+    }
+
+    refreshEnviarDestinationSelects();
 
     enviarForm.actividadId.value = actividad.id;
     enviarForm.titulo.value = actividad.titulo || '';
     enviarForm.fechaPublicacion.value = actividad.fecha_publicacion || '';
     enviarForm.fechaVencimiento.value = actividad.fecha_vencimiento || '';
 
-    if (enviarColegio) enviarColegio.value = form.colegio?.value || actividad.colegio || enviarColegio.value;
-    if (enviarTurno) enviarTurno.value = form.turno?.value || actividad.turno || enviarTurno.value;
-    if (enviarCurso) enviarCurso.value = form.cursoId?.value || actividad.curso_id || enviarCurso.value;
-    if (enviarMateria) enviarMateria.value = form.materiaId?.value || actividad.materia_id || enviarMateria.value;
+    const colegio = form.colegio?.value || actividad.colegio || getTeachingContext().escuela || '';
+    const turno = form.turno?.value || actividad.turno || getTeachingContext().turno || '';
+    const cursoId = form.cursoId?.value || actividad.curso_id || getTeachingContext().cursoId || '';
+    const materiaId = form.materiaId?.value || actividad.materia_id || getTeachingContext().materiaId || '';
+    const selectedCourse = courseById(cursoId);
+
+    ensureSelectOption(enviarColegio, colegio || selectedCourse?.escuela, colegio || selectedCourse?.escuela);
+    ensureSelectOption(enviarTurno, turno || selectedCourse?.turno, turno || selectedCourse?.turno);
+    ensureSelectOption(enviarCurso, cursoId, selectedCourse ? courseLabel(selectedCourse) : cursoId);
+    ensureSelectOption(
+      enviarMateria,
+      materiaId,
+      subjectById(materiaId)?.nombre || actividad.materia || materiaId,
+    );
     syncEnviarCourseFields();
 
     if (enviarSourceLabel) {
-      enviarSourceLabel.textContent = `Vas a enviar «${actividad.titulo}» (${activityTipoLabel(actividad)}) desde ${[actividad.curso, actividad.materia].filter(Boolean).join(' · ')}.`;
+      enviarSourceLabel.textContent = `Vas a enviar «${actividad.titulo}» (${activityTipoLabel(actividad)}) desde ${[actividad.curso, actividad.materia].filter(Boolean).join(' · ') || 'su curso original'}.`;
     }
 
-    enviarDialog.showModal();
+    if (typeof enviarDialog.showModal === 'function') {
+      enviarDialog.showModal();
+    } else {
+      enviarDialog.setAttribute('open', '');
+    }
   };
 
   list?.addEventListener('click', (event) => {
@@ -4495,31 +4951,33 @@ function initActivities() {
     const cargarBtn = event.target.closest('[data-cargar-entrega-actividad]');
     if (!cargarBtn) return;
 
-    const actividad = cachedActividadesList.find((item) => item.id === cargarBtn.dataset.cargarEntregaActividad);
-    if (actividad) {
-      toolsEntregasApi.setContext?.({
-        colegio: actividad.colegio,
-        turno: actividad.turno,
-        cursoId: actividad.curso_id,
-        materiaId: actividad.materia_id,
-      });
-      showSpaView('actividades');
-      openActivityFlowTab('entregas');
-      void toolsEntregasApi.refresh().then(() => {
-        toolsEntregasApi.openForActividad(actividad.id);
-      });
+    const actividadId = cargarBtn.dataset.cargarEntregaActividad;
+    const actividad = cachedActividadesList.find((item) => String(item.id) === String(actividadId));
+    if (!actividad) {
+      showAppToast('No se encontró la actividad. Recargá la lista e intentá de nuevo.', 'warning');
       return;
     }
 
+    toolsEntregasApi.setContext?.({
+      colegio: actividad.colegio,
+      turno: actividad.turno,
+      cursoId: actividad.curso_id,
+      materiaId: actividad.materia_id,
+    });
     showSpaView('actividades');
     openActivityFlowTab('entregas');
-    toolsEntregasApi.openForActividad(cargarBtn.dataset.cargarEntregaActividad);
+    void toolsEntregasApi.openForActividad(actividad.id);
+  });
+
+  enviarForm?.querySelector('[data-enviar-cancel]')?.addEventListener('click', () => {
+    enviarDialog?.close();
   });
 
   enviarForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    event.stopPropagation();
     const submitter = event.submitter;
-    if (!submitter || submitter.value === 'cancel') {
+    if (submitter?.value === 'cancel') {
       enviarDialog?.close();
       return;
     }
@@ -4532,9 +4990,20 @@ function initActivities() {
       return;
     }
 
-    await syncPendingOperations();
+    const confirmBtn = enviarForm.querySelector('button[type="submit"]');
+    const previousLabel = confirmBtn?.textContent || '';
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Enviando…';
+    }
 
     try {
+      try {
+        await syncPendingOperations();
+      } catch (syncError) {
+        console.warn('[aula-clara] sync antes de enviar actividad falló', syncError);
+      }
+
       const response = await fetch('/api/actividades/enviar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4559,10 +5028,471 @@ function initActivities() {
       showAppToast(`Actividad enviada a ${selectedCourse?.nombre || 'el curso'} (${selectedSubject?.nombre || 'materia'}).`, 'ok');
     } catch (error) {
       showAppToast(error instanceof Error ? error.message : 'Error al enviar la actividad.', 'error');
+    } finally {
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = previousLabel;
+      }
     }
   });
 
-  renderActivitiesList(list, (items) => { cachedActividadesList = items; });
+  window.addEventListener('aula-clara:teaching-context-changed', refreshEnviarDestinationSelects);
+  window.addEventListener('aula-clara:schools-changed', refreshEnviarDestinationSelects);
+  onPanelRefresh(refreshEnviarDestinationSelects);
+
+  const refreshListedActivities = () => {
+    void renderActivitiesList(list, (items) => { cachedActividadesList = items; });
+  };
+
+  document.querySelector('[data-activity-list-all]')?.addEventListener('change', refreshListedActivities);
+  window.addEventListener('aula-clara:teaching-context-changed', refreshListedActivities);
+
+  refreshListedActivities();
+  initClaseVirtual(root);
+}
+
+function initClaseVirtual(activitiesRoot) {
+  const root = activitiesRoot?.querySelector('[data-clase-virtual-root]') || document.querySelector('[data-clase-virtual-root]');
+  if (!root) return;
+
+  const form = root.querySelector('[data-clase-form]');
+  const qEditor = root.querySelector('[data-clase-questions-editor]');
+  const schoolSelect = root.querySelector('[data-clase-colegio]');
+  const shiftSelect = root.querySelector('[data-clase-turno]');
+  const courseSelect = root.querySelector('[data-clase-curso]');
+  const subjectSelect = root.querySelector('[data-clase-materia]');
+  let currentAula = null;
+  let currentStep = 1;
+
+  const showStep = (step) => {
+    currentStep = step;
+    root.querySelectorAll('[data-clase-panel]').forEach((panel) => {
+      panel.hidden = Number(panel.getAttribute('data-clase-panel')) !== step;
+    });
+    root.querySelectorAll('[data-clase-step]').forEach((item) => {
+      const id = Number(item.getAttribute('data-clase-step'));
+      item.classList.toggle('is-current', id === step);
+      item.classList.toggle('is-done', id < step);
+    });
+    if (step === 2) void refreshActividadesCargables();
+  };
+
+  const syncContextSelects = () => {
+    const ctx = getTeachingContext();
+    const schools = schoolNamesForSelect();
+    const courses = visibleCourses();
+    const shifts = [...new Set(courses.map((c) => c.turno).filter(Boolean))];
+    fillSelect(schoolSelect, schools.map((s) => ({ id: s, nombre: s })), 'Escuela');
+    fillSelect(shiftSelect, shifts.map((s) => ({ id: s, nombre: s })), 'Turno');
+    fillSelect(courseSelect, courses, 'Curso', 'id', courseLabel);
+    fillSelect(subjectSelect, activeSubjects(), 'Materia');
+    if (ctx.escuela) schoolSelect.value = ctx.escuela;
+    if (ctx.cursoId) courseSelect.value = ctx.cursoId;
+    if (ctx.materiaId) subjectSelect.value = ctx.materiaId;
+    const course = courseById(courseSelect.value || ctx.cursoId);
+    if (course?.turno) shiftSelect.value = course.turno;
+  };
+
+  const applyModoPreset = () => {
+    const modo = new FormData(form).get('modo');
+    const exam = modo === 'examen';
+    form.querySelector('[name="atOneAtATime"]').checked = exam;
+    form.querySelector('[name="atLockNav"]').checked = exam;
+    form.querySelector('[name="atHideResults"]').checked = exam;
+    form.querySelector('[name="atMaxFocus"]').value = exam ? '3' : '5';
+  };
+
+  const addQuestionCard = (preset = {}) => {
+    const list = qEditor.querySelector('[data-aula-q-editor]');
+    if (!list) return;
+    const modo = new FormData(form).get('modo');
+    const item = el('article', { className: 'aula-q-item', dataset: { aulaQItem: '' } },
+      el('div', { className: 'input-group' },
+        el('label', {},
+          el('span', {}, 'Tipo'),
+          el('select', { dataset: { aulaQTipo: '' } },
+            el('option', { attrs: { value: 'mc_single' } }, 'Opción única'),
+            el('option', { attrs: { value: 'mc_multi' } }, 'Varias correctas'),
+            modo === 'multiple_choice' ? null : el('option', { attrs: { value: 'corta' } }, 'Respuesta corta'),
+            modo === 'multiple_choice' ? null : el('option', { attrs: { value: 'abierta' } }, 'Respuesta abierta'),
+          ),
+        ),
+        el('label', {},
+          el('span', {}, 'Puntaje'),
+          el('input', { attrs: { type: 'number', min: '0.5', step: '0.5', value: String(preset.puntaje || 1), 'data-aula-q-puntaje': '' } }),
+        ),
+      ),
+      el('label', {},
+        el('span', {}, 'Enunciado'),
+        el('textarea', { attrs: { rows: '2', 'data-aula-q-enunciado': '', placeholder: 'Pregunta (respuesta digital)' } }, preset.enunciado || ''),
+      ),
+      el('div', { className: 'aula-q-options', dataset: { aulaQOptions: '' } }),
+      el('div', { className: 'button-row' },
+        el('button', { className: 'btn btn-secondary btn-sm', type: 'button', dataset: { aulaQAddOpt: '' } }, 'Agregar opción'),
+        el('button', { className: 'btn btn-secondary btn-sm', type: 'button', dataset: { aulaQRemove: '' } }, 'Quitar'),
+      ),
+    );
+    item.dataset.uid = `q${Date.now()}${Math.random().toString(16).slice(2, 5)}`;
+    const tipoSelect = item.querySelector('[data-aula-q-tipo]');
+    tipoSelect.value = modo === 'multiple_choice'
+      ? (preset.tipo === 'mc_multi' ? 'mc_multi' : 'mc_single')
+      : (preset.tipo || 'abierta');
+    list.appendChild(item);
+    const optionsBox = item.querySelector('[data-aula-q-options]');
+    const syncOptionsVisibility = () => {
+      const isMc = String(tipoSelect.value).startsWith('mc_');
+      optionsBox.hidden = !isMc;
+      item.querySelector('[data-aula-q-add-opt]').hidden = !isMc;
+    };
+    const addOption = (text = '', correct = false, id = '') => {
+      const row = el('div', { className: 'aula-q-option-row', dataset: { aulaQOption: '', optionId: id || `opt-${Date.now()}-${Math.random().toString(16).slice(2, 6)}` } },
+        el('input', { attrs: { type: tipoSelect.value === 'mc_multi' ? 'checkbox' : 'radio', name: `correct-${item.dataset.uid}`, 'data-aula-q-correct': '' } }),
+        el('input', { attrs: { type: 'text', placeholder: 'Opción', 'data-aula-q-option-text': '', value: text } }),
+      );
+      if (correct) row.querySelector('[data-aula-q-correct]').checked = true;
+      optionsBox.appendChild(row);
+    };
+    tipoSelect.addEventListener('change', () => {
+      optionsBox.querySelectorAll('[data-aula-q-correct]').forEach((input) => {
+        input.type = tipoSelect.value === 'mc_multi' ? 'checkbox' : 'radio';
+        input.name = `correct-${item.dataset.uid}`;
+      });
+      syncOptionsVisibility();
+    });
+    item.querySelector('[data-aula-q-add-opt]').addEventListener('click', () => addOption());
+    item.querySelector('[data-aula-q-remove]').addEventListener('click', () => item.remove());
+    (Array.isArray(preset.opciones) && preset.opciones.length ? preset.opciones : [{ texto: '' }, { texto: '' }]).forEach((opt) => {
+      addOption(opt.texto || '', Array.isArray(preset.correctas) && preset.correctas.includes(opt.id), opt.id || '');
+    });
+    syncOptionsVisibility();
+  };
+
+  const renderQuestionEditor = (preguntas = []) => {
+    replaceContent(qEditor,
+      el('div', { className: 'aula-q-editor', dataset: { aulaQEditor: '' } }),
+      el('button', { className: 'btn btn-secondary', type: 'button', dataset: { aulaQAdd: '' } }, 'Agregar pregunta'),
+    );
+    qEditor.querySelector('[data-aula-q-add]')?.addEventListener('click', () => addQuestionCard());
+    if (Array.isArray(preguntas) && preguntas.length) {
+      preguntas.forEach((p) => addQuestionCard(p));
+    } else {
+      addQuestionCard();
+    }
+  };
+
+  const refreshActividadesCargables = async () => {
+    const select = root.querySelector('[data-clase-actividad-existente]');
+    const aiRef = root.querySelector('[data-clase-ai-ref]');
+    try {
+      const res = await fetch('/api/aula-temporal/actividades-cargables', {
+        credentials: 'same-origin',
+      });
+      const data = await res.json().catch(() => ({}));
+      const items = data.actividades || [];
+
+      const fillSelectList = (elSelect, emptyLabel) => {
+        if (!elSelect) return;
+        const previous = elSelect.value;
+        replaceContent(elSelect, el('option', { attrs: { value: '' } }, emptyLabel));
+        items.forEach((item) => {
+          elSelect.appendChild(el('option', {
+            attrs: { value: item.id },
+          }, `${item.titulo} · ${item.curso} / ${item.materia}`));
+        });
+        if (previous && [...elSelect.options].some((o) => o.value === previous)) elSelect.value = previous;
+      };
+
+      fillSelectList(select, '— Elegí una actividad guardada —');
+      fillSelectList(aiRef, '— Actividad de referencia (opcional) —');
+    } catch {
+      showAppToast('No se pudieron listar las actividades.', 'warning');
+    }
+  };
+
+  const readQuestions = () => [...qEditor.querySelectorAll('[data-aula-q-item]')].map((item, index) => {
+    const tipo = item.querySelector('[data-aula-q-tipo]')?.value || 'mc_single';
+    const enunciado = String(item.querySelector('[data-aula-q-enunciado]')?.value || '').trim();
+    const puntaje = Number(item.querySelector('[data-aula-q-puntaje]')?.value) || 1;
+    const optionRows = [...item.querySelectorAll('[data-aula-q-option]')];
+    const opciones = optionRows.map((row, optIndex) => ({
+      id: row.dataset.optionId || `opt-${index + 1}-${optIndex + 1}`,
+      texto: String(row.querySelector('[data-aula-q-option-text]')?.value || '').trim(),
+    })).filter((opt) => opt.texto);
+    const correctas = optionRows
+      .filter((row) => row.querySelector('[data-aula-q-correct]')?.checked)
+      .map((row, optIndex) => row.dataset.optionId || `opt-${index + 1}-${optIndex + 1}`)
+      .filter((id) => opciones.some((opt) => opt.id === id));
+    return { tipo, enunciado, puntaje, opciones, correctas };
+  }).filter((q) => q.enunciado);
+
+  const renderShare = (aula) => {
+    currentAula = aula;
+    const url = `${window.location.origin}${aula.joinPath}`;
+    root.querySelector('[data-clase-url]').textContent = url;
+    root.querySelector('[data-clase-open]').href = url;
+    const box = root.querySelector('[data-clase-intentos]');
+    if (!aula.intentos?.length) {
+      replaceContent(box, el('p', { className: 'muted' }, 'Todavía no hay entregas digitales.'));
+    } else {
+      replaceContent(box, ...aula.intentos.map((item) =>
+        el('article', { className: 'event-card' },
+          el('strong', {}, `${item.apellido}, ${item.nombre}`),
+          el('small', {}, [
+            item.estado,
+            item.nota10 != null ? `nota ${item.nota10}` : null,
+            item.alumnoId ? 'vinculado' : 'sin vincular',
+          ].filter(Boolean).join(' · ')),
+        ),
+      ));
+    }
+    showStep(3);
+  };
+
+  form.querySelectorAll('[name="modo"]').forEach((input) => input.addEventListener('change', applyModoPreset));
+  applyModoPreset();
+  syncContextSelects();
+  showStep(1);
+
+  window.addEventListener('aula-clara:teaching-context-changed', syncContextSelects);
+  onPanelRefresh(syncContextSelects);
+
+  root.querySelector('[data-clase-crear]')?.addEventListener('click', async () => {
+    syncContextSelects();
+    const data = Object.fromEntries(new FormData(form));
+    const course = courseById(data.cursoId);
+    const btn = root.querySelector('[data-clase-crear]');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/aula-temporal/clase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          colegio: data.colegio || course?.escuela,
+          turno: data.turno || course?.turno,
+          cursoId: data.cursoId,
+          materiaId: data.materiaId,
+          titulo: data.titulo,
+          modo: data.modo,
+          duracionMinutos: Number(data.duracionMinutos) || 40,
+          expiresInHours: Number(data.expiresInHours) || 24,
+          mostrarNotaAlAlumno: Boolean(form.querySelector('[name="mostrarNota"]')?.checked),
+          antiTrampa: {
+            shuffleQuestions: Boolean(form.querySelector('[name="atShuffleQuestions"]')?.checked),
+            shuffleOptions: Boolean(form.querySelector('[name="atShuffleOptions"]')?.checked),
+            oneAtATime: Boolean(form.querySelector('[name="atOneAtATime"]')?.checked),
+            lockNavigation: Boolean(form.querySelector('[name="atLockNav"]')?.checked),
+            blockClipboard: Boolean(form.querySelector('[name="atClipboard"]')?.checked),
+            watermark: Boolean(form.querySelector('[name="atWatermark"]')?.checked),
+            hideResultsUntilClose: Boolean(form.querySelector('[name="atHideResults"]')?.checked),
+            maxFocusLoss: Number(form.querySelector('[name="atMaxFocus"]')?.value) || 3,
+            actionOnFocusLimit: form.querySelector('[name="atFocusAction"]')?.value || 'flag',
+          },
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'No se pudo crear la clase.');
+      currentAula = payload.aula;
+      renderQuestionEditor();
+      void refreshActividadesCargables();
+      showStep(2);
+      showAppToast('Clase creada. Cargá una actividad existente o armá preguntas nuevas.', 'ok');
+    } catch (error) {
+      showAppToast(error instanceof Error ? error.message : 'Error al crear la clase.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  root.querySelector('[data-clase-back-1]')?.addEventListener('click', () => showStep(1));
+
+  root.querySelector('[data-clase-ai-generar]')?.addEventListener('click', async () => {
+    if (!currentAula?.id) {
+      showAppToast('Primero creá la clase.', 'warning');
+      return;
+    }
+    const prompt = String(root.querySelector('[data-clase-ai-prompt]')?.value || '').trim();
+    const actividadId = root.querySelector('[data-clase-ai-ref]')?.value || '';
+    const filesInput = root.querySelector('[data-clase-ai-files]');
+    const files = Array.from(filesInput?.files || []);
+    if (!prompt && !actividadId && !files.length) {
+      showAppToast('Indicá un pedido, una actividad de referencia o un documento.', 'warning');
+      return;
+    }
+    const btn = root.querySelector('[data-clase-ai-generar]');
+    const status = root.querySelector('[data-clase-ai-status]');
+    btn.disabled = true;
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Generando con IA… puede tardar unos segundos.';
+    }
+    try {
+      const body = new FormData();
+      if (prompt) body.set('prompt', prompt);
+      if (actividadId) body.set('actividadId', actividadId);
+      files.forEach((file) => body.append('documentos', file));
+      const res = await fetch(`/api/aula-temporal/${currentAula.id}/generar-ia`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body,
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'No se pudo generar.');
+      renderShare(payload.aula);
+      showAppToast(`Listo: ${payload.generadas || payload.aula?.preguntas?.length || ''} preguntas cargadas. Descargá el documento referencia si querés.`, 'ok');
+    } catch (error) {
+      showAppToast(error instanceof Error ? error.message : 'Error al generar con IA.', 'error');
+      if (status) status.textContent = error instanceof Error ? error.message : 'Error';
+    } finally {
+      btn.disabled = false;
+      if (status && !status.textContent?.startsWith('Error') && !status.textContent?.includes('No se')) {
+        status.hidden = true;
+      }
+    }
+  });
+
+  root.querySelector('[data-clase-doc]')?.addEventListener('click', () => {
+    if (!currentAula?.id) {
+      showAppToast('Todavía no hay clase publicada.', 'warning');
+      return;
+    }
+    window.open(`/api/aula-temporal/${currentAula.id}/documento`, '_blank', 'noopener');
+  });
+
+  root.querySelector('[data-clase-cargar-existente]')?.addEventListener('click', async () => {
+    if (!currentAula?.id) {
+      showAppToast('Primero creá la clase.', 'warning');
+      return;
+    }
+    const actividadId = root.querySelector('[data-clase-actividad-existente]')?.value;
+    if (!actividadId) {
+      showAppToast('Elegí una actividad de la lista.', 'warning');
+      return;
+    }
+    const btn = root.querySelector('[data-clase-cargar-existente]');
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/api/aula-temporal/${currentAula.id}/cargar-actividad`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ actividadId }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'No se pudo cargar.');
+      currentAula = payload.aula;
+      if (payload.aula?.needsReview) {
+        const preview = payload.aula.preguntasPreview || payload.aula.preguntas || [];
+        renderQuestionEditor(preview);
+        showStep(2);
+        showAppToast(
+          payload.aula.importedFrom
+            ? `Se importó “${payload.aula.importedFrom}”. Completá opciones/correctas y guardá.`
+            : 'Actividad importada. Revisá las preguntas y guardá para publicar el link.',
+          'ok',
+        );
+        return;
+      }
+      renderShare(payload.aula);
+      showAppToast('Actividad cargada. Al cerrar la clase se auto-corrige.', 'ok');
+    } catch (error) {
+      showAppToast(error instanceof Error ? error.message : 'Error al cargar.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  root.querySelector('[data-clase-guardar-actividad]')?.addEventListener('click', async () => {
+    if (!currentAula?.id) {
+      showAppToast('Primero creá la clase.', 'warning');
+      return;
+    }
+    const preguntas = readQuestions();
+    if (!preguntas.length) {
+      showAppToast('Agregá al menos una pregunta digital.', 'warning');
+      return;
+    }
+    const modo = new FormData(form).get('modo');
+    if (modo === 'multiple_choice' && preguntas.some((q) => !String(q.tipo).startsWith('mc_'))) {
+      showAppToast('En opción múltiple solo se permiten preguntas MC.', 'warning');
+      return;
+    }
+    for (const q of preguntas) {
+      if (String(q.tipo).startsWith('mc_') && (q.opciones.length < 2 || !q.correctas.length)) {
+        showAppToast('Cada MC necesita opciones y al menos una correcta.', 'warning');
+        return;
+      }
+    }
+    const btn = root.querySelector('[data-clase-guardar-actividad]');
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/api/aula-temporal/${currentAula.id}/actividad`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ preguntas, publicar: true }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'No se pudo guardar la actividad.');
+      renderShare(payload.aula);
+      showAppToast('Actividad lista. Compartí el link con el curso.', 'ok');
+    } catch (error) {
+      showAppToast(error instanceof Error ? error.message : 'Error al guardar.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  root.querySelector('[data-clase-copy]')?.addEventListener('click', async () => {
+    const url = root.querySelector('[data-clase-url]')?.textContent || '';
+    try {
+      await navigator.clipboard.writeText(url);
+      showAppToast('Link copiado.', 'ok');
+    } catch {
+      showAppToast('Copiá el link manualmente.', 'warning');
+    }
+  });
+
+  root.querySelector('[data-clase-refresh]')?.addEventListener('click', async () => {
+    if (!currentAula?.id) return;
+    const res = await fetch(`/api/aula-temporal/${currentAula.id}`, { credentials: 'same-origin' });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showAppToast(payload.error || 'No se pudieron cargar intentos.', 'error');
+      return;
+    }
+    renderShare(payload.aula);
+  });
+
+  root.querySelector('[data-clase-close]')?.addEventListener('click', async () => {
+    if (!currentAula?.id) return;
+    if (!confirm('¿Cerrar la clase? Se auto-corregirán todas las entregas (MC + IA) y se cargarán las notas.')) return;
+    const closeBtn = root.querySelector('[data-clase-close]');
+    if (closeBtn) {
+      closeBtn.disabled = true;
+      closeBtn.textContent = 'Corrigiendo…';
+    }
+    const res = await fetch(`/api/aula-temporal/${currentAula.id}/cerrar`, { method: 'POST', credentials: 'same-origin' });
+    const payload = await res.json().catch(() => ({}));
+    if (closeBtn) {
+      closeBtn.disabled = false;
+      closeBtn.textContent = 'Cerrar clase y corregir';
+    }
+    if (!res.ok) {
+      showAppToast(payload.error || 'No se pudo cerrar.', 'error');
+      return;
+    }
+    showAppToast('Clase cerrada. Entregas corregidas automáticamente.', 'ok');
+    renderShare(payload.aula);
+  });
+
+  root.querySelector('[data-clase-nueva]')?.addEventListener('click', () => {
+    currentAula = null;
+    form.reset();
+    applyModoPreset();
+    syncContextSelects();
+    showStep(1);
+  });
 }
 
 function activityTipoLabel(item) {
@@ -4577,24 +5507,54 @@ async function renderActivitiesList(list, onLoaded) {
   if (!list) return [];
   const response = await fetch('/api/actividades');
   if (!response.ok) {
-    replaceContent(list, emptyState('Sin actividades', 'Todavia no se pudieron cargar actividades.'));
+    replaceContent(list, emptyState('Sin actividades', 'Todavía no se pudieron cargar actividades.'));
     if (onLoaded) onLoaded([]);
     return [];
   }
   const data = await response.json();
-  const actividades = Array.isArray(data.actividades) ? data.actividades : [];
-  if (onLoaded) onLoaded(actividades);
+  const allActividades = Array.isArray(data.actividades) ? data.actividades : [];
+  knownHasActivity = allActividades.length > 0;
+  if (knownHasActivity) sessionStorage.setItem('aula_clara_has_activity', '1');
+  if (onLoaded) onLoaded(allActividades);
 
-  if (!actividades.length) {
-    replaceContent(list, emptyState('Sin actividades', 'Creá una evaluación o TP para empezar.', {
-      ctaLabel: 'Crear actividad',
+  const showAll = Boolean(document.querySelector('[data-activity-list-all]')?.checked);
+  const ctx = getTeachingContext();
+  let actividades = allActividades;
+  if (!showAll && ctx.cursoId) {
+    actividades = allActividades.filter((item) =>
+      item.curso_id === ctx.cursoId && (!ctx.materiaId || item.materia_id === ctx.materiaId)
+    );
+  }
+
+  if (!allActividades.length) {
+    replaceContent(list, emptyState('Sin actividades', 'Creá la primera evaluación o TP en este panel.', {
+      ctaLabel: 'Empezar a crear',
       onClick: () => {
         showSpaView('actividades');
-        window.dispatchEvent(new CustomEvent('aula-clara:open-activity-flow', { detail: { tab: 'contenido' } }));
-        root.querySelector('[name="titulo"]')?.focus();
+        openActivityFlowTab('contenido');
+        document.querySelector('[data-activities] [name="titulo"]')?.focus();
       },
     }));
-    return actividades;
+    void updateActivityFlowStepper('contenido');
+    return allActividades;
+  }
+
+  if (!actividades.length) {
+    replaceContent(list, emptyState(
+      'Sin actividades en este curso',
+      showAll
+        ? 'No hay actividades cargadas.'
+        : 'No hay actividades para el Curso actual. Creá una o marcá “Ver todas”.',
+      {
+        ctaLabel: 'Crear actividad',
+        onClick: () => {
+          openActivityFlowTab('contenido');
+          document.querySelector('[data-activities] [name="titulo"]')?.focus();
+        },
+      },
+    ));
+    void updateActivityFlowStepper('contenido');
+    return allActividades;
   }
 
   replaceContent(list, ...actividades.map((item) =>
@@ -4614,7 +5574,10 @@ async function renderActivitiesList(list, onLoaded) {
     ),
   ));
 
-  return actividades;
+  void updateActivityFlowStepper(
+    document.querySelector('[data-activity-flow-tab].is-active')?.getAttribute('data-activity-flow-tab') || 'contenido',
+  );
+  return allActividades;
 }
 
 function formatSyncStatus(counts = {}) {
@@ -4766,21 +5729,22 @@ async function bootstrap() {
   initOnboarding({
     getUserId: () => currentUser?.id || null,
     hasCourse: () => visibleCourses().length > 0,
+    hasSubject: () => activeSubjects().length > 0,
     hasStudents: () => studentsInCiclo().length > 0,
-    hasAttendance: () => read(KEYS.attendance).length > 0,
+    hasTeachingContext: () => teachingContextIsReady(),
+    hasActivity: () => knownHasActivity || sessionStorage.getItem('aula_clara_has_activity') === '1',
+    openTeachingContextPicker,
     onPanelRefresh,
   });
   initProductTour({
     getUserId: () => currentUser?.id || null,
-    isSetupComplete: () => visibleCourses().length > 0
-      && studentsInCiclo().length > 0
-      && read(KEYS.attendance).length > 0,
   });
   initGuestSession({
     userId: currentUser?.id || null,
     isGuest: Boolean(currentUser?.isGuest),
   });
   initTeacherContext();
+  initScheduleSuggestion();
   initGlobalTeachingContext();
   initStudents();
   initAttendance();
@@ -4843,8 +5807,7 @@ async function bootstrap() {
       if (importType === 'alumnos') {
         const root = document.querySelector('[data-students]');
         const list = root?.querySelector('[data-student-list]');
-        const form = root?.querySelector('[data-student-form]');
-        if (list && form) renderStudents(list, form);
+        if (list) renderStudents(list);
         const total = Number(result?.imported || 0) + Number(result?.updated || 0);
         const visible = studentsInCiclo().length;
         if (total > 0 && visible > 0) {

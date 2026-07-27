@@ -27,13 +27,23 @@ export async function prepareActivitySource(
   let summaryModel: string | undefined;
 
   if (text.length > ACTIVITY_AI_LIMITS.summarizeThresholdChars) {
-    const summary = await summarizeActivitySource(text, context);
-    text = summary.text;
-    summarized = true;
-    summaryModel = summary.model;
-    messages.push(
-      `El material tenía ${formatActivityChars(extraction.extractedChars)} caracteres y se resumió a ${formatActivityChars(summary.outputChars)} antes de generar la actividad.`,
-    );
+    try {
+      const summary = await summarizeActivitySource(text, context);
+      text = summary.text;
+      summarized = true;
+      summaryModel = summary.model;
+      messages.push(
+        `El material tenía ${formatActivityChars(extraction.extractedChars)} caracteres y se resumió a ${formatActivityChars(summary.outputChars)} antes de generar la actividad.`,
+      );
+    } catch (error) {
+      // Plan gratuito Groq: si el resumen excede TPM, usamos un recorte local.
+      text = text.slice(0, ACTIVITY_AI_LIMITS.maxInputChars);
+      inputTruncated = true;
+      const detail = error instanceof Error ? error.message : 'error de resumen';
+      messages.push(
+        `No se pudo resumir con IA (${detail.slice(0, 80)}). Se usaron los primeros ${formatActivityChars(ACTIVITY_AI_LIMITS.maxInputChars)} caracteres del material.`,
+      );
+    }
   }
 
   if (text.length > ACTIVITY_AI_LIMITS.maxInputChars) {

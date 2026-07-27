@@ -3,6 +3,7 @@ import { ACTIVITY_AI_LIMITS } from '../lib/activity-ai-limits';
 import { db, type User } from './db';
 import { extractTextFromStoredFiles } from './document-extractor';
 import { readTrabajoFile } from './file-storage';
+import { requireGroqApiKey } from './groq-env';
 import { groqQueue } from './groq-queue';
 import { summarizeActivitySource } from './groq-text-summarizer';
 
@@ -41,14 +42,14 @@ export class GradeDeliveryError extends Error {
 }
 
 function getApiKey() {
-  const key = import.meta.env.GROQ_API_KEY || process.env.GROQ_API_KEY;
-  if (!key) {
+  try {
+    return requireGroqApiKey();
+  } catch (error) {
     throw new GradeDeliveryError(
-      'GROQ_API_KEY no está configurada. Agregala en el archivo .env del servidor.',
+      error instanceof Error ? error.message : 'GROQ_API_KEY no está configurada.',
       503,
     );
   }
-  return key;
 }
 
 function extensionOf(filename: string) {

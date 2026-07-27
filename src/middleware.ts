@@ -7,8 +7,20 @@ const publicApiRoutes = new Set([
   '/api/auth/logout',
   '/api/auth/register',
   '/api/auth/guest',
+  '/api/aula-temporal/join',
 ]);
-const publicPageRoutes = new Set(['/login', '/register']);
+
+function isPublicApi(path: string) {
+  if (publicApiRoutes.has(path)) return true;
+  if (path.startsWith('/api/aula-temporal/public/')) return true;
+  if (path.startsWith('/api/aula-temporal/intento/')) return true;
+  return false;
+}
+
+function isPublicPage(path: string) {
+  return path === '/login' || path === '/register' || path.startsWith('/s/');
+}
+
 const protectedPagePrefixes = ['/asistencia', '/notas', '/actividades', '/cursos', '/materias', '/registro', '/admin'];
 startBackupScheduler();
 
@@ -18,7 +30,7 @@ export const onRequest = defineMiddleware((context, next) => {
   context.locals.user = user;
 
   const path = context.url.pathname;
-  const isProtectedApi = path.startsWith('/api/') && !publicApiRoutes.has(path);
+  const isProtectedApi = path.startsWith('/api/') && !isPublicApi(path);
   const isProtectedPage = path === '/' || protectedPagePrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
   const isAdminArea = path.startsWith('/admin') || path.startsWith('/api/admin/');
 
@@ -26,11 +38,11 @@ export const onRequest = defineMiddleware((context, next) => {
     return Response.json({ error: 'No autenticado' }, { status: 401 });
   }
 
-  if (!user && isProtectedPage && !publicPageRoutes.has(path)) {
+  if (!user && isProtectedPage && !isPublicPage(path)) {
     return context.redirect('/login');
   }
 
-  if (user && publicPageRoutes.has(path)) {
+  if (user && (path === '/login' || path === '/register')) {
     return context.redirect('/');
   }
 

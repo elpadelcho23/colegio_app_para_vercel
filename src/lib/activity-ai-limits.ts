@@ -3,14 +3,19 @@ export const ACTIVITY_AI_LIMITS = {
   maxFileBytes: 8 * 1024 * 1024,
   maxFileMb: 8,
   /** Máximo de caracteres que se envían al modelo principal (70B). */
-  maxInputChars: 35_000,
+  maxInputChars: 18_000,
   /** Máximo de caracteres leídos al extraer archivos (puede superar lo enviado a la IA). */
   maxExtractChars: 120_000,
   /** Por encima de este umbral se resume con el modelo liviano. */
-  summarizeThresholdChars: 12_000,
-  /** Máximo enviado al modelo liviano para resumir. */
-  summarizerInputChars: 28_000,
-  approxPagesAtInputCap: '10-15',
+  summarizeThresholdChars: 8_000,
+  /**
+   * Máximo enviado al modelo liviano para resumir.
+   * El plan gratuito de Groq (~6000 TPM en 8B) no tolera prompts muy largos.
+   */
+  summarizerInputChars: 9_000,
+  /** Tokens de salida del resumen (dejar margen dentro del TPM). */
+  summarizerMaxTokens: 1_200,
+  approxPagesAtInputCap: '6-10',
   groqModelHeavy: 'llama-3.3-70b-versatile',
   groqModelLight: 'llama-3.1-8b-instant',
 } as const;

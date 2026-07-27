@@ -6,22 +6,17 @@ const TOUR_STEPS = [
     id: 'asistencia',
     view: 'asistencia',
     title: 'Asistencia',
-    body: 'Acá pasás lista del curso que elegiste arriba. Marcá presente o ausente y guardá.',
+    body: 'Acá pasás lista del curso que elegiste arriba. Marcá presente o ausente y guardá. Más abajo está el historial.',
     target: '[data-spa-nav="asistencia"]',
   },
   {
     id: 'notas',
     view: 'notas',
     title: 'Notas',
-    body: 'Acá cargás calificaciones del mismo curso. Podés volver al Panel cuando quieras.',
+    body: 'Acá cargás calificaciones del mismo curso. El detalle por período queda en la misma pantalla.',
     target: '[data-spa-nav="notas"]',
   },
 ];
-
-function tourStatus(userId) {
-  if (!userId) return 'done';
-  return localStorage.getItem(productTourKey(userId)) || '';
-}
 
 function setTourStatus(userId, value) {
   if (!userId) return;
@@ -29,49 +24,22 @@ function setTourStatus(userId, value) {
 }
 
 /**
- * Tour opcional de ~60s: Asistencia y Notas.
- * Se ofrece una sola vez cuando el setup inicial está completo.
+ * Tour opcional (Asistencia y Notas).
+ * Solo se inicia desde el menú de ayuda "?" — no se ofrece solo.
  */
-export function initProductTour({ getUserId, isSetupComplete }) {
-  const invite = document.querySelector('[data-product-tour-invite]');
-  if (!invite) return { maybeOfferTour: () => {} };
+export function initProductTour({ getUserId }) {
+  const startButtons = [...document.querySelectorAll('[data-product-tour-start]')];
+  if (!startButtons.length) return { startTour: () => {} };
 
-  const startBtn = invite.querySelector('[data-product-tour-start]');
-  const skipBtn = invite.querySelector('[data-product-tour-skip]');
   const overlay = ensureTourOverlay();
-
-  const hideInvite = () => {
-    invite.classList.add('is-hidden');
-    invite.setAttribute('hidden', '');
-  };
-
-  const showInvite = () => {
-    invite.classList.remove('is-hidden');
-    invite.removeAttribute('hidden');
-  };
-
-  const maybeOfferTour = () => {
-    const userId = getUserId();
-    if (!userId || !isSetupComplete()) {
-      hideInvite();
-      return;
-    }
-    const status = tourStatus(userId);
-    if (status === 'done' || status === 'skipped') {
-      hideInvite();
-      return;
-    }
-    showInvite();
-  };
+  let stepIndex = 0;
 
   const finishTour = (status) => {
     setTourStatus(getUserId(), status);
-    hideInvite();
     overlay.close();
     showSpaView('panel');
+    document.querySelector('[data-help-menu]')?.removeAttribute('open');
   };
-
-  let stepIndex = 0;
 
   const showStep = (index) => {
     stepIndex = index;
@@ -97,21 +65,19 @@ export function initProductTour({ getUserId, isSetupComplete }) {
     });
   };
 
-  startBtn?.addEventListener('click', () => {
-    hideInvite();
+  const startTour = () => {
+    document.querySelector('[data-help-menu]')?.removeAttribute('open');
     showStep(0);
+  };
+
+  startButtons.forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      startTour();
+    });
   });
 
-  skipBtn?.addEventListener('click', () => {
-    finishTour('skipped');
-  });
-
-  window.addEventListener('aula-clara:local-data-changed', maybeOfferTour);
-  window.addEventListener('aula-clara:data-hydrated', maybeOfferTour);
-
-  maybeOfferTour();
-
-  return { maybeOfferTour };
+  return { startTour };
 }
 
 function ensureTourOverlay() {
@@ -146,6 +112,7 @@ function ensureTourOverlay() {
 
   nextBtn?.addEventListener('click', () => onNext?.());
   skipBtn?.addEventListener('click', () => onSkip?.());
+  root.querySelector('[data-tour-backdrop]')?.addEventListener('click', () => onSkip?.());
 
   return {
     open({ title, body, stepLabel, onNext: next, onSkip: skip, isLast }) {

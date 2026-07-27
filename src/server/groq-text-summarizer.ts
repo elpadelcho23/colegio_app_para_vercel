@@ -1,15 +1,12 @@
 import { ACTIVITY_AI_LIMITS } from '../lib/activity-ai-limits';
 import { groqQueue } from './groq-queue';
+import { requireGroqApiKey } from './groq-env';
 
 const MODEL = ACTIVITY_AI_LIMITS.groqModelLight;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 function getApiKey() {
-  const key = import.meta.env.GROQ_API_KEY || process.env.GROQ_API_KEY;
-  if (!key) {
-    throw new Error('GROQ_API_KEY no está configurada. Agregala en el archivo .env del servidor.');
-  }
-  return key;
+  return requireGroqApiKey();
 }
 
 export async function summarizeActivitySource(rawText: string, context?: { materia?: string; curso?: string }) {
@@ -40,7 +37,7 @@ export async function summarizeActivitySource(rawText: string, context?: { mater
     body: JSON.stringify({
       model: MODEL,
       temperature: 0.2,
-      max_tokens: 2800,
+      max_tokens: ACTIVITY_AI_LIMITS.summarizerMaxTokens,
       messages: [
         {
           role: 'system',

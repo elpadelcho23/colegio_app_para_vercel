@@ -2,18 +2,27 @@ import { onboardingDismissedKey } from '../lib/client-storage-keys.ts';
 import { registerSpaViewRefresh } from './spa-router.ts';
 
 /**
- * Checklist de 3 pasos en el panel docente.
- * Paso 1: al menos un curso en el ciclo lectivo activo.
- * Paso 2: al menos un alumno activo.
- * Paso 3: al menos un registro de asistencia guardado.
+ * Checklist de estado real en el panel docente.
+ * Cada paso se completa según datos locales / contexto.
  */
 const STEPS = [
   { id: 1, label: 'Creá un curso', nav: 'cursos', cta: 'Crear curso' },
-  { id: 2, label: 'Cargá alumnos', nav: 'registro', cta: 'Cargar alumnos' },
-  { id: 3, label: 'Tomá asistencia', nav: 'asistencia', cta: 'Tomar asistencia' },
+  { id: 2, label: 'Creá o asigná una materia', nav: 'cursos', cta: 'Ver cursos y materias' },
+  { id: 3, label: 'Cargá alumnos', nav: 'registro', cta: 'Cargar alumnos' },
+  { id: 4, label: 'Elegí el curso actual', nav: 'panel', cta: 'Elegir curso actual', openContext: true },
+  { id: 5, label: 'Creá la primera actividad', nav: 'actividades', cta: 'Ir a Actividades' },
 ];
 
-export function initOnboarding({ getUserId, hasCourse, hasStudents, hasAttendance, onPanelRefresh }) {
+export function initOnboarding({
+  getUserId,
+  hasCourse,
+  hasSubject,
+  hasStudents,
+  hasTeachingContext,
+  hasActivity,
+  openTeachingContextPicker,
+  onPanelRefresh,
+}) {
   const root = document.querySelector('[data-onboarding]');
   const hero = document.querySelector('[data-panel-hero]');
   const resume = document.querySelector('[data-onboarding-resume]');
@@ -24,16 +33,26 @@ export function initOnboarding({ getUserId, hasCourse, hasStudents, hasAttendanc
   const cta = root.querySelector('[data-onboarding-cta]');
   const dismiss = root.querySelector('[data-onboarding-dismiss]');
 
+  function getCompletedFlags() {
+    return [
+      Boolean(hasCourse?.()),
+      Boolean(hasSubject?.()),
+      Boolean(hasStudents?.()),
+      Boolean(hasTeachingContext?.()),
+      Boolean(hasActivity?.()),
+    ];
+  }
+
   function getProgress() {
-    const completed = [hasCourse(), hasStudents(), hasAttendance()];
+    const completed = getCompletedFlags();
     const complete = completed.every(Boolean);
-    const currentStep = completed[0]
-      ? completed[1]
-        ? completed[2]
-          ? 4
-          : 3
-        : 2
-      : 1;
+    let currentStep = STEPS.length + 1;
+    for (let i = 0; i < completed.length; i += 1) {
+      if (!completed[i]) {
+        currentStep = i + 1;
+        break;
+      }
+    }
     return { completed, complete, currentStep };
   }
 
@@ -99,7 +118,13 @@ export function initOnboarding({ getUserId, hasCourse, hasStudents, hasAttendanc
     const step = STEPS.find((item) => item.id === currentStep);
     if (!step) return;
     cta.textContent = step.cta;
-    cta.setAttribute('data-spa-nav', step.nav);
+    if (step.openContext) {
+      cta.removeAttribute('data-spa-nav');
+      cta.dataset.onboardingOpenContext = '1';
+    } else {
+      delete cta.dataset.onboardingOpenContext;
+      cta.setAttribute('data-spa-nav', step.nav);
+    }
   }
 
   function render() {
@@ -132,7 +157,7 @@ export function initOnboarding({ getUserId, hasCourse, hasStudents, hasAttendanc
     hideNode(resume);
 
     if (progressNode) {
-      progressNode.textContent = `Paso ${Math.min(currentStep, 3)} de 3`;
+      progressNode.textContent = `Paso ${Math.min(currentStep, STEPS.length)} de ${STEPS.length}`;
     }
     renderSteps(completed, currentStep);
     updateCta(currentStep);
@@ -148,9 +173,16 @@ export function initOnboarding({ getUserId, hasCourse, hasStudents, hasAttendanc
     render();
   });
 
+  cta?.addEventListener('click', (event) => {
+    if (cta.dataset.onboardingOpenContext !== '1') return;
+    event.preventDefault();
+    openTeachingContextPicker?.();
+  });
+
   onPanelRefresh(render);
   registerSpaViewRefresh('panel', render);
   window.addEventListener('aula-clara:local-data-changed', render);
+  window.addEventListener('aula-clara:teaching-context-changed', render);
 
   render();
 }
