@@ -1,5 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { getUserFromToken, SESSION_COOKIE } from './server/auth';
+import { GUEST_PASSPORT_COOKIE, rehydrateGuestFromPassport } from './server/guest-passport';
 import { startBackupScheduler } from './server/backup';
 
 const publicApiRoutes = new Set([
@@ -26,7 +27,10 @@ startBackupScheduler();
 
 export const onRequest = defineMiddleware((context, next) => {
   const token = context.cookies.get(SESSION_COOKIE)?.value;
-  const user = getUserFromToken(token);
+  let user = getUserFromToken(token);
+  if (!user && token) {
+    user = rehydrateGuestFromPassport(token, context.cookies.get(GUEST_PASSPORT_COOKIE)?.value);
+  }
   context.locals.user = user;
 
   const path = context.url.pathname;

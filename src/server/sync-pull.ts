@@ -144,7 +144,10 @@ export function pullClientData(user: User) {
   }>;
 
   return {
-    courses,
+    courses: courses.map((course) => ({
+      ...course,
+      subjectIds: subjects.map((subject) => subject.id),
+    })),
     schools: schools.map((school) => ({
       id: school.id,
       nombre: school.nombre,

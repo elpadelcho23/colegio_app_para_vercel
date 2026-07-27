@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { db, type User } from './db';
+import { db, ensureTeachingContextRows, type User } from './db';
 
 export const INTENTO_COOKIE = 'aula_clara_intento';
 
@@ -433,15 +433,23 @@ export function createClaseVirtual(input: {
     throw new Error('Completá escuela, turno, curso, materia y título de la clase.');
   }
 
+  ensureTeachingContextRows({
+    user: input.user,
+    cursoId,
+    materiaId,
+    colegio,
+    turno,
+  });
+
   const curso = db.prepare(`
     SELECT id, tenant_id FROM cursos WHERE id = ? AND tenant_id = ?
   `).get(cursoId, input.user.tenant_id) as { id: string; tenant_id: string } | undefined;
-  if (!curso) throw new Error('Curso no encontrado.');
+  if (!curso) throw new Error('Curso no encontrado. Elegí un curso en “Curso actual” o crealo en Cursos.');
 
   const materia = db.prepare(`
     SELECT id FROM materias WHERE id = ? AND tenant_id = ?
   `).get(materiaId, input.user.tenant_id) as { id: string } | undefined;
-  if (!materia) throw new Error('Materia no encontrada.');
+  if (!materia) throw new Error('Materia no encontrada. Elegí una materia en “Curso actual”.');
 
   const actividadId = `act-${randomUUID()}`;
   const now = new Date().toISOString();

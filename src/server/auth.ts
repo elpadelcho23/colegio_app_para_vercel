@@ -1,9 +1,14 @@
 import bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { CLIENT_DATA_STORAGE, PULL_FIELD_BY_KEY } from '../lib/client-storage-keys';
-import { db, type User } from './db';
+import { db, getUserById, type User } from './db';
+import {
+  createGuestPassportCookieValue,
+  GUEST_PASSPORT_COOKIE,
+} from './guest-passport';
 
 export const SESSION_COOKIE = 'aula_clara_session';
+export { GUEST_PASSPORT_COOKIE };
 const SESSION_DAYS = 7;
 /** TTL de seguridad en SQLite para invitados (cookie de navegador sin expires). */
 const GUEST_SESSION_HOURS = 12;
@@ -204,9 +209,26 @@ function respondWithSessionHtml(
 
   cookies.set(SESSION_COOKIE, session.token, cookieProps);
 
+  if (options.sessionOnly) {
+    const user = getUserById(userId);
+    if (user?.is_guest) {
+      cookies.set(
+        GUEST_PASSPORT_COOKIE,
+        createGuestPassportCookieValue({
+          user,
+          sessionToken: session.token,
+          expiresAt: session.expiresAt,
+        }),
+        cookieProps,
+      );
+    }
+  } else {
+    cookies.delete(GUEST_PASSPORT_COOKIE, cookieOptions(url));
+  }
+
   return new Response(html, {
     status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/html; charset=utf-8' },
   });
 }
 
@@ -246,11 +268,12 @@ export function respondWithGuestSession(
   url: URL,
   redirectTo = '/',
 ) {
+  // mode "login" → hidrata desde /api/sync/pull (incluye demo del servidor)
   return respondWithSessionHtml(
     userId,
     cookies,
     url,
-    buildFreshSessionHtml(userId, redirectTo),
+    buildLoginSessionHtml(userId, redirectTo),
     { sessionOnly: true },
   );
 }

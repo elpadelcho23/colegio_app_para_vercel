@@ -1,13 +1,24 @@
 import type { APIRoute } from 'astro';
-import { cookieOptions, deleteSession, getUserFromToken, SESSION_COOKIE } from '../../../server/auth';
+import {
+  cookieOptions,
+  deleteSession,
+  getUserFromToken,
+  GUEST_PASSPORT_COOKIE,
+  SESSION_COOKIE,
+} from '../../../server/auth';
 import { purgeGuestAccount, purgeExpiredGuestAccounts } from '../../../server/db';
+import { rehydrateGuestFromPassport } from '../../../server/guest-passport';
 
 export const POST: APIRoute = ({ cookies, url, redirect, request }) => {
   const token = cookies.get(SESSION_COOKIE)?.value;
-  const user = getUserFromToken(token);
+  let user = getUserFromToken(token);
+  if (!user && token) {
+    user = rehydrateGuestFromPassport(token, cookies.get(GUEST_PASSPORT_COOKIE)?.value);
+  }
 
   deleteSession(token);
   cookies.delete(SESSION_COOKIE, cookieOptions(url));
+  cookies.delete(GUEST_PASSPORT_COOKIE, cookieOptions(url));
 
   if (user?.is_guest) {
     try {

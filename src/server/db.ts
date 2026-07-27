@@ -62,7 +62,7 @@ export function createGuestUser(): User {
     VALUES (?, ?, ?, ?, ?, 'docente', 1)
   `).run(id, tenantId, 'Invitado', email, bcrypt.hashSync(password, 10));
 
-  return {
+  const user: User = {
     id,
     tenant_id: tenantId,
     nombre: 'Invitado',
@@ -70,6 +70,208 @@ export function createGuestUser(): User {
     rol: 'docente',
     is_guest: true,
   };
+
+  seedGuestDemoData(user);
+  return user;
+}
+
+/**
+ * Datos de prueba para que el invitado pueda usar panel, asistencia, notas y clase virtual
+ * sin tener que importar Excel primero. IDs únicos por usuario (PK global).
+ */
+export function seedGuestDemoData(user: User) {
+  if (!user?.is_guest) return;
+
+  const tenantId = user.tenant_id;
+  const prefix = user.id;
+  const now = new Date().toISOString();
+
+  const schoolId = `${prefix}-escuela-1`;
+  const cursoManana = `${prefix}-curso-6-1-manana`;
+  const cursoTarde = `${prefix}-curso-5-2-tarde`;
+  const matMate = `${prefix}-matematica`;
+  const matProg = `${prefix}-programacion`;
+  const matLit = `${prefix}-literatura`;
+  const al1 = `${prefix}-al-1`;
+  const al2 = `${prefix}-al-2`;
+  const al3 = `${prefix}-al-3`;
+
+  const existing = db.prepare('SELECT 1 AS ok FROM cursos WHERE tenant_id = ? LIMIT 1').get(tenantId) as
+    | { ok: number }
+    | undefined;
+  if (existing) return;
+
+  const tx = db.transaction(() => {
+    db.prepare('INSERT OR IGNORE INTO escuelas (id, tenant_id, nombre) VALUES (?, ?, ?)').run(
+      schoolId,
+      tenantId,
+      'Escuela Tecnica 1',
+    );
+
+    const insertCourse = db.prepare(`
+      INSERT OR IGNORE INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertCourse.run(cursoManana, tenantId, 'Escuela Tecnica 1', '6to 1ra', 'Manana', 2026, now);
+    insertCourse.run(cursoTarde, tenantId, 'Escuela Tecnica 1', '5to 2da', 'Tarde', 2026, now);
+
+    const insertSubject = db.prepare(`
+      INSERT OR IGNORE INTO materias (id, tenant_id, nombre, activo, updated_at)
+      VALUES (?, ?, ?, 1, ?)
+    `);
+    insertSubject.run(matMate, tenantId, 'Matematica', now);
+    insertSubject.run(matProg, tenantId, 'Programacion', now);
+    insertSubject.run(matLit, tenantId, 'Literatura', now);
+
+    const insertStudent = db.prepare(`
+      INSERT OR IGNORE INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertStudent.run(al1, tenantId, cursoManana, 'Martina Ruiz', '44111222', 'Laura Ruiz', now);
+    insertStudent.run(al2, tenantId, cursoManana, 'Tomas Pereyra', '45222333', 'Ruben Pereyra', now);
+    insertStudent.run(al3, tenantId, cursoTarde, 'Sofia Molina', '46333444', 'Ana Molina', now);
+
+    db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)').run(
+      tenantId,
+      user.id,
+      schoolId,
+    );
+    db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(
+      tenantId,
+      user.id,
+      cursoManana,
+    );
+    db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(
+      tenantId,
+      user.id,
+      cursoTarde,
+    );
+    for (const materiaId of [matMate, matProg, matLit]) {
+      db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)').run(
+        tenantId,
+        user.id,
+        materiaId,
+      );
+    }
+
+    const assignStudentSubject = db.prepare(
+      'INSERT OR IGNORE INTO alumno_materias (tenant_id, alumno_id, materia_id) VALUES (?, ?, ?)',
+    );
+    assignStudentSubject.run(tenantId, al1, matMate);
+    assignStudentSubject.run(tenantId, al1, matProg);
+    assignStudentSubject.run(tenantId, al2, matMate);
+    assignStudentSubject.run(tenantId, al2, matProg);
+    assignStudentSubject.run(tenantId, al3, matLit);
+
+    const insertGrade = db.prepare(`
+      INSERT OR IGNORE INTO notas (
+        id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion, valor, peso, fecha, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertGrade.run(
+      `${prefix}-nota-1`,
+      tenantId,
+      user.id,
+      al1,
+      matProg,
+      'TP HTML',
+      'TP',
+      8,
+      60,
+      now.slice(0, 10),
+      now,
+    );
+    insertGrade.run(
+      `${prefix}-nota-2`,
+      tenantId,
+      user.id,
+      al2,
+      matProg,
+      'Integrador',
+      'Integrador',
+      5,
+      100,
+      now.slice(0, 10),
+      now,
+    );
+
+    const insertAttendance = db.prepare(`
+      INSERT OR IGNORE INTO asistencias (
+        id, tenant_id, docente_id, alumno_id, materia_id, fecha, estado, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertAttendance.run(`${prefix}-asis-1`, tenantId, user.id, al2, matProg, '2026-03-10', 'ausente', now);
+    insertAttendance.run(`${prefix}-asis-2`, tenantId, user.id, al2, matProg, '2026-03-12', 'ausente', now);
+    insertAttendance.run(`${prefix}-asis-3`, tenantId, user.id, al1, matProg, '2026-03-10', 'presente', now);
+  });
+
+  tx();
+}
+
+/** Asegura curso/materia/vínculos del docente (p. ej. datos solo en localStorage del invitado). */
+export function ensureTeachingContextRows(input: {
+  user: User;
+  cursoId: string;
+  materiaId: string;
+  colegio: string;
+  turno: string;
+  cursoNombre?: string;
+  materiaNombre?: string;
+}) {
+  const tenantId = input.user.tenant_id;
+  const now = new Date().toISOString();
+  const cursoId = String(input.cursoId || '').trim();
+  const materiaId = String(input.materiaId || '').trim();
+  if (!cursoId || !materiaId) return;
+
+  const tx = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        escuela = excluded.escuela,
+        nombre = excluded.nombre,
+        turno = excluded.turno,
+        updated_at = excluded.updated_at
+      WHERE cursos.tenant_id = excluded.tenant_id
+    `).run(
+      cursoId,
+      tenantId,
+      String(input.colegio || 'Escuela').trim() || 'Escuela',
+      String(input.cursoNombre || cursoId).trim() || cursoId,
+      String(input.turno || 'Manana').trim() || 'Manana',
+      2026,
+      now,
+    );
+
+    db.prepare(`
+      INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
+      VALUES (?, ?, ?, 1, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        nombre = excluded.nombre,
+        activo = 1,
+        updated_at = excluded.updated_at
+      WHERE materias.tenant_id = excluded.tenant_id
+    `).run(
+      materiaId,
+      tenantId,
+      String(input.materiaNombre || materiaId).trim() || materiaId,
+      now,
+    );
+
+    db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(
+      tenantId,
+      input.user.id,
+      cursoId,
+    );
+    db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)').run(
+      tenantId,
+      input.user.id,
+      materiaId,
+    );
+  });
+
+  tx();
 }
 
 export function getUserById(userId: string): User | null {
