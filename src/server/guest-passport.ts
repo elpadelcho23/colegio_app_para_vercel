@@ -74,6 +74,18 @@ function verifyPassport(raw?: string): GuestPassportPayload | null {
   }
 }
 
+/** Lee el passport sin tocar la DB (útil en logout). */
+export function readGuestPassport(
+  sessionToken: string | undefined,
+  passportCookie: string | undefined,
+): GuestPassportPayload | null {
+  if (!sessionToken) return null;
+  const passport = verifyPassport(passportCookie);
+  if (!passport) return null;
+  if (passport.tokenHash !== hashToken(sessionToken)) return null;
+  return passport;
+}
+
 /**
  * En Vercel el SQLite de /tmp no se comparte entre instancias.
  * Si la cookie de sesión existe pero la fila no está en esta instancia,

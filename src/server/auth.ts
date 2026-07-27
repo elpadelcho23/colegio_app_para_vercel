@@ -20,7 +20,7 @@ export type SessionOptions = {
 
 export { CLIENT_DATA_STORAGE };
 
-function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: 'login' | 'register') {
+function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: 'login' | 'register' | 'guest') {
   const storageInit = JSON.stringify(
     Object.entries(CLIENT_DATA_STORAGE).map(([key, value]) => [key, value]),
   );
@@ -35,6 +35,21 @@ function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: '
 
   function scopedKey(key) {
     return key + ':' + userId;
+  }
+
+  function wipeStaleAulaClaraKeys() {
+    var keep = { aula_clara_theme: 1, aula_clara_offline_reset_v2: 1 };
+    var remove = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (!key || keep[key]) continue;
+      if (key.indexOf('aula_clara_') === 0 || key.indexOf(':guest-') !== -1) remove.push(key);
+    }
+    remove.forEach(function (key) { localStorage.removeItem(key); });
+    try {
+      ['aula_clara_recovery_draft','aula_clara_curriculum_context','aula_clara_ai_extra_prompt','aula_clara_has_activity']
+        .forEach(function (key) { sessionStorage.removeItem(key); });
+    } catch (e) {}
   }
 
   function removeLegacyKeys() {
@@ -72,7 +87,7 @@ function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: '
     return Object.keys(map).map(function (id) { return map[id]; });
   }
 
-  function applyServerData(data) {
+  function applyServerData(data, replace) {
     entries.forEach(function (pair) {
       var key = pair[0];
       var fallback = pair[1];
@@ -84,7 +99,9 @@ function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: '
       var localPayload = localRaw ? JSON.parse(localRaw) : JSON.parse(fallback);
       var payload;
 
-      if (key === 'aula_clara_dashboard_filters') {
+      if (replace) {
+        payload = serverPayload != null ? serverPayload : JSON.parse(fallback);
+      } else if (key === 'aula_clara_dashboard_filters') {
         payload = Object.assign({}, serverPayload, localPayload);
       } else if (Array.isArray(serverPayload)) {
         payload = mergeById(serverPayload, Array.isArray(localPayload) ? localPayload : []);
@@ -98,6 +115,25 @@ function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: '
 
   function finish() {
     window.location.replace(redirectTo);
+  }
+
+  if (mode === 'guest') {
+    wipeStaleAulaClaraKeys();
+    removeLegacyKeys();
+    fetch('/api/sync/pull', { credentials: 'same-origin' })
+      .then(function (response) {
+        return response.ok ? response.json() : null;
+      })
+      .then(function (data) {
+        if (data) applyServerData(data, true);
+        else initMissingEmpty();
+        finish();
+      })
+      .catch(function () {
+        initMissingEmpty();
+        finish();
+      });
+    return;
   }
 
   removeLegacyKeys();
@@ -140,7 +176,7 @@ function buildSessionBootstrapScript(userId: string, redirectTo: string, mode: '
     })
     .then(function (data) {
       if (data) {
-        applyServerData(data);
+        applyServerData(data, false);
       } else {
         initMissingEmpty();
       }
@@ -163,6 +199,20 @@ export function buildLoginSessionHtml(userId: string, redirectTo = '/') {
 </head>
 <body>
   <script>${buildSessionBootstrapScript(userId, redirectTo, 'login')}</script>
+</body>
+</html>`;
+}
+
+export function buildGuestSessionHtml(userId: string, redirectTo = '/') {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Preparando modo invitado...</title>
+</head>
+<body>
+  <script>${buildSessionBootstrapScript(userId, redirectTo, 'guest')}</script>
 </body>
 </html>`;
 }
@@ -268,12 +318,12 @@ export function respondWithGuestSession(
   url: URL,
   redirectTo = '/',
 ) {
-  // mode "login" → hidrata desde /api/sync/pull (incluye demo del servidor)
+  // Bootstrap dedicado: limpia restos y reemplaza con demo del servidor (sin merge).
   return respondWithSessionHtml(
     userId,
     cookies,
     url,
-    buildLoginSessionHtml(userId, redirectTo),
+    buildGuestSessionHtml(userId, redirectTo),
     { sessionOnly: true },
   );
 }

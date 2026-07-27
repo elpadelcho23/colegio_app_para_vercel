@@ -25,19 +25,20 @@ const registered = Astro.url.searchParams.get('registered');
         localStorage.getItem('aula_clara_theme') || 'light';
 
       (function () {
-        var keys = [
-          'aula_clara_students',
-          'aula_clara_courses',
-          'aula_clara_subjects',
-          'aula_clara_attendance',
-          'aula_clara_grades',
-          'aula_clara_dashboard_filters',
-          'aula_clara_teacher_context',
-          'aula_clara_calendar_alerts_dismissed',
-        ];
-        keys.forEach(function (key) {
-          localStorage.removeItem(key);
-        });
+        var keep = { aula_clara_theme: 1, aula_clara_offline_reset_v2: 1 };
+        var remove = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var key = localStorage.key(i);
+          if (!key || keep[key]) continue;
+          if (key.indexOf('aula_clara_') === 0 || key.indexOf(':guest-') !== -1) {
+            remove.push(key);
+          }
+        }
+        remove.forEach(function (key) { localStorage.removeItem(key); });
+        try {
+          ['aula_clara_recovery_draft','aula_clara_curriculum_context','aula_clara_ai_extra_prompt','aula_clara_has_activity']
+            .forEach(function (key) { sessionStorage.removeItem(key); });
+        } catch (e) {}
       })();
     </script>
   </head>

@@ -294,16 +294,71 @@ export function getUserById(userId: string): User | null {
 
 /**
  * Elimina usuario invitado + tenant (y datos asociados por CASCADE).
- * No-op si el usuario no existe o no es invitado.
+ * No-op si el usuario no existe o no es invitado (salvo que se pase tenantId del passport).
  */
-export function purgeGuestAccount(userId: string) {
+export function purgeGuestAccount(userId: string, tenantIdHint?: string) {
   const user = getUserById(userId);
-  if (!user?.is_guest) return false;
+  if (user && !user.is_guest) return false;
+
+  const tenantId = user?.tenant_id || tenantIdHint;
+  if (!tenantId && !user) return false;
 
   const purge = db.transaction(() => {
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
-    db.prepare('DELETE FROM usuarios WHERE id = ? AND is_guest = 1').run(userId);
-    db.prepare('DELETE FROM tenants WHERE id = ?').run(user.tenant_id);
+    // Borrar tablas hijas por si algún FK no hace CASCADE en migraciones viejas
+    if (tenantId) {
+      try {
+        db.prepare(`
+          DELETE FROM aula_intento_eventos
+          WHERE intento_id IN (SELECT id FROM aula_intentos WHERE tenant_id = ?)
+        `).run(tenantId);
+      } catch {
+        // ignore
+      }
+      try {
+        db.prepare('DELETE FROM aula_intentos WHERE tenant_id = ?').run(tenantId);
+      } catch {
+        // ignore
+      }
+      try {
+        db.prepare(`
+          DELETE FROM actividad_preguntas
+          WHERE actividad_id IN (SELECT id FROM actividades WHERE tenant_id = ?)
+        `).run(tenantId);
+      } catch {
+        // ignore
+      }
+      const tables = [
+        'aulas_temporales',
+        'trabajo_archivos',
+        'trabajo_entregas',
+        'actividades',
+        'calendario_eventos',
+        'notas',
+        'asistencias',
+        'alumno_materias',
+        'alumnos',
+        'docente_materias',
+        'docente_cursos',
+        'docente_escuelas',
+        'materias',
+        'cursos',
+        'escuelas',
+        'sync_log',
+        'notification_preferences',
+      ];
+      for (const table of tables) {
+        try {
+          db.prepare(`DELETE FROM ${table} WHERE tenant_id = ?`).run(tenantId);
+        } catch {
+          // tabla puede no existir en schemas viejos
+        }
+      }
+    }
+    db.prepare('DELETE FROM usuarios WHERE id = ?').run(userId);
+    if (tenantId) {
+      db.prepare('DELETE FROM tenants WHERE id = ?').run(tenantId);
+    }
   });
   purge();
   return true;

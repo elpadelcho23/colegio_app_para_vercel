@@ -143,11 +143,29 @@ export function pullClientData(user: User) {
     updatedAt: string;
   }>;
 
+  const subjectByStudent = new Map<string, string[]>();
+  for (const link of subjectLinks) {
+    const list = subjectByStudent.get(link.alumno_id) || [];
+    list.push(link.materia_id);
+    subjectByStudent.set(link.alumno_id, list);
+  }
+
   return {
-    courses: courses.map((course) => ({
-      ...course,
-      subjectIds: subjects.map((subject) => subject.id),
-    })),
+    courses: courses.map((course) => {
+      const ids = new Set<string>();
+      for (const student of students) {
+        if (student.cursoId !== course.id) continue;
+        for (const materiaId of subjectByStudent.get(student.id) || []) ids.add(materiaId);
+      }
+      // Fallback: si el curso aún no tiene alumnos con materias, ofrecer las del docente.
+      if (!ids.size) {
+        for (const subject of subjects) ids.add(subject.id);
+      }
+      return {
+        ...course,
+        subjectIds: [...ids],
+      };
+    }),
     schools: schools.map((school) => ({
       id: school.id,
       nombre: school.nombre,
@@ -165,9 +183,7 @@ export function pullClientData(user: User) {
       cursoId: student.cursoId,
       tutor: student.tutor || '',
       activo: student.activo !== 0,
-      subjectIds: subjectLinks
-        .filter((link) => link.alumno_id === student.id)
-        .map((link) => link.materia_id),
+      subjectIds: subjectByStudent.get(student.id) || [],
     })),
     attendance,
     grades,
