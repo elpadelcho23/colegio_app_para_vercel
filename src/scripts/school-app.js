@@ -3,7 +3,7 @@ import { initProductTour } from './product-tour.js';
 import { initGuestSession } from './guest-session.js';
 import { initSyncUi } from './sync-ui.js';
 import { initToolsView, navigateToToolsSection, initSimpleExcelImport } from './tools-ui.js';
-import { countPendingOperations, getOperationStatusCounts, queueOfflineOperation, resetOfflineDatabaseOnce, saveAttendanceOffline } from './offline-db.ts';
+import { countPendingOperations, getOperationStatusCounts, getPendingOperations, queueOfflineOperation, resetOfflineDatabaseOnce, saveAttendanceOffline } from './offline-db.ts';
 import { hydrateLocalStorageFromServer, startAutoSync, syncPendingOperations } from './sync-client.ts';
 import { initMobileNav, openMenu, closeMenu } from './ui-nav.js';
 import { initSpaRouter, registerSpaViewRefresh, showSpaView } from './spa-router.ts';
@@ -1826,7 +1826,10 @@ function initAttendance() {
       showAppToast('Asistencias guardadas.', 'ok');
     } catch (error) {
       console.error('[aula-clara] attendance save failed', error);
-      showAppToast('No se pudieron guardar las asistencias. Intentá de nuevo.', 'error');
+      showAppToast(
+        error instanceof Error ? error.message : 'No se pudieron guardar las asistencias. Intentá de nuevo.',
+        'error',
+      );
     } finally {
       renderAttendance();
     }
@@ -1925,6 +1928,7 @@ async function commitAttendanceDraft(draftAttendance, context) {
 
   if (!dirtyEntries.length) return;
 
+  const queuedOpIds = [];
   for (const entry of dirtyEntries) {
     records = records.filter((item) => !(
       item.studentId === entry.studentId &&
@@ -1941,17 +1945,30 @@ async function commitAttendanceDraft(draftAttendance, context) {
       estado: entry.state,
       updatedAt,
     });
-    await saveAttendanceOffline({
+    const { operation } = await saveAttendanceOffline({
       docenteId: currentUser.id,
       studentId: entry.studentId,
       subjectId: entry.subjectId,
       fecha: entry.date,
       estado: entry.state,
     });
+    queuedOpIds.push(operation.id);
     draftAttendance.delete(entry.key);
   }
 
   write(KEYS.attendance, records);
+
+  if (!navigator.onLine) return;
+
+  const syncResult = await syncPendingOperations();
+  const unresolved = (await getPendingOperations()).filter((op) => queuedOpIds.includes(op.id));
+  if (unresolved.length) {
+    throw new Error(
+      unresolved[0].lastError
+      || syncResult.lastError
+      || 'No se pudieron sincronizar las asistencias con el servidor.',
+    );
+  }
 }
 
 async function saveAttendance(studentId, state, date, subjectId) {

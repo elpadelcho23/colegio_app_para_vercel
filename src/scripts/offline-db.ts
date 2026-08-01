@@ -245,6 +245,9 @@ export async function saveAttendanceOffline(input: {
   tx.objectStore(OPERATIONS_STORE).put(operation);
   await transactionDone(tx);
 
+  // Dispara sync automático (antes solo lo hacía queueOfflineOperation).
+  window.dispatchEvent(new CustomEvent('aula-clara:operation-queued'));
+
   return { record, operation };
 }
 

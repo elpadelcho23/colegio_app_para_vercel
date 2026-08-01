@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { canAccessCourse, canAccessStudent, canAccessSubject } from '../../server/auth';
-import { db, getCourseViewSnapshot, type User } from '../../server/db';
+import { db, type User } from '../../server/db';
 
 type SyncEntity = 'attendance' | 'student' | 'grade' | 'subject' | 'course' | 'school';
 type SyncAction = 'upsert' | 'delete';
@@ -205,22 +205,23 @@ async function applyAttendance(operation: PendingOperation<AttendancePayload>, u
 
   await db.prepare(`
     INSERT INTO asistencias (id, tenant_id, docente_id, alumno_id, materia_id, fecha, estado, updated_at)
-    VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @fecha, @estado, @updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (docente_id, alumno_id, materia_id, fecha)
     DO UPDATE SET
+      id = excluded.id,
       estado = excluded.estado,
       updated_at = excluded.updated_at
     WHERE asistencias.tenant_id = excluded.tenant_id
-  `).run({
-    id: payload.id,
-    tenant_id: tenantId,
-    docente_id: docenteId,
-    alumno_id: payload.studentId,
-    materia_id: payload.subjectId,
-    fecha: payload.fecha,
-    estado: payload.estado,
-    updated_at: payload.updatedAt,
-  });
+  `).run([
+    payload.id ?? null,
+    tenantId ?? null,
+    docenteId ?? null,
+    payload.studentId ?? null,
+    payload.subjectId ?? null,
+    payload.fecha ?? null,
+    payload.estado ?? null,
+    payload.updatedAt ?? null,
+  ]);
 
   return { status: 'synced' as const };
 }
@@ -306,7 +307,7 @@ async function applyStudent(operation: PendingOperation<StudentPayload>, user: U
 
   await db.prepare(`
     INSERT INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor, activo, updated_at)
-    VALUES (@id, @tenant_id, @curso_id, @nombre, @dni, @tutor, @activo, @updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       curso_id = excluded.curso_id,
       nombre = excluded.nombre,
@@ -315,21 +316,21 @@ async function applyStudent(operation: PendingOperation<StudentPayload>, user: U
       activo = excluded.activo,
       updated_at = excluded.updated_at
     WHERE alumnos.tenant_id = excluded.tenant_id
-  `).run({
-    id: payload.id,
-    tenant_id: tenantId,
-    curso_id: payload.cursoId,
-    nombre: payload.nombre,
-    dni: payload.dni || null,
-    tutor: payload.tutor || null,
-    activo: payload.activo === false ? 0 : 1,
-    updated_at: payload.updatedAt,
-  });
+  `).run([
+    payload.id ?? null,
+    tenantId ?? null,
+    payload.cursoId ?? null,
+    payload.nombre ?? null,
+    payload.dni || null,
+    payload.tutor || null,
+    payload.activo === false ? 0 : 1,
+    payload.updatedAt ?? null,
+  ]);
 
   if (subjectIds) {
-    await db.prepare('DELETE FROM alumno_materias WHERE tenant_id = ? AND alumno_id = ?').run(tenantId, payload.id);
+    await db.prepare('DELETE FROM alumno_materias WHERE tenant_id = ? AND alumno_id = ?').run([tenantId, payload.id]);
     const insert = db.prepare('INSERT OR IGNORE INTO alumno_materias (tenant_id, alumno_id, materia_id) VALUES (?, ?, ?)');
-    for (const subjectId of subjectIds) await insert.run(tenantId, payload.id, subjectId);
+    for (const subjectId of subjectIds) await insert.run([tenantId, payload.id, subjectId]);
   }
 
   return { status: 'synced' };
@@ -383,7 +384,7 @@ async function applyCourse(operation: PendingOperation<CoursePayload>, user: Use
 
   await db.prepare(`
     INSERT INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo, updated_at)
-    VALUES (@id, @tenant_id, @escuela, @nombre, @turno, @ciclo_lectivo, @updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       escuela = excluded.escuela,
       nombre = excluded.nombre,
@@ -391,16 +392,17 @@ async function applyCourse(operation: PendingOperation<CoursePayload>, user: Use
       ciclo_lectivo = excluded.ciclo_lectivo,
       updated_at = excluded.updated_at
     WHERE cursos.tenant_id = excluded.tenant_id
-  `).run({
-    id: payload.id,
-    tenant_id: tenantId,
-    escuela: payload.escuela,
-    nombre: payload.nombre,
-    turno: payload.turno,
-    ciclo_lectivo: payload.cicloLectivo || new Date().getFullYear(),
-    updated_at: payload.updatedAt,
-  });
-  await db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
+  `).run([
+    payload.id ?? null,
+    tenantId ?? null,
+    payload.escuela ?? null,
+    payload.nombre ?? null,
+    payload.turno ?? null,
+    payload.cicloLectivo || new Date().getFullYear(),
+    payload.updatedAt ?? null,
+  ]);
+  await db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)')
+    .run([tenantId, docenteId, payload.id]);
 
   return { status: 'synced' };
 }
@@ -450,7 +452,7 @@ async function applyGrade(operation: PendingOperation<GradePayload>, user: User)
 
   await db.prepare(`
     INSERT INTO notas (id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion, valor, calificacion_texto, peso, fecha, fecha_entrega, periodo, motivo, updated_at)
-    VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @titulo, @tipo_evaluacion, @valor, @calificacion_texto, @peso, @fecha, @fecha_entrega, @periodo, @motivo, @updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       titulo = excluded.titulo,
       tipo_evaluacion = excluded.tipo_evaluacion,
@@ -463,23 +465,23 @@ async function applyGrade(operation: PendingOperation<GradePayload>, user: User)
       motivo = excluded.motivo,
       updated_at = excluded.updated_at
     WHERE notas.tenant_id = excluded.tenant_id
-  `).run({
-    id: payload.id,
-    tenant_id: tenantId,
-    docente_id: docenteId,
-    alumno_id: payload.studentId,
-    materia_id: payload.subjectId,
-    titulo: payload.titulo,
-    tipo_evaluacion: payload.tipoEvaluacion || null,
-    valor: hasNumericGrade ? payload.valor : null,
-    calificacion_texto: hasTextGrade ? payload.calificacionTexto?.trim() : null,
-    peso: payload.peso || 100,
-    fecha: payload.fecha,
-    fecha_entrega: payload.fechaEntrega || null,
-    periodo: payload.periodo || null,
-    motivo: payload.motivo?.trim() || null,
-    updated_at: payload.updatedAt,
-  });
+  `).run([
+    payload.id ?? null,
+    tenantId ?? null,
+    docenteId ?? null,
+    payload.studentId ?? null,
+    payload.subjectId ?? null,
+    payload.titulo ?? null,
+    payload.tipoEvaluacion || null,
+    hasNumericGrade ? payload.valor : null,
+    hasTextGrade ? (payload.calificacionTexto?.trim() || null) : null,
+    payload.peso || 100,
+    payload.fecha ?? null,
+    payload.fechaEntrega || null,
+    payload.periodo || null,
+    payload.motivo?.trim() || null,
+    payload.updatedAt ?? null,
+  ]);
 
   return { status: 'synced' };
 }
@@ -543,20 +545,21 @@ async function applySubject(operation: PendingOperation<SubjectPayload>, user: U
 
   await db.prepare(`
     INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
-    VALUES (@id, @tenant_id, @nombre, @activo, @updated_at)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       nombre = excluded.nombre,
       activo = excluded.activo,
       updated_at = excluded.updated_at
     WHERE materias.tenant_id = excluded.tenant_id
-  `).run({
-    id: payload.id,
-    tenant_id: tenantId,
-    nombre: payload.nombre,
-    activo: payload.activo === false ? 0 : 1,
-    updated_at: payload.updatedAt,
-  });
-  await db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
+  `).run([
+    payload.id ?? null,
+    tenantId ?? null,
+    payload.nombre ?? null,
+    payload.activo === false ? 0 : 1,
+    payload.updatedAt ?? null,
+  ]);
+  await db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)')
+    .run([tenantId, docenteId, payload.id]);
 
   return { status: 'synced' };
 }
@@ -598,143 +601,163 @@ async function applySchool(operation: PendingOperation<SchoolPayload>, user: Use
 
   await db.prepare(`
     INSERT INTO escuelas (id, tenant_id, nombre, activo, updated_at)
-    VALUES (@id, @tenant_id, @nombre, @activo, @updated_at)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       nombre = excluded.nombre,
       activo = excluded.activo,
       updated_at = excluded.updated_at
     WHERE escuelas.tenant_id = excluded.tenant_id
-  `).run({
-    id: payload.id,
-    tenant_id: tenantId,
-    nombre: payload.nombre,
-    activo: payload.activo === false ? 0 : 1,
-    updated_at: payload.updatedAt,
-  });
-  await db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)').run(tenantId, docenteId, payload.id);
+  `).run([
+    payload.id ?? null,
+    tenantId ?? null,
+    payload.nombre ?? null,
+    payload.activo === false ? 0 : 1,
+    payload.updatedAt ?? null,
+  ]);
+  await db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)')
+    .run([tenantId, docenteId, payload.id]);
 
   return { status: 'synced' as const };
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;
-  if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+  if (!user) return Response.json({ success: false, error: 'No autenticado' }, { status: 401 });
 
-  const body = await request.json().catch(() => null);
-  const operations = Array.isArray(body?.operations) ? body.operations as PendingOperation[] : [];
+  try {
+    const body = await request.json().catch(() => null);
+    const operations = Array.isArray(body?.operations) ? body.operations as PendingOperation[] : [];
 
-  if (operations.length === 0) {
-    return Response.json({ results: [] }, { status: 400 });
-  }
-
-  const results: SyncResult[] = [];
-  const tx = db.transaction(async () => {
-    for (const operation of operations) {
-      if (!operation.clientMutationId) {
-        results.push({ clientMutationId: '', status: 'error', message: 'Falta clientMutationId.' });
-        continue;
-      }
-
-      const duplicate = await db.prepare(`
-        SELECT client_mutation_id
-        FROM sync_log
-        WHERE client_mutation_id = ?
-          AND tenant_id = ?
-      `).get(operation.clientMutationId, user.tenant_id);
-
-      if (duplicate) {
-        results.push({ clientMutationId: operation.clientMutationId, status: 'duplicate' });
-        continue;
-      }
-
-      if (!['attendance', 'student', 'grade', 'subject', 'school', 'course'].includes(operation.entity)) {
-        results.push({
-          clientMutationId: operation.clientMutationId,
-          status: 'error',
-          message: 'Operacion no soportada.',
-        });
-        continue;
-      }
-
-      const payload = operation.payload;
-      if (!hasIdAndUpdatedAt(payload)) {
-        results.push({
-          clientMutationId: operation.clientMutationId,
-          status: 'error',
-          message: 'Payload invalido.',
-        });
-        continue;
-      }
-
-      const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
-      if (tenantMismatch) {
-        results.push({
-          clientMutationId: operation.clientMutationId,
-          status: 'error',
-          message: tenantMismatch,
-        });
-        continue;
-      }
-
-      const docenteError = await validateDocentePayload(user, payload);
-      if (docenteError) {
-        results.push({
-          clientMutationId: operation.clientMutationId,
-          status: 'error',
-          message: docenteError,
-        });
-        continue;
-      }
-
-      let applied: SyncApplyResult;
-
-      if (operation.entity === 'attendance') {
-        if (!isAttendancePayload(payload) || operation.action !== 'upsert') {
-          applied = { status: 'error', message: 'Payload de asistencia invalido.' };
-        } else {
-          const permissionError = await validateAttendancePermission(user, payload);
-          applied = permissionError
-            ? { status: 'error', message: permissionError }
-            : await applyAttendance(operation as PendingOperation<AttendancePayload>, user);
-        }
-      } else if (operation.entity === 'student') {
-        applied = await applyStudent(operation as PendingOperation<StudentPayload>, user);
-      } else if (operation.entity === 'course') {
-        applied = await applyCourse(operation as PendingOperation<CoursePayload>, user);
-      } else if (operation.entity === 'grade') {
-        applied = await applyGrade(operation as PendingOperation<GradePayload>, user);
-      } else if (operation.entity === 'school') {
-        applied = await applySchool(operation as PendingOperation<SchoolPayload>, user);
-      } else {
-        applied = await applySubject(operation as PendingOperation<SubjectPayload>, user);
-      }
-
-      if (applied.status === 'error') {
-        results.push({
-          clientMutationId: operation.clientMutationId,
-          status: 'error',
-          message: applied.message,
-        });
-        continue;
-      }
-
-      const loggedDocenteId = await resolveSyncDocenteId(user, payload);
-      const docenteIdForLog = typeof loggedDocenteId === 'string' ? loggedDocenteId : user.id;
-
-      await db.prepare(`
-        INSERT INTO sync_log (client_mutation_id, tenant_id, docente_id, entity, operation_id, status)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(operation.clientMutationId, user.tenant_id, docenteIdForLog, operation.entity, operation.id, 'synced');
-
-      results.push({
-        clientMutationId: operation.clientMutationId,
-        status: applied.status,
-        ignoredOlderWrite: applied.ignoredOlderWrite ?? false,
-      });
+    if (operations.length === 0) {
+      return Response.json({ success: false, error: 'Sin operaciones', results: [] }, { status: 400 });
     }
-  });
 
-  await tx();
+    const results: SyncResult[] = [];
+    const tx = db.transaction(async () => {
+      for (const operation of operations) {
+        if (!operation.clientMutationId) {
+          results.push({ clientMutationId: '', status: 'error', message: 'Falta clientMutationId.' });
+          continue;
+        }
 
-  return Response.json({ results });
+        const duplicate = await db.prepare(`
+          SELECT client_mutation_id
+          FROM sync_log
+          WHERE client_mutation_id = ?
+            AND tenant_id = ?
+        `).get([operation.clientMutationId, user.tenant_id]);
+
+        if (duplicate) {
+          results.push({ clientMutationId: operation.clientMutationId, status: 'duplicate' });
+          continue;
+        }
+
+        if (!['attendance', 'student', 'grade', 'subject', 'school', 'course'].includes(operation.entity)) {
+          results.push({
+            clientMutationId: operation.clientMutationId,
+            status: 'error',
+            message: 'Operacion no soportada.',
+          });
+          continue;
+        }
+
+        const payload = operation.payload;
+        if (!hasIdAndUpdatedAt(payload)) {
+          results.push({
+            clientMutationId: operation.clientMutationId,
+            status: 'error',
+            message: 'Payload invalido.',
+          });
+          continue;
+        }
+
+        // Forzar docente/tenant de la sesión (no confiar en el cliente).
+        if (user.rol !== 'admin') {
+          (payload as { docenteId: string }).docenteId = user.id;
+        }
+
+        const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
+        if (tenantMismatch) {
+          results.push({
+            clientMutationId: operation.clientMutationId,
+            status: 'error',
+            message: tenantMismatch,
+          });
+          continue;
+        }
+
+        const docenteError = await validateDocentePayload(user, payload);
+        if (docenteError) {
+          results.push({
+            clientMutationId: operation.clientMutationId,
+            status: 'error',
+            message: docenteError,
+          });
+          continue;
+        }
+
+        let applied: SyncApplyResult;
+
+        // Errores de LibSQL salen al catch externo del POST (1 op por request desde el cliente).
+        if (operation.entity === 'attendance') {
+          if (!isAttendancePayload(payload) || operation.action !== 'upsert') {
+            applied = { status: 'error', message: 'Payload de asistencia invalido.' };
+          } else {
+            const permissionError = await validateAttendancePermission(user, payload);
+            applied = permissionError
+              ? { status: 'error', message: permissionError }
+              : await applyAttendance(operation as PendingOperation<AttendancePayload>, user);
+          }
+        } else if (operation.entity === 'student') {
+          applied = await applyStudent(operation as PendingOperation<StudentPayload>, user);
+        } else if (operation.entity === 'course') {
+          applied = await applyCourse(operation as PendingOperation<CoursePayload>, user);
+        } else if (operation.entity === 'grade') {
+          applied = await applyGrade(operation as PendingOperation<GradePayload>, user);
+        } else if (operation.entity === 'school') {
+          applied = await applySchool(operation as PendingOperation<SchoolPayload>, user);
+        } else {
+          applied = await applySubject(operation as PendingOperation<SubjectPayload>, user);
+        }
+
+        if (applied.status === 'error') {
+          results.push({
+            clientMutationId: operation.clientMutationId,
+            status: 'error',
+            message: applied.message,
+          });
+          continue;
+        }
+
+        const loggedDocenteId = await resolveSyncDocenteId(user, payload);
+        const docenteIdForLog = typeof loggedDocenteId === 'string' ? loggedDocenteId : user.id;
+
+        await db.prepare(`
+          INSERT OR IGNORE INTO sync_log (client_mutation_id, tenant_id, docente_id, entity, operation_id, status)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run([
+          operation.clientMutationId,
+          user.tenant_id,
+          docenteIdForLog,
+          operation.entity,
+          operation.id,
+          'synced',
+        ]);
+
+        results.push({
+          clientMutationId: operation.clientMutationId,
+          status: applied.status,
+          ignoredOlderWrite: applied.ignoredOlderWrite ?? false,
+        });
+      }
+    });
+
+    await tx();
+
+    return Response.json({ success: true, results });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? 'Error desconocido');
+    console.error('[api/sync] POST failed', message);
+    return Response.json({ success: false, error: message, results: [] }, { status: 500 });
+  }
 };

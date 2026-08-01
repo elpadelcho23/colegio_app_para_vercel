@@ -54,17 +54,37 @@ export async function hydrateLocalStorageFromServer(userId: string, options: { n
   }
 }
 
+const SYNC_ENTITY_ORDER: Record<string, number> = {
+  school: 0,
+  course: 1,
+  subject: 2,
+  student: 3,
+  attendance: 4,
+  grade: 5,
+};
+
 export async function syncPendingOperations() {
   if (syncInProgress || !navigator.onLine) {
-    return { synced: 0, failed: 0, pending: await countPendingOperations(), counts: await getOperationStatusCounts() };
+    return {
+      synced: 0,
+      failed: 0,
+      pending: await countPendingOperations(),
+      counts: await getOperationStatusCounts(),
+      lastError: undefined as string | undefined,
+    };
   }
 
   syncInProgress = true;
   let synced = 0;
   let failed = 0;
+  let lastError: string | undefined;
 
   try {
-    const operations = await getPendingOperations();
+    const operations = (await getPendingOperations()).sort((a, b) => {
+      const order = (SYNC_ENTITY_ORDER[a.entity] ?? 99) - (SYNC_ENTITY_ORDER[b.entity] ?? 99);
+      if (order !== 0) return order;
+      return String(a.createdAt).localeCompare(String(b.createdAt));
+    });
 
     for (const operation of operations) {
       try {
@@ -72,6 +92,7 @@ export async function syncPendingOperations() {
         const response = await fetch('/api/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
           body: JSON.stringify({ operations: [operation] satisfies PendingOperation[] }),
         });
 
@@ -80,30 +101,33 @@ export async function syncPendingOperations() {
           throw new Error('Sesion expirada. Inicia sesion para sincronizar.');
         }
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result?.error || result?.results?.[0]?.message || `HTTP ${response.status}`);
+        }
 
-        const result = await response.json();
         const item = result.results?.[0];
 
         if (item?.status === 'synced' || item?.status === 'duplicate') {
           await markOperationSynced(operation.id);
           synced++;
         } else {
-          throw new Error(item?.message || 'No se pudo sincronizar la operacion.');
+          throw new Error(item?.message || result?.error || 'No se pudo sincronizar la operacion.');
         }
       } catch (error) {
         failed++;
-        await markOperationError(operation.id, error instanceof Error ? error.message : 'Error desconocido');
+        lastError = error instanceof Error ? error.message : 'Error desconocido';
+        await markOperationError(operation.id, lastError);
       }
     }
   } finally {
     syncInProgress = false;
     window.dispatchEvent(new CustomEvent('aula-clara:sync-finished', {
-      detail: { synced, failed, pending: await countPendingOperations(), counts: await getOperationStatusCounts() },
+      detail: { synced, failed, pending: await countPendingOperations(), counts: await getOperationStatusCounts(), lastError },
     }));
   }
 
-  return { synced, failed, pending: await countPendingOperations(), counts: await getOperationStatusCounts() };
+  return { synced, failed, pending: await countPendingOperations(), counts: await getOperationStatusCounts(), lastError };
 }
 
 export function startAutoSync() {

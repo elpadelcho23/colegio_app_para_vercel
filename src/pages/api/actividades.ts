@@ -132,73 +132,36 @@ export const POST: APIRoute = async ({ locals, request }) => {
   try {
     await db.prepare(`
       INSERT INTO actividades (
-        id,
-        tenant_id,
-        docente_id,
-        colegio,
-        turno,
-        curso_id,
-        materia_id,
-        tipo,
-        titulo,
-        estado,
-        fecha_publicacion,
-        fecha_vencimiento,
-        contenido_json,
-        updated_at
+        id, tenant_id, docente_id, colegio, turno, curso_id, materia_id,
+        tipo, titulo, estado, fecha_publicacion, fecha_vencimiento, contenido_json, updated_at
       )
-      VALUES (
-        @id,
-        @tenant_id,
-        @docente_id,
-        @colegio,
-        @turno,
-        @curso_id,
-        @materia_id,
-        @tipo,
-        @titulo,
-        @estado,
-        @fecha_publicacion,
-        @fecha_vencimiento,
-        @contenido_json,
-        @updated_at
-      )
-    `).run({
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run([
       id,
-      tenant_id: user.tenant_id,
-      docente_id: user.id,
+      user.tenant_id,
+      user.id,
       colegio,
       turno,
-      curso_id: cursoId,
-      materia_id: materiaId,
+      cursoId,
+      materiaId,
       tipo,
       titulo,
-      estado: 'borrador',
-      fecha_publicacion: fechaPublicacion,
-      fecha_vencimiento: fechaVencimiento,
-      contenido_json: JSON.stringify(contenido),
-      updated_at: now,
-    });
+      'borrador',
+      fechaPublicacion,
+      fechaVencimiento,
+      JSON.stringify(contenido),
+      now,
+    ]);
 
     if (fechaVencimiento || fechaPublicacion) {
       await db.prepare(`
         INSERT INTO calendario_eventos (
-          id,
-          tenant_id,
-          docente_id,
-          curso_id,
-          materia_id,
-          tipo,
-          titulo,
-          descripcion,
-          fecha_inicio,
-          fecha_fin,
-          source_type,
-          source_id,
-          updated_at
+          id, tenant_id, docente_id, curso_id, materia_id,
+          tipo, titulo, descripcion, fecha_inicio, fecha_fin,
+          source_type, source_id, updated_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'actividades', ?, ?)
-      `).run(
+      `).run([
         `cal-${id}`,
         user.tenant_id,
         user.id,
@@ -211,7 +174,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         fechaVencimiento,
         id,
         now,
-      );
+      ]);
     }
   } catch (error) {
     console.error('[actividades POST]', error);
