@@ -26,11 +26,13 @@ export interface PendingOperation<TPayload = unknown> {
 }
 
 const DB_NAME = 'aula_clara_offline';
-const DB_VERSION = 2;
+/** v3: agrega object store de cache de vistas (VIEW_CACHE_STORE). */
+const DB_VERSION = 3;
 const ATTENDANCE_STORE = 'attendance_records';
 const OPERATIONS_STORE = 'pending_operations';
+const VIEW_CACHE_STORE = 'view_cache';
 const ATTENDANCE_NATURAL_KEY = ['docenteId', 'studentId', 'subjectId', 'fecha'] as const;
-const OFFLINE_DB_RESET_FLAG = 'aula_clara_offline_reset_v2';
+const OFFLINE_DB_RESET_FLAG = 'aula_clara_offline_reset_v3';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -64,7 +66,7 @@ export async function resetOfflineDatabaseOnce() {
     await deleteOfflineDatabase();
     await openOfflineDb();
     localStorage.setItem(OFFLINE_DB_RESET_FLAG, '1');
-    console.info('[aula-clara] IndexedDB offline reset to schema v2.');
+    console.info('[aula-clara] IndexedDB offline reset to schema v3.');
     return true;
   } catch (error) {
     console.error('[aula-clara] offline database reset failed', error);
@@ -139,37 +141,78 @@ export function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export function openOfflineDb() {
-  if (dbPromise) return dbPromise;
+function ensureOfflineStores(db: IDBDatabase, tx: IDBTransaction | null, oldVersion: number) {
+  if (!db.objectStoreNames.contains(ATTENDANCE_STORE)) {
+    createAttendanceStore(db);
+  } else if (tx && oldVersion > 0 && oldVersion < 2) {
+    migrateAttendanceStoreToV2(tx.objectStore(ATTENDANCE_STORE));
+  }
 
-  dbPromise = new Promise((resolve, reject) => {
+  if (!db.objectStoreNames.contains(OPERATIONS_STORE)) {
+    const store = db.createObjectStore(OPERATIONS_STORE, { keyPath: 'id' });
+    store.createIndex('byStatus', 'status', { unique: false });
+    store.createIndex('byClientMutationId', 'clientMutationId', { unique: true });
+  }
+
+  if (!db.objectStoreNames.contains(VIEW_CACHE_STORE)) {
+    const store = db.createObjectStore(VIEW_CACHE_STORE, { keyPath: 'key' });
+    store.createIndex('byFetchedAt', 'fetchedAt', { unique: false });
+  }
+}
+
+function openOfflineDbOnce() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = (event) => {
-      const db = request.result;
-      const tx = request.transaction;
-      const oldVersion = event.oldVersion;
-
-      if (!db.objectStoreNames.contains(ATTENDANCE_STORE)) {
-        createAttendanceStore(db);
-      } else if (oldVersion > 0 && oldVersion < 2) {
-        migrateAttendanceStoreToV2(tx.objectStore(ATTENDANCE_STORE));
-      }
-
-      if (!db.objectStoreNames.contains(OPERATIONS_STORE)) {
-        const store = db.createObjectStore(OPERATIONS_STORE, { keyPath: 'id' });
-        store.createIndex('byStatus', 'status', { unique: false });
-        store.createIndex('byClientMutationId', 'clientMutationId', { unique: true });
-      }
-
-      if (!db.objectStoreNames.contains(VIEW_CACHE_STORE)) {
-        const store = db.createObjectStore(VIEW_CACHE_STORE, { keyPath: 'key' });
-        store.createIndex('byFetchedAt', 'fetchedAt', { unique: false });
+      try {
+        const db = request.result;
+        ensureOfflineStores(db, request.transaction, event.oldVersion);
+      } catch (error) {
+        console.error('[aula-clara] IndexedDB upgradeneeded failed', error);
+        try {
+          request.transaction?.abort();
+        } catch {
+          // ignore
+        }
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      // Reparación en caliente si un upgrade previo abortó a medias.
+      const missing =
+        !db.objectStoreNames.contains(ATTENDANCE_STORE)
+        || !db.objectStoreNames.contains(OPERATIONS_STORE)
+        || !db.objectStoreNames.contains(VIEW_CACHE_STORE);
+      if (missing) {
+        db.close();
+        reject(new Error('IndexedDB schema incompleto; se recreará.'));
+        return;
+      }
+      resolve(db);
+    };
+    request.onerror = () => reject(request.error ?? new Error('No se pudo abrir IndexedDB offline.'));
+    request.onblocked = () => {
+      console.warn('[aula-clara] IndexedDB open blocked; close other tabs with Aula Clara open.');
+    };
+  });
+}
+
+export function openOfflineDb() {
+  if (dbPromise) return dbPromise;
+
+  dbPromise = openOfflineDbOnce().catch(async (error) => {
+    console.error('[aula-clara] IndexedDB open failed, recreating database', error);
+    dbPromise = null;
+    try {
+      await deleteOfflineDatabase();
+    } catch (deleteError) {
+      console.error('[aula-clara] IndexedDB delete failed', deleteError);
+    }
+    dbPromise = openOfflineDbOnce();
+    return dbPromise;
   });
 
   return dbPromise;
