@@ -75,11 +75,12 @@ CREATE TABLE IF NOT EXISTS alumnos (
   tenant_id TEXT NOT NULL,
   curso_id TEXT NOT NULL,
   nombre TEXT NOT NULL,
-  dni TEXT UNIQUE,
+  dni TEXT,
   tutor TEXT,
   activo INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (tenant_id, dni),
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
   FOREIGN KEY (curso_id) REFERENCES cursos(id) ON DELETE RESTRICT
 );
@@ -231,14 +232,27 @@ CREATE TABLE IF NOT EXISTS sync_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_usuarios_tenant ON usuarios(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_cursos_tenant ON cursos(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_materias_tenant ON materias(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_escuelas_tenant ON escuelas(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_alumnos_tenant_curso ON alumnos(tenant_id, curso_id);
 CREATE INDEX IF NOT EXISTS idx_alumno_materias_tenant ON alumno_materias(tenant_id, alumno_id, materia_id);
+CREATE INDEX IF NOT EXISTS idx_docente_cursos_docente ON docente_cursos(tenant_id, docente_id);
+CREATE INDEX IF NOT EXISTS idx_docente_cursos_curso ON docente_cursos(tenant_id, curso_id);
+CREATE INDEX IF NOT EXISTS idx_docente_materias_docente ON docente_materias(tenant_id, docente_id);
+CREATE INDEX IF NOT EXISTS idx_docente_materias_materia ON docente_materias(tenant_id, materia_id);
+CREATE INDEX IF NOT EXISTS idx_docente_escuelas_docente ON docente_escuelas(tenant_id, docente_id);
 CREATE INDEX IF NOT EXISTS idx_asistencias_tenant_docente_fecha ON asistencias(tenant_id, docente_id, fecha);
+CREATE INDEX IF NOT EXISTS idx_asistencias_docente_alumno ON asistencias(tenant_id, docente_id, alumno_id);
 CREATE INDEX IF NOT EXISTS idx_notas_tenant_docente_fecha ON notas(tenant_id, docente_id, fecha);
+CREATE INDEX IF NOT EXISTS idx_notas_docente_alumno ON notas(tenant_id, docente_id, alumno_id);
 CREATE INDEX IF NOT EXISTS idx_calendario_tenant_fecha ON calendario_eventos(tenant_id, fecha_inicio);
+CREATE INDEX IF NOT EXISTS idx_calendario_tenant_docente ON calendario_eventos(tenant_id, docente_id, fecha_inicio);
 CREATE INDEX IF NOT EXISTS idx_actividades_tenant_contexto ON actividades(tenant_id, colegio, turno, curso_id, materia_id);
+CREATE INDEX IF NOT EXISTS idx_actividades_tenant_docente ON actividades(tenant_id, docente_id);
+CREATE INDEX IF NOT EXISTS idx_sync_log_tenant_docente ON sync_log(tenant_id, docente_id);
 
 CREATE TABLE IF NOT EXISTS subscriptions (
   tenant_id TEXT PRIMARY KEY,
@@ -316,6 +330,8 @@ CREATE TABLE IF NOT EXISTS aula_intentos (
 );
 
 CREATE INDEX IF NOT EXISTS idx_actividad_preguntas_actividad ON actividad_preguntas(actividad_id, orden);
+CREATE INDEX IF NOT EXISTS idx_actividad_preguntas_tenant ON actividad_preguntas(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_aulas_temporales_token ON aulas_temporales(join_token);
 CREATE INDEX IF NOT EXISTS idx_aulas_temporales_docente ON aulas_temporales(tenant_id, docente_id);
 CREATE INDEX IF NOT EXISTS idx_aula_intentos_aula ON aula_intentos(aula_id);
+CREATE INDEX IF NOT EXISTS idx_aula_intentos_tenant ON aula_intentos(tenant_id);

@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { canAccessCourse, canAccessStudent, canAccessSubject } from '../../server/auth';
 import { db, getCourseViewSnapshot, type User } from '../../server/db';
 
-type SyncEntity = 'attendance' | 'student' | 'grade' | 'subject' | 'course';
+type SyncEntity = 'attendance' | 'student' | 'grade' | 'subject' | 'course' | 'school';
 type SyncAction = 'upsert' | 'delete';
 
 interface PendingOperation<TPayload = unknown> {
@@ -250,11 +250,16 @@ async function applyStudent(operation: PendingOperation<StudentPayload>, user: U
     }
 
     const hasDependencies = await db.prepare(`
-      SELECT 1 FROM asistencias WHERE tenant_id = ? AND alumno_id = ?
+      SELECT 1 FROM asistencias
+      WHERE tenant_id = ? AND alumno_id = ? AND (? = 1 OR docente_id = ?)
       UNION
-      SELECT 1 FROM notas WHERE tenant_id = ? AND alumno_id = ?
+      SELECT 1 FROM notas
+      WHERE tenant_id = ? AND alumno_id = ? AND (? = 1 OR docente_id = ?)
       LIMIT 1
-    `).get(tenantId, payload.id, tenantId, payload.id);
+    `).get(
+      tenantId, payload.id, user.rol === 'admin' ? 1 : 0, docenteId,
+      tenantId, payload.id, user.rol === 'admin' ? 1 : 0, docenteId,
+    );
 
     if (hasDependencies) {
       await db.prepare('UPDATE alumnos SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
@@ -350,7 +355,12 @@ async function applyCourse(operation: PendingOperation<CoursePayload>, user: Use
 
     const hasStudents = await db.prepare('SELECT 1 FROM alumnos WHERE tenant_id = ? AND curso_id = ? LIMIT 1').get(tenantId, payload.id);
     if (hasStudents) return { status: 'error', message: 'El curso tiene alumnos vinculados.' };
-    await db.prepare('DELETE FROM docente_cursos WHERE tenant_id = ? AND curso_id = ?').run(tenantId, payload.id);
+    if (user.rol === 'admin') {
+      await db.prepare('DELETE FROM docente_cursos WHERE tenant_id = ? AND curso_id = ?').run(tenantId, payload.id);
+    } else {
+      await db.prepare('DELETE FROM docente_cursos WHERE tenant_id = ? AND docente_id = ? AND curso_id = ?')
+        .run(tenantId, docenteId, payload.id);
+    }
     await db.prepare('DELETE FROM cursos WHERE tenant_id = ? AND id = ?').run(tenantId, payload.id);
     return { status: 'synced' };
   }
@@ -493,16 +503,26 @@ async function applySubject(operation: PendingOperation<SubjectPayload>, user: U
     }
 
     const hasDependencies = await db.prepare(`
-      SELECT 1 FROM asistencias WHERE tenant_id = ? AND materia_id = ?
+      SELECT 1 FROM asistencias
+      WHERE tenant_id = ? AND materia_id = ? AND (? = 1 OR docente_id = ?)
       UNION
-      SELECT 1 FROM notas WHERE tenant_id = ? AND materia_id = ?
+      SELECT 1 FROM notas
+      WHERE tenant_id = ? AND materia_id = ? AND (? = 1 OR docente_id = ?)
       LIMIT 1
-    `).get(tenantId, payload.id, tenantId, payload.id);
+    `).get(
+      tenantId, payload.id, user.rol === 'admin' ? 1 : 0, docenteId,
+      tenantId, payload.id, user.rol === 'admin' ? 1 : 0, docenteId,
+    );
 
     if (hasDependencies) {
       await db.prepare('UPDATE materias SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
     } else {
-      await db.prepare('DELETE FROM docente_materias WHERE tenant_id = ? AND materia_id = ?').run(tenantId, payload.id);
+      if (user.rol === 'admin') {
+        await db.prepare('DELETE FROM docente_materias WHERE tenant_id = ? AND materia_id = ?').run(tenantId, payload.id);
+      } else {
+        await db.prepare('DELETE FROM docente_materias WHERE tenant_id = ? AND docente_id = ? AND materia_id = ?')
+          .run(tenantId, docenteId, payload.id);
+      }
       await db.prepare('DELETE FROM materias WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
     }
     return { status: 'synced' };
@@ -557,7 +577,11 @@ async function applySchool(operation: PendingOperation<SchoolPayload>, user: Use
         return { status: 'synced' as const };
       }
     }
-    await db.prepare('DELETE FROM docente_escuelas WHERE tenant_id = ? AND escuela_id = ?').run(tenantId, payload.id);
+    await db.prepare(
+      user.rol === 'admin'
+        ? 'DELETE FROM docente_escuelas WHERE tenant_id = ? AND escuela_id = ?'
+        : 'DELETE FROM docente_escuelas WHERE tenant_id = ? AND docente_id = ? AND escuela_id = ?',
+    ).run(...(user.rol === 'admin' ? [tenantId, payload.id] : [tenantId, docenteId, payload.id]));
     await db.prepare('DELETE FROM escuelas WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
     return { status: 'synced' as const };
   }
@@ -615,7 +639,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         SELECT client_mutation_id
         FROM sync_log
         WHERE client_mutation_id = ?
-      `).get(operation.clientMutationId);
+          AND tenant_id = ?
+      `).get(operation.clientMutationId, user.tenant_id);
 
       if (duplicate) {
         results.push({ clientMutationId: operation.clientMutationId, status: 'duplicate' });

@@ -1,8 +1,14 @@
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
-import { db, dbPath, isRemoteTurso } from './db-client';
+import { db, dbPath, getDbBackend, isRemoteTurso } from './db-client';
 
-export { db, dbPath };
+/**
+ * Persistencia de Aula Clara.
+ * - Con `TURSO_DATABASE_URL`: Turso/LibSQL (producción serverless).
+ * - Sin ella: SQLite local en `.data/` vía LibSQL file: (dev).
+ * Ver `db-client.ts`. Consultas siempre con parámetros preparados.
+ */
+export { db, dbPath, getDbBackend, isRemoteTurso };
 
 export const DEFAULT_TENANT_ID = 'tenant-demo';
 export const ADMIN_TENANT_ID = 'tenant-admin';
@@ -1029,21 +1035,37 @@ async function migrateTenancy() {
 
 async function createIndexes() {
   await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_usuarios_tenant ON usuarios(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_cursos_tenant ON cursos(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_materias_tenant ON materias(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_escuelas_tenant ON escuelas(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_alumnos_tenant_curso ON alumnos(tenant_id, curso_id);
     CREATE INDEX IF NOT EXISTS idx_alumno_materias_tenant ON alumno_materias(tenant_id, alumno_id, materia_id);
+    CREATE INDEX IF NOT EXISTS idx_docente_cursos_docente ON docente_cursos(tenant_id, docente_id);
+    CREATE INDEX IF NOT EXISTS idx_docente_cursos_curso ON docente_cursos(tenant_id, curso_id);
+    CREATE INDEX IF NOT EXISTS idx_docente_materias_docente ON docente_materias(tenant_id, docente_id);
+    CREATE INDEX IF NOT EXISTS idx_docente_materias_materia ON docente_materias(tenant_id, materia_id);
+    CREATE INDEX IF NOT EXISTS idx_docente_escuelas_docente ON docente_escuelas(tenant_id, docente_id);
     CREATE INDEX IF NOT EXISTS idx_asistencias_tenant_docente_fecha ON asistencias(tenant_id, docente_id, fecha);
+    CREATE INDEX IF NOT EXISTS idx_asistencias_docente_alumno ON asistencias(tenant_id, docente_id, alumno_id);
     CREATE INDEX IF NOT EXISTS idx_notas_tenant_docente_fecha ON notas(tenant_id, docente_id, fecha);
+    CREATE INDEX IF NOT EXISTS idx_notas_docente_alumno ON notas(tenant_id, docente_id, alumno_id);
     CREATE INDEX IF NOT EXISTS idx_calendario_tenant_fecha ON calendario_eventos(tenant_id, fecha_inicio);
+    CREATE INDEX IF NOT EXISTS idx_calendario_tenant_docente ON calendario_eventos(tenant_id, docente_id, fecha_inicio);
     CREATE INDEX IF NOT EXISTS idx_actividades_tenant_contexto ON actividades(tenant_id, colegio, turno, curso_id, materia_id);
+    CREATE INDEX IF NOT EXISTS idx_actividades_tenant_docente ON actividades(tenant_id, docente_id);
+    CREATE INDEX IF NOT EXISTS idx_sync_log_tenant_docente ON sync_log(tenant_id, docente_id);
     CREATE INDEX IF NOT EXISTS idx_trabajo_entregas_contexto ON trabajo_entregas(tenant_id, docente_id, curso_id, materia_id);
     CREATE INDEX IF NOT EXISTS idx_trabajo_entregas_actividad ON trabajo_entregas(actividad_id);
     CREATE INDEX IF NOT EXISTS idx_trabajo_archivos_entrega ON trabajo_archivos(entrega_id);
+    CREATE INDEX IF NOT EXISTS idx_trabajo_archivos_tenant ON trabajo_archivos(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_actividad_preguntas_actividad ON actividad_preguntas(actividad_id, orden);
+    CREATE INDEX IF NOT EXISTS idx_actividad_preguntas_tenant ON actividad_preguntas(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_aulas_temporales_token ON aulas_temporales(join_token);
     CREATE INDEX IF NOT EXISTS idx_aulas_temporales_docente ON aulas_temporales(tenant_id, docente_id);
     CREATE INDEX IF NOT EXISTS idx_aula_intentos_aula ON aula_intentos(aula_id);
+    CREATE INDEX IF NOT EXISTS idx_aula_intentos_tenant ON aula_intentos(tenant_id);
   `);
 }
 
@@ -1051,13 +1073,18 @@ async function insertUser(user: User & { password: string }) {
   const exists = await db.prepare('SELECT id FROM usuarios WHERE id = ?').get(user.id);
   if (exists) return;
 
+  // Solo los 6 placeholders: no pasar `password` ni spreads con claves extra (LibSQL cuenta todas).
   await db.prepare(`
     INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
-    VALUES (@id, @tenant_id, @nombre, @email, @password_hash, @rol, 0)
-  `).run({
-    ...user,
-    password_hash: bcrypt.hashSync(user.password, 12),
-  });
+    VALUES (?, ?, ?, ?, ?, ?, 0)
+  `).run(
+    user.id,
+    user.tenant_id,
+    user.nombre,
+    user.email,
+    bcrypt.hashSync(user.password, 12),
+    user.rol,
+  );
 }
 
 export interface CourseViewFilters {
@@ -1312,10 +1339,10 @@ async function seed() {
 
   const insertCourse = db.prepare(`
     INSERT OR IGNORE INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo)
-    VALUES (@id, @tenant_id, @escuela, @nombre, @turno, @ciclo_lectivo)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
-  await insertCourse.run({ id: 'curso-6-1-manana', tenant_id: DEFAULT_TENANT_ID, escuela: 'Escuela Tecnica 1', nombre: '6to 1ra', turno: 'Manana', ciclo_lectivo: 2026 });
-  await insertCourse.run({ id: 'curso-5-2-tarde', tenant_id: DEFAULT_TENANT_ID, escuela: 'Escuela Tecnica 1', nombre: '5to 2da', turno: 'Tarde', ciclo_lectivo: 2026 });
+  await insertCourse.run('curso-6-1-manana', DEFAULT_TENANT_ID, 'Escuela Tecnica 1', '6to 1ra', 'Manana', 2026);
+  await insertCourse.run('curso-5-2-tarde', DEFAULT_TENANT_ID, 'Escuela Tecnica 1', '5to 2da', 'Tarde', 2026);
 
   const insertSchool = db.prepare('INSERT OR IGNORE INTO escuelas (id, tenant_id, nombre) VALUES (?, ?, ?)');
   await insertSchool.run('escuela-tecnica-1', DEFAULT_TENANT_ID, 'Escuela Tecnica 1');
@@ -1327,11 +1354,11 @@ async function seed() {
 
   const insertStudent = db.prepare(`
     INSERT OR IGNORE INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor)
-    VALUES (@id, @tenant_id, @curso_id, @nombre, @dni, @tutor)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
-  await insertStudent.run({ id: 'al-1', tenant_id: DEFAULT_TENANT_ID, curso_id: 'curso-6-1-manana', nombre: 'Martina Ruiz', dni: '44111222', tutor: 'Laura Ruiz' });
-  await insertStudent.run({ id: 'al-2', tenant_id: DEFAULT_TENANT_ID, curso_id: 'curso-6-1-manana', nombre: 'Tomas Pereyra', dni: '45222333', tutor: 'Ruben Pereyra' });
-  await insertStudent.run({ id: 'al-3', tenant_id: DEFAULT_TENANT_ID, curso_id: 'curso-5-2-tarde', nombre: 'Sofia Molina', dni: '46333444', tutor: 'Ana Molina' });
+  await insertStudent.run('al-1', DEFAULT_TENANT_ID, 'curso-6-1-manana', 'Martina Ruiz', '44111222', 'Laura Ruiz');
+  await insertStudent.run('al-2', DEFAULT_TENANT_ID, 'curso-6-1-manana', 'Tomas Pereyra', '45222333', 'Ruben Pereyra');
+  await insertStudent.run('al-3', DEFAULT_TENANT_ID, 'curso-5-2-tarde', 'Sofia Molina', '46333444', 'Ana Molina');
 
   const assignCourse = db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)');
   await assignCourse.run(DEFAULT_TENANT_ID, 'docente-demo', 'curso-6-1-manana');
@@ -1354,32 +1381,32 @@ async function seed() {
 
   const insertGrade = db.prepare(`
     INSERT OR IGNORE INTO notas (id, tenant_id, docente_id, alumno_id, materia_id, titulo, valor, peso, fecha, updated_at)
-    VALUES (@id, @tenant_id, @docente_id, @alumno_id, @materia_id, @titulo, @valor, @peso, @fecha, @updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  await insertGrade.run({
-    id: 'nota-db-1',
-    tenant_id: DEFAULT_TENANT_ID,
-    docente_id: 'docente-demo',
-    alumno_id: 'al-1',
-    materia_id: 'programacion',
-    titulo: 'TP HTML',
-    valor: 8,
-    peso: 40,
-    fecha: '2026-05-05',
-    updated_at: '2026-05-05T03:00:00.000Z',
-  });
-  await insertGrade.run({
-    id: 'nota-db-2',
-    tenant_id: DEFAULT_TENANT_ID,
-    docente_id: 'docente-demo',
-    alumno_id: 'al-2',
-    materia_id: 'programacion',
-    titulo: 'Integrador',
-    valor: 5,
-    peso: 60,
-    fecha: '2026-05-05',
-    updated_at: '2026-05-05T03:00:00.000Z',
-  });
+  await insertGrade.run(
+    'nota-db-1',
+    DEFAULT_TENANT_ID,
+    'docente-demo',
+    'al-1',
+    'programacion',
+    'TP HTML',
+    8,
+    40,
+    '2026-05-05',
+    '2026-05-05T03:00:00.000Z',
+  );
+  await insertGrade.run(
+    'nota-db-2',
+    DEFAULT_TENANT_ID,
+    'docente-demo',
+    'al-2',
+    'programacion',
+    'Integrador',
+    5,
+    60,
+    '2026-05-05',
+    '2026-05-05T03:00:00.000Z',
+  );
 
   const insertActividad = db.prepare(`
     INSERT OR IGNORE INTO actividades (
