@@ -86,6 +86,12 @@ function namedPlaceholders(sql: string): string[] {
 
 function normalizeArgs(args: unknown[], allowedNamedKeys: string[] = []): InArgs | undefined {
   if (args.length === 0) return undefined;
+
+  // .run([a, b, c]) → args posicionales (no anidar el array)
+  if (args.length === 1 && Array.isArray(args[0])) {
+    return (args[0] as unknown[]).map(sanitizeSqlValue) as InArgs;
+  }
+
   if (
     args.length === 1
     && args[0] !== null

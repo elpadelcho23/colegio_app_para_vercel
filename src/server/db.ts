@@ -38,9 +38,16 @@ export async function createUser(user: Omit<User, 'id' | 'tenant_id'> & { passwo
   const id = `docente-${randomBytes(8).toString('hex')}`;
   const tenantId = user.tenant_id || (await createTenant(`Cuenta de ${user.nombre.trim() || email}`));
   await db.prepare(`
-    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
-    VALUES (?, ?, ?, ?, ?, ?, 0)
-  `).run(id, tenantId, user.nombre.trim(), email, bcrypt.hashSync(user.password, 12), user.rol);
+    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run([
+    id,
+    tenantId,
+    user.nombre.trim(),
+    email,
+    bcrypt.hashSync(user.password, 12),
+    user.rol ?? null,
+  ]);
 
   return { id, tenant_id: tenantId, nombre: user.nombre.trim(), email, rol: user.rol, is_guest: false } as User;
 }
@@ -55,8 +62,16 @@ export async function createGuestUser(): Promise<User> {
 
   await db.prepare(`
     INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
-    VALUES (?, ?, ?, ?, ?, 'docente', 1)
-  `).run(id, tenantId, 'Invitado', email, bcrypt.hashSync(password, 10));
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run([
+    id,
+    tenantId,
+    'Invitado',
+    email,
+    bcrypt.hashSync(password, 10),
+    'docente',
+    1,
+  ]);
 
   const user: User = {
     id,
@@ -1086,21 +1101,23 @@ async function createIndexes() {
 }
 
 async function insertUser(user: User & { password: string }) {
-  const exists = await db.prepare('SELECT id FROM usuarios WHERE id = ?').get(user.id);
+  const exists = await db.prepare('SELECT id FROM usuarios WHERE id = ?').get(user.id ?? null);
   if (exists) return;
 
-  // Solo los 6 placeholders: no pasar `password` ni spreads con claves extra (LibSQL cuenta todas).
-  await db.prepare(`
-    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, is_guest)
-    VALUES (?, ?, ?, ?, ?, ?, 0)
-  `).run(
-    user.id,
-    user.tenant_id,
-    user.nombre,
-    user.email,
+  // LibSQL/Turso: SOLO array posicional de longitud exacta a los `?`. Nunca spread/{...user}/password.
+  const params = [
+    user.id ?? null,
+    user.tenant_id ?? null,
+    user.nombre ?? null,
+    user.email ?? null,
     bcrypt.hashSync(user.password, 12),
-    user.rol,
-  );
+    user.rol ?? null,
+  ];
+
+  await db.prepare(`
+    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(params);
 }
 
 export interface CourseViewFilters {
@@ -1357,49 +1374,49 @@ async function seed() {
     INSERT OR IGNORE INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
-  await insertCourse.run('curso-6-1-manana', DEFAULT_TENANT_ID, 'Escuela Tecnica 1', '6to 1ra', 'Manana', 2026);
-  await insertCourse.run('curso-5-2-tarde', DEFAULT_TENANT_ID, 'Escuela Tecnica 1', '5to 2da', 'Tarde', 2026);
+  await insertCourse.run(['curso-6-1-manana', DEFAULT_TENANT_ID, 'Escuela Tecnica 1', '6to 1ra', 'Manana', 2026]);
+  await insertCourse.run(['curso-5-2-tarde', DEFAULT_TENANT_ID, 'Escuela Tecnica 1', '5to 2da', 'Tarde', 2026]);
 
   const insertSchool = db.prepare('INSERT OR IGNORE INTO escuelas (id, tenant_id, nombre) VALUES (?, ?, ?)');
-  await insertSchool.run('escuela-tecnica-1', DEFAULT_TENANT_ID, 'Escuela Tecnica 1');
+  await insertSchool.run(['escuela-tecnica-1', DEFAULT_TENANT_ID, 'Escuela Tecnica 1']);
 
   const insertSubject = db.prepare('INSERT OR IGNORE INTO materias (id, tenant_id, nombre) VALUES (?, ?, ?)');
-  await insertSubject.run('matematica', DEFAULT_TENANT_ID, 'Matematica');
-  await insertSubject.run('programacion', DEFAULT_TENANT_ID, 'Programacion');
-  await insertSubject.run('literatura', DEFAULT_TENANT_ID, 'Literatura');
+  await insertSubject.run(['matematica', DEFAULT_TENANT_ID, 'Matematica']);
+  await insertSubject.run(['programacion', DEFAULT_TENANT_ID, 'Programacion']);
+  await insertSubject.run(['literatura', DEFAULT_TENANT_ID, 'Literatura']);
 
   const insertStudent = db.prepare(`
     INSERT OR IGNORE INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
-  await insertStudent.run('al-1', DEFAULT_TENANT_ID, 'curso-6-1-manana', 'Martina Ruiz', '44111222', 'Laura Ruiz');
-  await insertStudent.run('al-2', DEFAULT_TENANT_ID, 'curso-6-1-manana', 'Tomas Pereyra', '45222333', 'Ruben Pereyra');
-  await insertStudent.run('al-3', DEFAULT_TENANT_ID, 'curso-5-2-tarde', 'Sofia Molina', '46333444', 'Ana Molina');
+  await insertStudent.run(['al-1', DEFAULT_TENANT_ID, 'curso-6-1-manana', 'Martina Ruiz', '44111222', 'Laura Ruiz']);
+  await insertStudent.run(['al-2', DEFAULT_TENANT_ID, 'curso-6-1-manana', 'Tomas Pereyra', '45222333', 'Ruben Pereyra']);
+  await insertStudent.run(['al-3', DEFAULT_TENANT_ID, 'curso-5-2-tarde', 'Sofia Molina', '46333444', 'Ana Molina']);
 
   const assignCourse = db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)');
-  await assignCourse.run(DEFAULT_TENANT_ID, 'docente-demo', 'curso-6-1-manana');
-  await assignCourse.run(DEFAULT_TENANT_ID, 'docente-demo', 'curso-5-2-tarde');
+  await assignCourse.run([DEFAULT_TENANT_ID, 'docente-demo', 'curso-6-1-manana']);
+  await assignCourse.run([DEFAULT_TENANT_ID, 'docente-demo', 'curso-5-2-tarde']);
 
   const assignSchool = db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)');
-  await assignSchool.run(DEFAULT_TENANT_ID, 'docente-demo', 'escuela-tecnica-1');
+  await assignSchool.run([DEFAULT_TENANT_ID, 'docente-demo', 'escuela-tecnica-1']);
 
   const assignSubject = db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)');
-  await assignSubject.run(DEFAULT_TENANT_ID, 'docente-demo', 'matematica');
-  await assignSubject.run(DEFAULT_TENANT_ID, 'docente-demo', 'programacion');
-  await assignSubject.run(DEFAULT_TENANT_ID, 'docente-demo', 'literatura');
+  await assignSubject.run([DEFAULT_TENANT_ID, 'docente-demo', 'matematica']);
+  await assignSubject.run([DEFAULT_TENANT_ID, 'docente-demo', 'programacion']);
+  await assignSubject.run([DEFAULT_TENANT_ID, 'docente-demo', 'literatura']);
 
   const assignStudentSubject = db.prepare('INSERT OR IGNORE INTO alumno_materias (tenant_id, alumno_id, materia_id) VALUES (?, ?, ?)');
-  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-1', 'matematica');
-  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-1', 'programacion');
-  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-2', 'matematica');
-  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-2', 'programacion');
-  await assignStudentSubject.run(DEFAULT_TENANT_ID, 'al-3', 'literatura');
+  await assignStudentSubject.run([DEFAULT_TENANT_ID, 'al-1', 'matematica']);
+  await assignStudentSubject.run([DEFAULT_TENANT_ID, 'al-1', 'programacion']);
+  await assignStudentSubject.run([DEFAULT_TENANT_ID, 'al-2', 'matematica']);
+  await assignStudentSubject.run([DEFAULT_TENANT_ID, 'al-2', 'programacion']);
+  await assignStudentSubject.run([DEFAULT_TENANT_ID, 'al-3', 'literatura']);
 
   const insertGrade = db.prepare(`
     INSERT OR IGNORE INTO notas (id, tenant_id, docente_id, alumno_id, materia_id, titulo, valor, peso, fecha, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  await insertGrade.run(
+  await insertGrade.run([
     'nota-db-1',
     DEFAULT_TENANT_ID,
     'docente-demo',
@@ -1410,8 +1427,8 @@ async function seed() {
     40,
     '2026-05-05',
     '2026-05-05T03:00:00.000Z',
-  );
-  await insertGrade.run(
+  ]);
+  await insertGrade.run([
     'nota-db-2',
     DEFAULT_TENANT_ID,
     'docente-demo',
@@ -1422,7 +1439,7 @@ async function seed() {
     60,
     '2026-05-05',
     '2026-05-05T03:00:00.000Z',
-  );
+  ]);
 
   const insertActividad = db.prepare(`
     INSERT OR IGNORE INTO actividades (
@@ -1431,7 +1448,7 @@ async function seed() {
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  await insertActividad.run(
+  await insertActividad.run([
     'act-demo-tp1',
     DEFAULT_TENANT_ID,
     'docente-demo',
@@ -1446,8 +1463,8 @@ async function seed() {
     '2026-06-20',
     JSON.stringify({ template: 'tp-v1', bloques: [{ type: 'consigna', texto: 'Desarrollar landing responsive.' }] }),
     new Date().toISOString(),
-  );
-  await insertActividad.run(
+  ]);
+  await insertActividad.run([
     'act-demo-eval1',
     DEFAULT_TENANT_ID,
     'docente-demo',
@@ -1462,5 +1479,5 @@ async function seed() {
     '2026-06-15',
     JSON.stringify({ template: 'evaluacion-v1', bloques: [{ type: 'pregunta', texto: 'Resolver ejercicios de funciones.', puntaje: 10 }] }),
     new Date().toISOString(),
-  );
+  ]);
 }
