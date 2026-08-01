@@ -785,7 +785,17 @@ async function initSchema() {
   await migrateAulaTemporal();
   await createIndexes();
   await setSchemaVersion(1);
-  await seed();
+
+  try {
+    await seed();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    if (/UNIQUE constraint failed/i.test(message)) {
+      console.warn('[db] seed omitido (datos ya existentes):', message);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function setSchemaVersion(version: number) {
@@ -1101,7 +1111,10 @@ async function createIndexes() {
 }
 
 async function insertUser(user: User & { password: string }) {
-  const exists = await db.prepare('SELECT id FROM usuarios WHERE id = ?').get(user.id ?? null);
+  const exists = await db.prepare(`
+    SELECT id FROM usuarios
+    WHERE id = ? OR lower(email) = lower(?)
+  `).get(user.id ?? null, user.email ?? null);
   if (exists) return;
 
   // LibSQL/Turso: SOLO array posicional de longitud exacta a los `?`. Nunca spread/{...user}/password.
@@ -1115,7 +1128,7 @@ async function insertUser(user: User & { password: string }) {
   ];
 
   await db.prepare(`
-    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol)
+    INSERT OR IGNORE INTO usuarios (id, tenant_id, nombre, email, password_hash, rol)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(params);
 }
@@ -1352,6 +1365,15 @@ export async function getCourseViewSnapshot(user: User, filters: CourseViewFilte
 }
 
 async function seed() {
+  const existingUsers = (await db.prepare('SELECT COUNT(*) AS count FROM usuarios').get()) as
+    | { count: number | bigint | string }
+    | undefined;
+  const userCount = Number(existingUsers?.count ?? 0);
+  if (userCount > 0) {
+    console.log(`[db] seed omitido: ya hay ${userCount} usuario(s) en la base.`);
+    return;
+  }
+
   await insertUser({
     id: 'docente-demo',
     tenant_id: DEFAULT_TENANT_ID,
