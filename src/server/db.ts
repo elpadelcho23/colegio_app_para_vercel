@@ -785,10 +785,26 @@ async function tableColumns(table: string) {
   return (await db.prepare(`PRAGMA table_info(${table})`).all()) as Array<{ name: string }>;
 }
 
+function isDuplicateColumnError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /duplicate column name/i.test(message) || /already exists/i.test(message);
+}
+
 async function ensureColumn(table: string, column: string, ddl: string) {
   const columns = await tableColumns(table);
-  if (columns.some((item) => item.name === column)) return;
-  await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${ddl}`).run();
+  const target = column.toLowerCase();
+  if (columns.some((item) => String(item.name || '').toLowerCase() === target)) return;
+
+  try {
+    await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${ddl}`).run();
+  } catch (error) {
+    // Idempotente: en Turso/LibSQL PRAGMA table_info a veces no refleja columnas ya migradas.
+    if (isDuplicateColumnError(error)) {
+      console.log(`[db] Columna ya existe, se omite ALTER: ${table}.${column}`);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function migrateTrabajoCorreccion() {
