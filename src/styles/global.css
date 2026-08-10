@@ -320,17 +320,12 @@ h3 {
     display: none;
   }
 
-  .institution-strip {
-    padding-top: 0.35rem;
-    gap: 0.35rem 0.65rem;
-    font-size: 0.78rem;
+  .topbar {
+    padding: 0.35rem 0.55rem;
   }
 
-  .institution-strip-user-name {
-    max-width: 9rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .page-header h1 {
+    font-size: 1.2rem;
   }
 }
 
@@ -756,6 +751,54 @@ h3 {
     z-index: 40;
   }
 
+  /* Chrome compacto: más espacio para el contenido en pantallas angostas. */
+  .institution-strip {
+    display: none;
+  }
+
+  .guest-banner {
+    padding: 0.2rem 0.75rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+  }
+
+  .guest-banner strong {
+    font-weight: 700;
+  }
+
+  .topbar {
+    width: 100%;
+    margin: 0;
+    padding: 0.4rem 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .brand {
+    gap: 0.45rem;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    font-size: 0.78rem;
+  }
+
+  .brand strong {
+    font-size: 0.95rem;
+    line-height: 1.15;
+  }
+
+  .brand small {
+    display: none;
+  }
+
+  .menu-toggle {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+
   .nav-links {
     position: fixed;
     top: var(--app-shell-height, 108px);
@@ -772,6 +815,26 @@ h3 {
     right: 0;
     bottom: 0;
     left: 0;
+  }
+
+  .page,
+  .page-container {
+    width: calc(100% - 16px);
+    padding-top: var(--space-3);
+  }
+
+  .page-header {
+    gap: var(--space-3);
+    margin-bottom: 0.35rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+
+  .page-header p {
+    font-size: 0.88rem;
   }
 }
 
