@@ -737,8 +737,19 @@ h3 {
   outline: none;
 }
 
+@media (min-width: 768px) and (max-width: 1023px) {
+  .institution-strip,
+  .topbar {
+    width: min(var(--content-max), calc(100% - 40px));
+  }
+
+  .nav-links {
+    width: min(320px, 88vw);
+  }
+}
+
 @media (max-width: 1023px) {
-  /* Header sticky compacto: el menú de paneles se ancla debajo y sigue el viewport. */
+  /* Header sticky: el menú de paneles se ancla debajo y sigue el viewport. */
   .app-shell {
     position: sticky;
     top: 0;
@@ -757,6 +768,10 @@ h3 {
 
   body.mobile-menu-open::before {
     top: var(--app-shell-height, 108px);
+    inset: unset;
+    right: 0;
+    bottom: 0;
+    left: 0;
   }
 }
 
