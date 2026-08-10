@@ -2391,7 +2391,8 @@ td small {
 }
 
 .subject-chip button {
-  min-height: 28px;
+  min-width: 44px;
+  min-height: 44px;
   color: var(--muted);
   background: transparent;
 }
