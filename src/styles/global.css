@@ -2935,8 +2935,29 @@ label.checkbox-row {
   gap: 1rem;
 }
 
+.student-workspace {
+  display: grid;
+  gap: var(--space-4);
+}
+
 .student-workspace .activity-mode-picker {
   margin-bottom: 0.25rem;
+}
+
+.student-manual-details {
+  border-style: dashed;
+}
+
+.student-manual-details .form-grid {
+  margin-top: var(--space-3);
+}
+
+.student-workspace > [data-student-mode-panel='excel'] .excel-workspace.panel {
+  /* Evita doble marco: el workspace ya vive dentro de student-workspace. */
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .export-panel {

@@ -42,7 +42,7 @@ const { initialView = 'panel' } = Astro.props;
     <section class="hero-card" data-panel-hero>
       <p class="eyebrow">Hoy</p>
       <h1 data-panel-today-title>Hoy: elegí curso arriba</h1>
-      <p class="hero-help">Todo usa el Curso actual del encabezado. Si faltan alumnos, importá un Excel.</p>
+      <p class="hero-help">Lo más rápido: importá alumnos con Excel. Si ya están, elegí el curso arriba.</p>
 
       <div class="schedule-suggestion is-hidden" data-schedule-suggestion hidden>
         <p>
@@ -118,95 +118,76 @@ const { initialView = 'panel' } = Astro.props;
     <header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
-        <h1>Registro simple</h1>
-        <p>Cargá alumnos uno a uno con curso y materias.</p>
+        <h1>Cargar alumnos</h1>
+        <p>Lo más rápido: importá desde Excel. Escuela, curso, materias y listado entran juntos.</p>
       </div>
       <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block">Organizar cursos</button>
     </header>
 
     <section class="panel student-workspace">
       <div class="section-title">
-        <h2>Registrar alumnos</h2>
-        <p>Cargá alumnos uno a uno o importá desde Excel con una plantilla personalizada.</p>
+        <h2>Importar desde Excel</h2>
+        <p>Recomendado si tenés (o podés armar) una planilla. Mapeá columnas y guardá plantillas.</p>
       </div>
 
-      <div class="activity-mode-picker full-width" role="tablist" aria-label="Modo de registro">
-        <label class="template-card activity-mode-card">
-          <input type="radio" name="studentMode" value="manual" checked data-student-mode-input />
-          <span>
-            <strong>Cargar uno a uno</strong>
-            <small>Completá nombre, escuela, curso, materias y contacto.</small>
-          </span>
-        </label>
-        <label class="template-card activity-mode-card">
-          <input type="radio" name="studentMode" value="excel" data-student-mode-input />
-          <span>
-            <strong>Cargar desde hoja Excel</strong>
-            <small>Mapeá columnas y guardá plantillas reutilizables.</small>
-          </span>
-        </label>
+      <div class="student-mode-panel full-width" data-student-mode-panel="excel">
+        <ExcelImportWorkspace
+          importType="alumnos"
+          title="Cargar alumnos desde Excel"
+          description="Subí el archivo y confirmá las columnas."
+        />
       </div>
 
-      <section class="responsive-grid">
-        <div class="student-mode-panel full-width" data-student-mode-panel="manual">
-          <form class="panel form-grid" data-student-form>
-            <div class="section-title">
-              <h2>Nuevo alumno</h2>
-            </div>
-
-            <div class="input-group full-width">
-              <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /><small class="field-error" hidden></small></label>
-              <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
-            </div>
-
-            <label class="full-width">
-              <span>Escuela</span>
-              <select name="escuela" data-student-school required></select>
-              <small class="field-error" hidden></small>
-            </label>
-
-            <label class="full-width">
-              <span>Curso</span>
-              <select name="cursoId" required></select>
-              <small class="field-error" hidden></small>
-            </label>
-
-            <fieldset class="subject-picker">
-              <legend>Materias del alumno</legend>
-              <div class="subject-search" data-student-subjects></div>
-              <div class="inline-form">
-                <input name="nuevaMateria" data-student-new-subject placeholder="Escribí el nombre de la materia..." aria-label="Nueva materia" />
-                <button class="btn btn-secondary" type="button" data-student-add-subject>Agregar materia</button>
-              </div>
-            </fieldset>
-
-            <label class="full-width">
-              <span>Tutor o contacto</span>
-              <input name="tutor" />
-            </label>
-
-            <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
-          </form>
-        </div>
-
-        <div class="student-mode-panel full-width is-hidden" data-student-mode-panel="excel">
-          <ExcelImportWorkspace importType="alumnos" />
-        </div>
-
-        <section class="panel">
-          <div class="section-title">
-            <h2>Alumnos cargados</h2>
-            <p>Listado con curso, materias y promedio actualizado.</p>
+      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual">
+        <summary class="panel-collapsible-summary">
+          <span class="section-title">
+            <h2>Cargar uno a uno</h2>
+            <p>Opcional. Si preferís cargar a mano, abrí este formulario.</p>
+          </span>
+        </summary>
+        <form class="form-grid" data-student-form>
+          <div class="input-group full-width">
+            <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /><small class="field-error" hidden></small></label>
+            <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
           </div>
-          <div class="list" data-student-list></div>
-        </section>
-      </section>
 
-      <p class="tools-nav-link-wrap">
-        <button type="button" class="tools-nav-link" data-tools-focus="excel" data-tools-tab="alumnos">
-          ¿Muchos alumnos? Importá desde Excel y cuenta →
-        </button>
-      </p>
+          <label class="full-width">
+            <span>Escuela</span>
+            <select name="escuela" data-student-school required></select>
+            <small class="field-error" hidden></small>
+          </label>
+
+          <label class="full-width">
+            <span>Curso</span>
+            <select name="cursoId" required></select>
+            <small class="field-error" hidden></small>
+          </label>
+
+          <fieldset class="subject-picker">
+            <legend>Materias del alumno</legend>
+            <div class="subject-search" data-student-subjects></div>
+            <div class="inline-form">
+              <input name="nuevaMateria" data-student-new-subject placeholder="Escribí el nombre de la materia..." aria-label="Nueva materia" />
+              <button class="btn btn-secondary" type="button" data-student-add-subject>Agregar materia</button>
+            </div>
+          </fieldset>
+
+          <label class="full-width">
+            <span>Tutor o contacto</span>
+            <input name="tutor" />
+          </label>
+
+          <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
+        </form>
+      </details>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Alumnos cargados</h2>
+          <p>Listado con curso, materias y promedio actualizado.</p>
+        </div>
+        <div class="list" data-student-list></div>
+      </section>
     </section>
 
     <dialog class="modal modal--wide" data-student-profile-dialog>
@@ -276,7 +257,7 @@ const { initialView = 'panel' } = Astro.props;
         <h1>Cursos y divisiones</h1>
         <p>Base de trabajo por ciclo lectivo: escuela, curso, materias y horarios.</p>
       </div>
-      <button type="button" data-spa-nav="registro" class="btn btn-secondary btn-block" >Cargar alumnos</button>
+      <button type="button" data-spa-nav="registro" class="btn btn-primary btn-block">Importar alumnos (Excel)</button>
     </header>
 
     <SchoolCyclePanel />

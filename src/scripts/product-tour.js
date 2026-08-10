@@ -4,10 +4,10 @@ import { showSpaView } from './spa-router.ts';
 const TOUR_STEPS = [
   {
     id: 'excel',
-    view: 'herramientas',
+    view: 'registro',
     title: 'Excel: lo más rápido',
-    body: 'Si tenés el listado en planilla, importalo acá. Escuela, curso, materias y alumnos entran juntos.',
-    target: '[data-spa-nav="herramientas"], [data-spa-view="herramientas"] [data-excel-workspace]',
+    body: 'Acá importás el listado. Escuela, curso, materias y alumnos entran juntos. El formulario uno a uno queda más abajo, opcional.',
+    target: '[data-spa-view="registro"] [data-student-mode-panel="excel"], [data-spa-nav="registro"]',
   },
   {
     id: 'curso-actual',

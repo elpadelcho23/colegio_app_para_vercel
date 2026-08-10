@@ -1230,7 +1230,18 @@ function initStudents() {
       input.checked = input.value === value;
     });
     modePanels.forEach((panel) => {
-      panel.classList.toggle('is-hidden', panel.getAttribute('data-student-mode-panel') !== value);
+      const panelMode = panel.getAttribute('data-student-mode-panel');
+      // Excel queda siempre visible (prioridad). Manual vive abajo en un <details>.
+      if (panelMode === 'excel') {
+        panel.classList.remove('is-hidden');
+        return;
+      }
+      if (panelMode === 'manual') {
+        panel.classList.remove('is-hidden');
+        if (panel instanceof HTMLDetailsElement) {
+          panel.open = value === 'manual';
+        }
+      }
     });
   };
 
@@ -1342,12 +1353,12 @@ function initStudents() {
     button.addEventListener('click', () => {
       const mode = button.getAttribute('data-student-mode-trigger') || 'excel';
       activateStudentMode(mode);
-      const excelPanel = root.querySelector('[data-student-mode-panel="excel"]');
-      excelPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const target = root.querySelector(`[data-student-mode-panel="${mode === 'manual' ? 'manual' : 'excel'}"]`);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 
-  activateStudentMode('manual');
+  activateStudentMode('excel');
 
   const addSubjectFromInput = async () => {
     const subjectPayload = await upsertSubjectByName(newSubjectInput?.value);
@@ -1603,8 +1614,8 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
 function renderStudents(list) {
   const students = studentsInCiclo();
   if (!students.length) {
-    replaceContent(list, emptyState('No hay alumnos en este ciclo', `Registrá alumnos del ciclo ${activeCicloLectivo()}.`, {
-      ctaLabel: 'Cargar alumno',
+    replaceContent(list, emptyState('No hay alumnos en este ciclo', `Importá desde Excel (recomendado) o cargá uno a uno. Ciclo ${activeCicloLectivo()}.`, {
+      ctaLabel: 'Importar con Excel',
       spaNav: 'registro',
     }));
     return;
@@ -1837,8 +1848,8 @@ function initAttendance() {
     ]);
 
     if (!students.length) {
-      replaceContent(list, emptyState('No hay alumnos para estos filtros', 'Cargá alumnos o cambiá el curso de arriba.', {
-        ctaLabel: 'Ir a Alumnos',
+      replaceContent(list, emptyState('No hay alumnos para estos filtros', 'Importá alumnos con Excel (recomendado) o cargá uno a uno abajo en Alumnos.', {
+        ctaLabel: 'Importar con Excel',
         spaNav: 'registro',
       }));
       updateAttendanceSaveUi();
@@ -2240,8 +2251,8 @@ function initGrades() {
     if (!students.length || !meta?.subjectId) {
       replaceContent(
         bulkList,
-        emptyState('Sin alumnos', 'Cargá alumnos del curso de arriba.', {
-          ctaLabel: 'Ir a Alumnos',
+        emptyState('Sin alumnos', 'Importá alumnos con Excel (recomendado) o cargá uno a uno en Alumnos.', {
+          ctaLabel: 'Importar con Excel',
           spaNav: 'registro',
         }),
       );
@@ -2678,8 +2689,8 @@ function renderGrades(table, subjectId = '', courseId = '') {
     table,
     ['Alumno', 'Promedio', 'Asistencia', 'Calificaciones', 'Estado'],
     rows,
-    emptyState('Sin alumnos', 'Cargá alumnos del curso de arriba.', {
-      ctaLabel: 'Ir a Alumnos',
+    emptyState('Sin alumnos', 'Importá alumnos con Excel (recomendado) o cargá uno a uno en Alumnos.', {
+      ctaLabel: 'Importar con Excel',
       spaNav: 'registro',
     }),
   );
