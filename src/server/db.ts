@@ -87,8 +87,9 @@ export async function createGuestUser(): Promise<User> {
 }
 
 /**
- * Datos de prueba para que el invitado pueda usar panel, asistencia, notas y clase virtual
- * sin tener que importar Excel primero. IDs únicos por usuario (PK global).
+ * Estructura mínima para el invitado (escuela/cursos/materias), sin alumnos de ejemplo.
+ * El aula arranca vacía de listados; se cargan con Excel o a mano.
+ * IDs únicos por usuario (PK global).
  */
 export async function seedGuestDemoData(user: User) {
   if (!user?.is_guest) return;
@@ -103,9 +104,6 @@ export async function seedGuestDemoData(user: User) {
   const matMate = `${prefix}-matematica`;
   const matProg = `${prefix}-programacion`;
   const matLit = `${prefix}-literatura`;
-  const al1 = `${prefix}-al-1`;
-  const al2 = `${prefix}-al-2`;
-  const al3 = `${prefix}-al-3`;
 
   const existing = (await db.prepare('SELECT 1 AS ok FROM cursos WHERE tenant_id = ? LIMIT 1').get(tenantId)) as
     | { ok: number }
@@ -134,14 +132,6 @@ export async function seedGuestDemoData(user: User) {
     await insertSubject.run(matProg, tenantId, 'Programacion', now);
     await insertSubject.run(matLit, tenantId, 'Literatura', now);
 
-    const insertStudent = db.prepare(`
-      INSERT OR IGNORE INTO alumnos (id, tenant_id, curso_id, nombre, dni, tutor, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    await insertStudent.run(al1, tenantId, cursoManana, 'Martina Ruiz', '44111222', 'Laura Ruiz', now);
-    await insertStudent.run(al2, tenantId, cursoManana, 'Tomas Pereyra', '45222333', 'Ruben Pereyra', now);
-    await insertStudent.run(al3, tenantId, cursoTarde, 'Sofia Molina', '46333444', 'Ana Molina', now);
-
     await db.prepare('INSERT OR IGNORE INTO docente_escuelas (tenant_id, docente_id, escuela_id) VALUES (?, ?, ?)').run(
       tenantId,
       user.id,
@@ -164,56 +154,6 @@ export async function seedGuestDemoData(user: User) {
         materiaId,
       );
     }
-
-    const assignStudentSubject = db.prepare(
-      'INSERT OR IGNORE INTO alumno_materias (tenant_id, alumno_id, materia_id) VALUES (?, ?, ?)',
-    );
-    await assignStudentSubject.run(tenantId, al1, matMate);
-    await assignStudentSubject.run(tenantId, al1, matProg);
-    await assignStudentSubject.run(tenantId, al2, matMate);
-    await assignStudentSubject.run(tenantId, al2, matProg);
-    await assignStudentSubject.run(tenantId, al3, matLit);
-
-    const insertGrade = db.prepare(`
-      INSERT OR IGNORE INTO notas (
-        id, tenant_id, docente_id, alumno_id, materia_id, titulo, tipo_evaluacion, valor, peso, fecha, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    await insertGrade.run(
-      `${prefix}-nota-1`,
-      tenantId,
-      user.id,
-      al1,
-      matProg,
-      'TP HTML',
-      'TP',
-      8,
-      60,
-      now.slice(0, 10),
-      now,
-    );
-    await insertGrade.run(
-      `${prefix}-nota-2`,
-      tenantId,
-      user.id,
-      al2,
-      matProg,
-      'Integrador',
-      'Integrador',
-      5,
-      100,
-      now.slice(0, 10),
-      now,
-    );
-
-    const insertAttendance = db.prepare(`
-      INSERT OR IGNORE INTO asistencias (
-        id, tenant_id, docente_id, alumno_id, materia_id, fecha, estado, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    await insertAttendance.run(`${prefix}-asis-1`, tenantId, user.id, al2, matProg, '2026-03-10', 'ausente', now);
-    await insertAttendance.run(`${prefix}-asis-2`, tenantId, user.id, al2, matProg, '2026-03-12', 'ausente', now);
-    await insertAttendance.run(`${prefix}-asis-3`, tenantId, user.id, al1, matProg, '2026-03-10', 'presente', now);
   });
 
   await tx();

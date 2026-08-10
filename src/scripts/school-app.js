@@ -99,25 +99,9 @@ const DEFAULTS = {
     { id: 'programacion', nombre: 'Programacion', activo: true },
     { id: 'literatura', nombre: 'Literatura', activo: true },
   ],
-  [KEYS.students]: [
-    { id: 'al-1', nombre: 'Martina Ruiz', dni: '44111222', cursoId: 'curso-6-1-manana', tutor: 'Laura Ruiz', subjectIds: ['programacion', 'matematica'], activo: true },
-    { id: 'al-2', nombre: 'Tomas Pereyra', dni: '45222333', cursoId: 'curso-6-1-manana', tutor: 'Ruben Pereyra', subjectIds: ['programacion', 'matematica'], activo: true },
-    { id: 'al-3', nombre: 'Sofia Molina', dni: '46333444', cursoId: 'curso-5-2-tarde', tutor: 'Ana Molina', subjectIds: ['literatura'], activo: true },
-  ],
-  [KEYS.attendance]: [
-    { id: 'asis-1', studentId: 'al-2', subjectId: 'programacion', fecha: '2026-03-10', estado: 'ausente', updatedAt: new Date().toISOString() },
-    { id: 'asis-2', studentId: 'al-2', subjectId: 'programacion', fecha: '2026-03-12', estado: 'ausente', updatedAt: new Date().toISOString() },
-    { id: 'asis-3', studentId: 'al-2', subjectId: 'programacion', fecha: '2026-03-14', estado: 'presente', updatedAt: new Date().toISOString() },
-    { id: 'asis-4', studentId: 'al-2', subjectId: 'programacion', fecha: '2026-03-17', estado: 'ausente', updatedAt: new Date().toISOString() },
-    { id: 'asis-5', studentId: 'al-1', subjectId: 'programacion', fecha: '2026-03-10', estado: 'presente', updatedAt: new Date().toISOString() },
-    { id: 'asis-6', studentId: 'al-1', subjectId: 'programacion', fecha: '2026-03-12', estado: 'presente', updatedAt: new Date().toISOString() },
-    { id: 'asis-7', studentId: 'al-1', subjectId: 'programacion', fecha: '2026-03-14', estado: 'presente', updatedAt: new Date().toISOString() },
-    { id: 'asis-8', studentId: 'al-1', subjectId: 'programacion', fecha: '2026-03-17', estado: 'presente', updatedAt: new Date().toISOString() },
-  ],
-  [KEYS.grades]: [
-    { id: 'nota-1', studentId: 'al-1', subjectId: 'programacion', titulo: 'TP HTML', tipoEvaluacion: 'TP', valor: 8, peso: 60, fecha: today(), fechaEntrega: '', updatedAt: new Date().toISOString() },
-    { id: 'nota-2', studentId: 'al-2', subjectId: 'programacion', titulo: 'Integrador', tipoEvaluacion: 'Integrador', valor: 5, peso: 100, fecha: today(), fechaEntrega: '', updatedAt: new Date().toISOString() },
-  ],
+  [KEYS.students]: [],
+  [KEYS.attendance]: [],
+  [KEYS.grades]: [],
   [KEYS.teacherContext]: [],
 };
 
