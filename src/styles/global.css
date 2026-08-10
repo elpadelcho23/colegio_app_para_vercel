@@ -673,8 +673,10 @@ h3 {
   list-style: none;
   display: inline-grid;
   place-items: center;
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -793,10 +795,10 @@ h3 {
   }
 
   .menu-toggle {
-    width: 40px;
-    min-width: 40px;
-    height: 40px;
-    min-height: 40px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
 
   .nav-links {
@@ -1470,9 +1472,9 @@ a.tools-nav-link {
 }
 
 .actions-group select {
-  min-height: 36px;
+  min-height: 44px;
   max-width: 220px;
-  padding: 0.35rem 0.6rem;
+  padding: 0.45rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm, 8px);
   background: var(--surface);
@@ -1667,7 +1669,7 @@ a.tools-nav-link {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  min-height: 36px;
+  min-height: 44px;
 }
 
 .days-checkboxes,
@@ -1871,6 +1873,11 @@ td small {
 
   .attendance-save-bar .btn {
     width: 100%;
+  }
+
+  /* Toast arriba de la barra fija de Guardar. */
+  body:has(.attendance-save-bar) .app-toast {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -2403,15 +2410,17 @@ td small {
 }
 
 .modal {
-  width: min(460px, calc(100% - 32px));
+  width: min(460px, calc(100% - 24px));
+  max-height: min(90dvh, 900px);
   border: 0;
   padding: 0;
   color: var(--ink);
   background: transparent;
+  overflow: hidden;
 }
 
 .modal--wide {
-  width: min(560px, calc(100% - 32px));
+  width: min(560px, calc(100% - 24px));
 }
 
 .modal::backdrop {
@@ -2420,6 +2429,9 @@ td small {
 
 .modal .panel {
   margin: 0;
+  max-height: min(90dvh, 900px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 label.checkbox-row {
@@ -2718,8 +2730,8 @@ label.checkbox-row {
 }
 
 .btn-sm {
-  min-height: 38px;
-  padding: 0.45rem 0.85rem;
+  min-height: 44px;
+  padding: 0.5rem 0.9rem;
   font-size: 0.86rem;
 }
 
@@ -2905,21 +2917,34 @@ label.checkbox-row {
 
 .attendance-matrix-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 8px);
+  background:
+    linear-gradient(90deg, var(--surface) 70%, transparent),
+    linear-gradient(270deg, var(--surface) 70%, transparent) 100% 0,
+    linear-gradient(90deg, rgba(0, 0, 0, 0.08), transparent),
+    linear-gradient(270deg, rgba(0, 0, 0, 0.08), transparent) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 28px 100%, 28px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
 }
 
 .attendance-matrix-table {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
 }
 
 .attendance-matrix-table th,
 .attendance-matrix-table td {
   border: 1px solid var(--line);
-  padding: 0.25rem 0.35rem;
+  padding: 0.45rem 0.5rem;
   text-align: center;
   white-space: nowrap;
+  min-width: 2.4rem;
 }
 
 .attendance-matrix-table th:first-child,
