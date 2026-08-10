@@ -51,6 +51,13 @@ export function initMobileNav() {
     setMenuState(!isOpen);
   }, { signal });
 
+  navMenu.querySelectorAll('[data-menu-close]').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      setMenuState(false);
+    }, { signal });
+  });
+
   navMenu.querySelectorAll('a, .nav-form button, .nav-tab, [data-spa-nav]').forEach((element) => {
     element.addEventListener('click', () => setMenuState(false), { signal });
   });

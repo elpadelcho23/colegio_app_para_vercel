@@ -91,7 +91,12 @@ const isActive = (href: string) => {
     </button>
 
     <div class="nav-links" id="main-navigation-menu" data-nav-menu role="menu">
-      <p class="nav-section-label">Menú</p>
+      <div class="nav-links-head">
+        <p class="nav-section-label">Menú</p>
+        <button type="button" class="nav-links-close btn btn-ghost btn-sm" data-menu-close aria-label="Cerrar menú">
+          Cerrar
+        </button>
+      </div>
       {user && (
         <div class="nav-cycle-picker">
           <label class="global-cycle-picker">
