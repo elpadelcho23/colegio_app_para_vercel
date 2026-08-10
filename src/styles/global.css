@@ -93,9 +93,14 @@ body.mobile-menu-open {
 body.mobile-menu-open::before {
   content: "";
   position: fixed;
-  inset: var(--app-shell-height, 108px) 0 0;
-  z-index: 30;
-  background: rgba(16, 24, 20, 0.36);
+  inset: 0;
+  z-index: 50;
+  background: rgba(16, 24, 20, 0.4);
+}
+
+/* El menú vive dentro del header: hay que subir todo el shell por encima del overlay. */
+body.mobile-menu-open .app-shell {
+  z-index: 60;
 }
 
 a {
@@ -409,7 +414,7 @@ h3 {
   right: 0;
   bottom: 0;
   left: auto;
-  z-index: 60;
+  z-index: 2;
   display: grid;
   width: min(360px, 92vw);
   height: 100dvh;
@@ -422,6 +427,8 @@ h3 {
   box-sizing: border-box;
   border-left: 1px solid var(--line);
   background: var(--surface);
+  background-color: var(--surface);
+  isolation: isolate;
   box-shadow: -22px 0 54px rgba(17, 24, 39, 0.16);
   opacity: 0;
   pointer-events: none;
@@ -833,17 +840,22 @@ h3 {
     width: min(340px, 92vw);
     height: 100dvh;
     max-height: 100dvh;
+    z-index: 2;
+    background: var(--surface);
+  }
+
+  body.mobile-menu-open .app-shell {
     z-index: 60;
   }
 
   body.mobile-menu-open::before {
     inset: 0;
-    z-index: 55;
+    z-index: 50;
   }
 
   .menu-toggle {
     position: relative;
-    z-index: 70;
+    z-index: 3;
   }
 
   .page,
