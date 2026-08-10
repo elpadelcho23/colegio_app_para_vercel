@@ -437,6 +437,24 @@ h3 {
   visibility: visible;
 }
 
+.nav-links-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.nav-links-head .nav-section-label {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-links-close {
+  flex-shrink: 0;
+}
+
 .nav-links a,
 .nav-form button,
 .theme-toggle {
@@ -909,6 +927,8 @@ h3 {
     position: static;
     display: grid;
     width: 100%;
+    height: auto;
+    max-height: none;
     flex: 1;
     gap: 0.25rem;
     padding: 0;
@@ -922,6 +942,10 @@ h3 {
     pointer-events: auto;
     transform: none;
     visibility: visible;
+  }
+
+  .nav-links-head {
+    display: none;
   }
 
   .nav-links a,
