@@ -213,21 +213,6 @@ const isActive = (href: string) => {
   )}
 </header>
 
-{spaEnabled && user && (
-  <nav class="mobile-bottom-nav" aria-label="Acceso rápido" data-mobile-bottom-nav>
-    {spaLinks.map((link) => (
-      <button
-        type="button"
-        class="mobile-bottom-nav-item"
-        data-spa-nav={link.view}
-        aria-label={link.label}
-      >
-        <span class="mobile-bottom-nav-label">{link.shortLabel}</span>
-      </button>
-    ))}
-  </nav>
-)}
-
 <style>
   .brand-button {
     border: 0;
