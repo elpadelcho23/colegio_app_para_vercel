@@ -1301,68 +1301,10 @@ h3 {
   margin-bottom: var(--space-2);
 }
 
-.onboarding-progress {
+.onboarding-lead {
   margin: 0;
   color: var(--muted);
-  font-weight: 600;
-}
-
-.onboarding-steps {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.onboarding-step {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-}
-
-.onboarding-step-indicator {
-  display: grid;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 999px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.onboarding-step-label {
-  font-weight: 600;
-}
-
-.onboarding-step--current {
-  border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
-  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
-}
-
-.onboarding-step--current .onboarding-step-indicator {
-  color: var(--brand);
-}
-
-.onboarding-step--done .onboarding-step-indicator {
-  color: var(--ok);
-}
-
-.onboarding-step--done .onboarding-step-label {
-  color: var(--muted);
-}
-
-.onboarding-step--locked {
-  opacity: 0.55;
-}
-
-.onboarding-step--locked .onboarding-step-label {
-  color: var(--muted);
+  line-height: 1.45;
 }
 
 .onboarding-actions {

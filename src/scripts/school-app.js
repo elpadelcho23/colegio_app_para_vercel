@@ -5727,18 +5727,16 @@ async function bootstrap() {
 
   initResponsiveTables();
   initDashboard();
+  const productTour = initProductTour({
+    getUserId: () => currentUser?.id || null,
+  });
   initOnboarding({
     getUserId: () => currentUser?.id || null,
     hasCourse: () => visibleCourses().length > 0,
-    hasSubject: () => activeSubjects().length > 0,
     hasStudents: () => studentsInCiclo().length > 0,
     hasTeachingContext: () => teachingContextIsReady(),
-    hasActivity: () => knownHasActivity || sessionStorage.getItem('aula_clara_has_activity') === '1',
-    openTeachingContextPicker,
     onPanelRefresh,
-  });
-  initProductTour({
-    getUserId: () => currentUser?.id || null,
+    startTour: () => productTour?.startTour?.(),
   });
   initGuestSession({
     userId: currentUser?.id || null,

@@ -19,24 +19,24 @@ const { initialView = 'panel' } = Astro.props;
     <section class="onboarding hero-card is-hidden" data-onboarding hidden aria-labelledby="onboarding-title">
       <div class="onboarding-header">
         <p class="eyebrow">Primeros pasos</p>
-        <h2 id="onboarding-title">Configurá tu aula</h2>
-        <p class="onboarding-progress" data-onboarding-progress aria-live="polite">Paso 1 de 5</p>
+        <h2 id="onboarding-title">¿Arrancamos con el tutorial?</h2>
+        <p class="onboarding-lead">
+          Te muestro lo esencial en un minuto. Lo más rápido para cargar alumnos es Excel.
+        </p>
       </div>
 
-      <ol class="onboarding-steps" data-onboarding-steps aria-label="Pasos de configuración inicial"></ol>
-
       <div class="onboarding-actions">
-        <button type="button" class="btn btn-primary btn-block" data-onboarding-cta data-spa-nav="cursos">
-          Crear curso
+        <button type="button" class="btn btn-primary btn-block" data-setup-tutorial-start>
+          Sí, arrancamos
         </button>
         <button type="button" class="btn btn-ghost btn-block" data-onboarding-dismiss>
-          Omitir por ahora
+          Ahora no
         </button>
       </div>
     </section>
 
     <button type="button" class="onboarding-resume btn btn-ghost is-hidden" data-onboarding-resume hidden>
-      Completar configuración
+      ¿Arrancamos con el tutorial?
     </button>
 
     <section class="hero-card" data-panel-hero>

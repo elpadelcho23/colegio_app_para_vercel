@@ -3,10 +3,24 @@ import { showSpaView } from './spa-router.ts';
 
 const TOUR_STEPS = [
   {
+    id: 'excel',
+    view: 'herramientas',
+    title: 'Excel: lo más rápido',
+    body: 'Si tenés el listado en planilla, importalo acá. Escuela, curso, materias y alumnos entran juntos.',
+    target: '[data-spa-nav="herramientas"], [data-spa-view="herramientas"] [data-excel-workspace]',
+  },
+  {
+    id: 'curso-actual',
+    view: 'panel',
+    title: 'Curso actual',
+    body: 'Arriba elegís el curso y la materia. Asistencia, Notas y Actividades usan esa elección.',
+    target: '[data-gtc-toggle], [data-gtc-open], [data-global-teaching-context]',
+  },
+  {
     id: 'asistencia',
     view: 'asistencia',
     title: 'Asistencia',
-    body: 'Acá pasás lista del curso que elegiste arriba. Marcá presente o ausente y guardá. Más abajo está el historial.',
+    body: 'Acá pasás lista del curso que elegiste arriba. Marcá presente o ausente y guardá.',
     target: '[data-spa-nav="asistencia"]',
   },
   {
@@ -24,13 +38,13 @@ function setTourStatus(userId, value) {
 }
 
 /**
- * Tour opcional (Asistencia y Notas).
- * Solo se inicia desde el menú de ayuda "?" — no se ofrece solo.
+ * Tour corto de primeros pasos (Excel → curso actual → Asistencia → Notas).
+ * Se inicia desde el panel (“¿Arrancamos con el tutorial?”) o desde el menú “?”.
  */
 export function initProductTour({ getUserId }) {
-  const startButtons = [...document.querySelectorAll('[data-product-tour-start]')];
-  if (!startButtons.length) return { startTour: () => {} };
-
+  const startButtons = [
+    ...document.querySelectorAll('[data-product-tour-start], [data-setup-tutorial-start]'),
+  ];
   const overlay = ensureTourOverlay();
   let stepIndex = 0;
 
@@ -39,6 +53,7 @@ export function initProductTour({ getUserId }) {
     overlay.close();
     showSpaView('panel');
     document.querySelector('[data-help-menu]')?.removeAttribute('open');
+    window.dispatchEvent(new CustomEvent('aula-clara:local-data-changed'));
   };
 
   const showStep = (index) => {
@@ -52,16 +67,16 @@ export function initProductTour({ getUserId }) {
     window.requestAnimationFrame(() => {
       const targets = [...document.querySelectorAll(step.target)]
         .filter((node) => node.offsetParent !== null || node.getBoundingClientRect().width > 0);
-      const target = targets[0] || document.querySelector(`[data-spa-view="${step.view}"]`);
       overlay.open({
         title: step.title,
         body: step.body,
         stepLabel: `${index + 1} de ${TOUR_STEPS.length}`,
-        target,
         onNext: () => showStep(index + 1),
         onSkip: () => finishTour('skipped'),
         isLast: index === TOUR_STEPS.length - 1,
+        nextLabel: index === 0 ? 'Empezar' : undefined,
       });
+      void targets[0];
     });
   };
 
@@ -72,6 +87,8 @@ export function initProductTour({ getUserId }) {
 
   startButtons.forEach((btn) => {
     btn.addEventListener('click', (event) => {
+      // El onboarding ya llama startTour; evitamos doble arranque en ese botón.
+      if (btn.hasAttribute('data-setup-tutorial-start')) return;
       event.preventDefault();
       startTour();
     });
@@ -115,13 +132,13 @@ function ensureTourOverlay() {
   root.querySelector('[data-tour-backdrop]')?.addEventListener('click', () => onSkip?.());
 
   return {
-    open({ title, body, stepLabel, onNext: next, onSkip: skip, isLast }) {
+    open({ title, body, stepLabel, onNext: next, onSkip: skip, isLast, nextLabel }) {
       onNext = next;
       onSkip = skip;
       if (titleEl) titleEl.textContent = title;
       if (bodyEl) bodyEl.textContent = body;
       if (stepEl) stepEl.textContent = stepLabel;
-      if (nextBtn) nextBtn.textContent = isLast ? 'Listo' : 'Siguiente';
+      if (nextBtn) nextBtn.textContent = isLast ? 'Listo' : (nextLabel || 'Siguiente');
       root.classList.remove('is-hidden');
       root.removeAttribute('hidden');
     },
