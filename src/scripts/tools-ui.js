@@ -34,7 +34,13 @@ export function navigateToToolsSection(section, tab) {
   }
   showSpaView('herramientas');
   const root = document.querySelector('[data-herramientas]');
-  if (section === 'sync' || section === 'plan' || section === 'kit' || section === 'cuenta') {
+  if (
+    section === 'sync'
+    || section === 'plan'
+    || section === 'kit'
+    || section === 'cuenta'
+    || section === 'install'
+  ) {
     activateToolsHubTab(root, 'cuenta');
   } else {
     activateToolsHubTab(root, 'excel');

@@ -87,10 +87,36 @@ const registered = Astro.url.searchParams.get('registered');
           <p class="muted auth-guest-hint">Modo invitado: probá la app completa (cursos de ejemplo, clase virtual e IA; sin alumnos precargados). Al salir se borran los datos — creá una cuenta para guardarlos.</p>
         </form>
 
+        <section class="pwa-install auth-pwa-install" data-pwa-install>
+          <div class="section-title">
+            <h2>Instalar en PC o Android</h2>
+            <p>Dejá Aula Clara como app en tu dispositivo. No es una extensión de tienda: se instala desde esta web.</p>
+          </div>
+          <button type="button" class="btn btn-primary btn-block" data-pwa-install-btn>
+            Instalar app
+          </button>
+          <p class="muted" data-pwa-install-status></p>
+          <details class="pwa-install-help" data-pwa-install-help>
+            <summary>Cómo instalar según el dispositivo</summary>
+            <ul>
+              <li><strong>Android (Chrome):</strong> tocá Instalar, o Menú ⋮ → Instalar app.</li>
+              <li><strong>PC (Chrome / Edge):</strong> tocá Instalar, o el ícono ⊕ en la barra de direcciones.</li>
+              <li><strong>iPhone / iPad (Safari):</strong> Compartir → Agregar a pantalla de inicio.</li>
+            </ul>
+          </details>
+        </section>
+
         <footer class="auth-footer">
           <p>¿No tenés cuenta? <a href="/register">Registrate acá</a>.</p>
         </footer>
       </section>
     </main>
+    <script>
+      import { registerSW } from 'virtual:pwa-register';
+      import { initPwaInstall } from '../scripts/pwa-install.js';
+
+      registerSW({ immediate: true });
+      initPwaInstall();
+    </script>
   </body>
 </html>

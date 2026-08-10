@@ -86,6 +86,8 @@ const initialView = spaEnabled
     </script>
     <script>
       import '../scripts/school-app.js';
+      import { initPwaInstall } from '../scripts/pwa-install.js';
+      initPwaInstall();
     </script>
     <script>
       import { registerSW } from 'virtual:pwa-register';

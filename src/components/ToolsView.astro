@@ -31,7 +31,7 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     aria-controls="tools-hub-cuenta"
     id="tools-hub-tab-cuenta"
   >
-    Cuenta / sincronización
+    Cuenta / instalar
   </button>
 </div>
 
@@ -149,6 +149,23 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     </div>
 
     <button class="btn btn-primary" type="button" data-sync-button>Sincronizar ahora</button>
+  </section>
+
+  <section class="panel tools-section pwa-install" data-pwa-install data-tools-section="install">
+    <div class="section-title">
+      <h2>Instalar app (PC / Android)</h2>
+      <p>Usá Aula Clara como aplicación instalada. Se descarga desde este sitio, no desde una tienda de extensiones.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-pwa-install-btn>Instalar en este dispositivo</button>
+    <p class="muted" data-pwa-install-status></p>
+    <details class="pwa-install-help" data-pwa-install-help>
+      <summary>Cómo instalar según el dispositivo</summary>
+      <ul>
+        <li><strong>Android (Chrome):</strong> tocá Instalar, o Menú ⋮ → Instalar app.</li>
+        <li><strong>PC (Chrome / Edge):</strong> tocá Instalar, o el ícono ⊕ en la barra de direcciones.</li>
+        <li><strong>iPhone / iPad (Safari):</strong> Compartir → Agregar a pantalla de inicio.</li>
+      </ul>
+    </details>
   </section>
 
   <section class="panel tools-section" data-tools-section="plan" data-billing-plan>
