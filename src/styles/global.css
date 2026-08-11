@@ -462,6 +462,7 @@ h3 {
 }
 
 .nav-links a,
+.nav-links .nav-tab,
 .nav-form button,
 .theme-toggle {
   display: flex;
@@ -479,13 +480,16 @@ h3 {
 }
 
 .nav-links a:hover,
+.nav-links .nav-tab:hover,
 .nav-form button:hover,
 .theme-toggle:hover {
   color: var(--brand-strong);
   background: var(--surface-2);
 }
 
-.nav-links a.active {
+.nav-links a.active,
+.nav-links .nav-tab.active,
+.nav-links .nav-tab[aria-current='page'] {
   color: var(--brand-strong);
   background: var(--surface-emphasis);
   box-shadow: inset 3px 0 0 var(--brand);
@@ -1065,6 +1069,21 @@ h3 {
   box-shadow: var(--shadow-soft);
 }
 
+/* Destaca el panel activo al navegar (y refuerza el contexto del tutorial). */
+[data-spa-view]:not(.spa-view--hidden) > .page-header,
+[data-spa-view]:not(.spa-view--hidden) > .hero-card,
+[data-spa-view]:not(.spa-view--hidden) > .panel-day-summary {
+  border-color: color-mix(in srgb, var(--brand) 38%, var(--line));
+  box-shadow:
+    inset 3px 0 0 var(--brand),
+    var(--shadow-soft);
+}
+
+[data-spa-view]:not(.spa-view--hidden) > .page-header .eyebrow,
+[data-spa-view]:not(.spa-view--hidden) > .hero-card .eyebrow {
+  color: var(--brand-strong);
+}
+
 .panel,
 .hero-card {
   padding: var(--space-4);
@@ -1286,6 +1305,7 @@ h3 {
   place-items: end center;
   padding: 1rem;
   padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
 }
 
 .product-tour-overlay.is-hidden,
@@ -1296,19 +1316,70 @@ h3 {
 .product-tour-backdrop {
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, #111 35%, transparent);
+  background: color-mix(in srgb, #111 42%, transparent);
+  pointer-events: auto;
+}
+
+.product-tour-spotlight {
+  position: fixed;
+  z-index: 1;
+  border-radius: calc(var(--radius) + 4px);
+  border: 2px solid color-mix(in srgb, var(--brand) 80%, #fff);
+  box-shadow:
+    0 0 0 9999px color-mix(in srgb, #0b1210 48%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--brand) 35%, transparent);
+  pointer-events: none;
+  transition:
+    top 0.18s ease,
+    left 0.18s ease,
+    width 0.18s ease,
+    height 0.18s ease;
+}
+
+.product-tour-spotlight.is-hidden,
+.product-tour-spotlight[hidden] {
+  display: none;
+}
+
+.product-tour-overlay--menu .product-tour-backdrop {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.product-tour-overlay--menu .product-tour-spotlight {
+  display: none;
+}
+
+body.product-tour-menu-step.mobile-menu-open .app-shell {
+  z-index: 95;
+}
+
+body.product-tour-menu-step .tour-target-active {
+  outline: 2px solid color-mix(in srgb, var(--brand) 70%, #fff);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+}
+
+.tour-target-active {
+  position: relative;
+  z-index: 91;
+  border-radius: var(--radius);
 }
 
 .product-tour-card {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: min(26rem, 100%);
+  max-height: min(42dvh, 22rem);
+  overflow: auto;
   padding: 1rem 1.1rem;
   border-radius: var(--radius-md, 0.75rem);
   border: 1px solid var(--line);
   background: var(--surface);
   display: grid;
   gap: 0.55rem;
+  pointer-events: auto;
+  box-shadow: var(--shadow);
 }
 
 .product-tour-step {
@@ -1719,6 +1790,50 @@ a.tools-nav-link {
 .metric span {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.metric--link {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition:
+    border-color var(--transition-fast, 0.16s ease),
+    background var(--transition-fast, 0.16s ease),
+    transform var(--transition-fast, 0.16s ease),
+    box-shadow var(--transition-fast, 0.16s ease);
+}
+
+.metric--link:hover,
+.metric--link:focus-visible {
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--line));
+  background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+  box-shadow: var(--shadow-soft);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.metric--link:active {
+  transform: translateY(0);
+}
+
+.metric-hint {
+  color: var(--brand-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+body[data-active-spa-view='registro'] .metric--link[data-spa-nav='registro'],
+body[data-active-spa-view='cursos'] .metric--link[data-spa-nav='cursos'],
+body[data-active-spa-view='notas'] .metric--link[data-spa-nav='notas'],
+body[data-active-spa-view='asistencia'] .metric--link[data-spa-nav='asistencia'] {
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--line));
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--brand);
 }
 
 @media (min-width: 560px) {

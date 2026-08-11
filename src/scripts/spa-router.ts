@@ -47,6 +47,7 @@ export function showSpaView(view: SpaViewId, options: { replace?: boolean; skipH
   });
 
   activeView = view;
+  document.body.dataset.activeSpaView = view;
   updateNavState(view);
   updateDocumentTitle(view);
 

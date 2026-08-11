@@ -254,9 +254,10 @@ const isActive = (href: string) => {
 
   .nav-tab.active,
   .nav-tab[aria-current='page'] {
-    background: color-mix(in srgb, var(--brand) 14%, var(--surface));
-    color: var(--brand);
-    font-weight: 700;
+    background: color-mix(in srgb, var(--brand) 18%, var(--surface));
+    color: var(--brand-strong, var(--brand));
+    font-weight: 800;
+    box-shadow: inset 3px 0 0 var(--brand);
   }
 
   .nav-section-label--secondary {
