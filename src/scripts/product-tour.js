@@ -7,28 +7,28 @@ const TOUR_STEPS = [
     view: 'registro',
     title: 'Excel: lo más rápido',
     body: 'Acá importás el listado. Escuela, curso, materias y alumnos entran juntos. El formulario uno a uno queda más abajo, opcional.',
-    target: '[data-spa-view="registro"] [data-student-mode-panel="excel"], [data-spa-nav="registro"]',
+    target: '[data-spa-view="registro"] [data-student-mode-panel="excel"], [data-spa-view="registro"] .page-header',
   },
   {
     id: 'curso-actual',
     view: 'panel',
     title: 'Curso actual',
     body: 'Arriba elegís el curso y la materia. Asistencia, Notas y Actividades usan esa elección.',
-    target: '[data-gtc-toggle], [data-gtc-open], [data-global-teaching-context]',
+    target: '[data-global-teaching-context], [data-gtc-toggle]',
   },
   {
     id: 'asistencia',
     view: 'asistencia',
     title: 'Asistencia',
     body: 'Acá pasás lista del curso que elegiste arriba. Marcá presente o ausente y guardá.',
-    target: '[data-spa-nav="asistencia"]',
+    target: '[data-spa-view="asistencia"] [data-attendance-take-view], [data-spa-view="asistencia"] .page-header',
   },
   {
     id: 'notas',
     view: 'notas',
     title: 'Notas',
     body: 'Acá cargás calificaciones del mismo curso. El detalle por período queda en la misma pantalla.',
-    target: '[data-spa-nav="notas"]',
+    target: '[data-spa-view="notas"] [data-grades-take-view], [data-spa-view="notas"] .page-header',
   },
 ];
 

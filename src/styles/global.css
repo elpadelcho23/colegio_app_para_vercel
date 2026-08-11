@@ -37,7 +37,6 @@
   --bp-wide: 1280px;
   --transition-fast: 0.16s ease;
   --transition-base: 0.2s ease;
-  --mobile-bottom-nav-height: 3.65rem;
 }
 
 :root[data-theme="dark"] {
@@ -515,15 +514,31 @@ h3 {
   background: var(--surface-2);
 }
 
-.mobile-bottom-nav {
-  display: none !important;
-}
-
 .activity-flow-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-bottom: var(--space-4);
+}
+
+@media (max-width: 479px) {
+  .activity-flow-tabs,
+  .tools-hub-tabs,
+  .tools-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    padding-bottom: 0.15rem;
+    scrollbar-width: thin;
+  }
+
+  .activity-flow-tab,
+  .tools-hub-tab,
+  .tools-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
 }
 
 .activity-flow-tab {
@@ -1372,7 +1387,7 @@ h3 {
 
 @media (min-width: 768px) {
   .app-toast {
-    bottom: 1.5rem;
+    bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .hero-actions-secondary .btn {
@@ -1465,10 +1480,6 @@ h3 {
 
 a.tools-nav-link {
   display: inline-block;
-}
-
-.institution-strip .sync-indicator {
-  flex-shrink: 0;
 }
 
 @media (min-width: 768px) {
@@ -1892,12 +1903,25 @@ td small {
 }
 
 @media (max-width: 767px) {
-  [data-attendance-take-view],
-  [data-grades-take-view] {
+  /* Solo en la vista SPA activa: evita padding/toast fantasma en Panel u otras pantallas. */
+  [data-spa-view="asistencia"]:not(.spa-view--hidden),
+  [data-spa-view="notas"]:not(.spa-view--hidden),
+  [data-attendance]:not([data-spa-view]),
+  [data-grades]:not([data-spa-view]) {
     padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
   }
 
-  .attendance-save-bar {
+  [data-spa-view="asistencia"]:not(.spa-view--hidden):has(.attendance-save-bar.is-pending),
+  [data-spa-view="notas"]:not(.spa-view--hidden):has(.attendance-save-bar.is-pending),
+  [data-attendance]:not([data-spa-view]):has(.attendance-save-bar.is-pending),
+  [data-grades]:not([data-spa-view]):has(.attendance-save-bar.is-pending) {
+    padding-bottom: calc(8.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  [data-spa-view="asistencia"]:not(.spa-view--hidden) .attendance-save-bar,
+  [data-spa-view="notas"]:not(.spa-view--hidden) .attendance-save-bar,
+  [data-attendance]:not([data-spa-view]) .attendance-save-bar,
+  [data-grades]:not([data-spa-view]) .attendance-save-bar {
     position: fixed;
     right: 0;
     bottom: 0;
@@ -1916,13 +1940,25 @@ td small {
     backdrop-filter: blur(12px);
   }
 
-  .attendance-save-bar .btn {
+  [data-spa-view="asistencia"]:not(.spa-view--hidden) .attendance-save-bar .btn,
+  [data-spa-view="notas"]:not(.spa-view--hidden) .attendance-save-bar .btn,
+  [data-attendance]:not([data-spa-view]) .attendance-save-bar .btn,
+  [data-grades]:not([data-spa-view]) .attendance-save-bar .btn {
     width: 100%;
   }
 
-  /* Toast arriba de la barra fija de Guardar. */
-  body:has(.attendance-save-bar) .app-toast {
+  body:has([data-spa-view="asistencia"]:not(.spa-view--hidden) .attendance-save-bar) .app-toast,
+  body:has([data-spa-view="notas"]:not(.spa-view--hidden) .attendance-save-bar) .app-toast,
+  body:has([data-attendance]:not([data-spa-view]) .attendance-save-bar) .app-toast,
+  body:has([data-grades]:not([data-spa-view]) .attendance-save-bar) .app-toast {
     bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has([data-spa-view="asistencia"]:not(.spa-view--hidden) .attendance-save-bar.is-pending) .app-toast,
+  body:has([data-spa-view="notas"]:not(.spa-view--hidden) .attendance-save-bar.is-pending) .app-toast,
+  body:has([data-attendance]:not([data-spa-view]) .attendance-save-bar.is-pending) .app-toast,
+  body:has([data-grades]:not([data-spa-view]) .attendance-save-bar.is-pending) .app-toast {
+    bottom: calc(7.75rem + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -2457,7 +2493,8 @@ td small {
 
 .modal {
   width: min(460px, calc(100% - 24px));
-  max-height: min(90dvh, 900px);
+  max-height: min(calc(100dvh - 2rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 900px);
+  margin: max(0.75rem, env(safe-area-inset-top, 0px)) auto max(0.75rem, env(safe-area-inset-bottom, 0px));
   border: 0;
   padding: 0;
   color: var(--ink);
@@ -2475,7 +2512,7 @@ td small {
 
 .modal .panel {
   margin: 0;
-  max-height: min(90dvh, 900px);
+  max-height: inherit;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -2489,9 +2526,13 @@ label.checkbox-row {
 .auth-body,
 .login-page {
   display: grid;
-  min-height: 100vh;
+  min-height: 100dvh;
   place-items: center;
-  padding: var(--space-4);
+  padding:
+    max(var(--space-4), env(safe-area-inset-top, 0px))
+    max(var(--space-4), env(safe-area-inset-right, 0px))
+    max(var(--space-4), env(safe-area-inset-bottom, 0px))
+    max(var(--space-4), env(safe-area-inset-left, 0px));
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--brand) 10%, transparent), transparent 52%),
     radial-gradient(circle at bottom left, color-mix(in srgb, var(--accent) 6%, transparent), transparent 45%),
@@ -2965,7 +3006,6 @@ label.checkbox-row {
   .theme-toggle,
   .nav-form,
   .btn,
-  .mobile-bottom-nav,
   .sidebar,
   .app-nav,
   nav,
@@ -3010,6 +3050,18 @@ label.checkbox-row {
 
 .seguimiento-row small {
   display: block;
+}
+
+.attendance-matrix-scroll-hint {
+  display: none;
+  margin: 0 0 0.45rem;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 767px) {
+  .attendance-matrix-scroll-hint {
+    display: block;
+  }
 }
 
 .attendance-matrix-wrap {

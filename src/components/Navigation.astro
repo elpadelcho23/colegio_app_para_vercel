@@ -4,12 +4,12 @@ const user = Astro.locals.user;
 const isGuest = Boolean(user?.is_guest);
 
 const spaLinks = [
-  { view: 'panel', href: '/', label: 'Panel', shortLabel: 'Panel' },
-  { view: 'registro', href: '/registro', label: 'Alumnos', shortLabel: 'Alumnos' },
-  { view: 'cursos', href: '/cursos', label: 'Cursos', shortLabel: 'Cursos' },
-  { view: 'asistencia', href: '/asistencia', label: 'Asistencia', shortLabel: 'Asist.' },
-  { view: 'notas', href: '/notas', label: 'Calificaciones', shortLabel: 'Calificaciones' },
-  { view: 'actividades', href: '/actividades', label: 'Actividades', shortLabel: 'Actividades' },
+  { view: 'panel', href: '/', label: 'Panel' },
+  { view: 'registro', href: '/registro', label: 'Alumnos' },
+  { view: 'cursos', href: '/cursos', label: 'Cursos' },
+  { view: 'asistencia', href: '/asistencia', label: 'Asistencia' },
+  { view: 'notas', href: '/notas', label: 'Calificaciones' },
+  { view: 'actividades', href: '/actividades', label: 'Actividades' },
 ] as const;
 
 const staticLinks = [
@@ -28,18 +28,6 @@ const isActive = (href: string) => {
       <strong>Escuela Técnica 1</strong>
       <span class="institution-strip-secondary">Seguimiento escolar simple para docentes</span>
     </div>
-    {user && (
-      <button
-        type="button"
-        class="sync-indicator"
-        data-sync-indicator
-        aria-label="Estado de sincronización"
-        title="Sincronización"
-      >
-        <span class="sync-indicator-dot" aria-hidden="true"></span>
-        <span class="sync-indicator-label" data-sync-indicator-label>Guardado</span>
-      </button>
-    )}
     {user && (
       <label class="global-cycle-picker global-cycle-picker--strip">
         <span>Ciclo</span>
@@ -77,18 +65,32 @@ const isActive = (href: string) => {
       </a>
     )}
 
-    <button
-      class="menu-toggle"
-      type="button"
-      aria-label="Abrir menú"
-      aria-controls="main-navigation-menu"
-      aria-expanded="false"
-      data-menu-toggle
-    >
-      <span></span>
-      <span></span>
-      <span></span>
-    </button>
+    <div class="topbar-actions">
+      {user && (
+        <button
+          type="button"
+          class="sync-indicator"
+          data-sync-indicator
+          aria-label="Estado de sincronización"
+          title="Sincronización"
+        >
+          <span class="sync-indicator-dot" aria-hidden="true"></span>
+          <span class="sync-indicator-label" data-sync-indicator-label>Guardado</span>
+        </button>
+      )}
+      <button
+        class="menu-toggle"
+        type="button"
+        aria-label="Abrir menú"
+        aria-controls="main-navigation-menu"
+        aria-expanded="false"
+        data-menu-toggle
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
 
     <div class="nav-links" id="main-navigation-menu" data-nav-menu role="menu">
       <div class="nav-links-head">
@@ -175,7 +177,7 @@ const isActive = (href: string) => {
             ¿Arrancamos con el tutorial?
           </button>
           <button type="button" class="help-menu-item" role="menuitem" data-pwa-install-btn>
-            Instalar app (PC / Android)
+            Instalar app (PC / Android / iOS)
           </button>
           <button type="button" class="help-menu-item" role="menuitem" data-gtc-open>
             Cambiar curso actual
@@ -264,11 +266,19 @@ const isActive = (href: string) => {
     font-size: 0.95rem;
   }
 
+  .topbar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
   .sync-indicator {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    min-height: 2rem;
+    min-height: 44px;
     width: auto;
     max-width: 11rem;
     padding: 0.25rem 0.55rem 0.25rem 0.45rem;
@@ -308,16 +318,37 @@ const isActive = (href: string) => {
     background: #6b7280;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 1023px) {
     .sync-indicator-label {
       display: none;
     }
 
     .sync-indicator {
-      width: 2rem;
+      width: 44px;
+      min-width: 44px;
+      height: 44px;
       max-width: none;
       padding: 0;
       justify-content: center;
+      border-radius: var(--radius, 0.65rem);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .topbar-actions {
+      margin: 0.55rem 0 0.35rem;
+      margin-left: 0;
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .sync-indicator {
+      max-width: none;
+      width: 100%;
+      justify-content: flex-start;
+      border-radius: 0.55rem;
+      min-height: 2.4rem;
+      padding: 0.4rem 0.65rem;
     }
   }
 
