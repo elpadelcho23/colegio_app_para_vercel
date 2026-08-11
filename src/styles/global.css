@@ -491,8 +491,9 @@ h3 {
 .nav-links .nav-tab.active,
 .nav-links .nav-tab[aria-current='page'] {
   color: var(--brand-strong);
-  background: var(--surface-emphasis);
-  box-shadow: inset 3px 0 0 var(--brand);
+  background: color-mix(in srgb, var(--brand) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--brand) 28%, transparent);
+  box-shadow: none;
 }
 
 .nav-section-label {
@@ -1169,14 +1170,18 @@ h3 {
   box-shadow: var(--shadow-soft);
 }
 
-/* Destaca el panel activo al navegar (y refuerza el contexto del tutorial). */
+/* Destaca el panel activo al navegar (sin raya lateral). */
 [data-spa-view]:not(.spa-view--hidden) > .page-header,
 [data-spa-view]:not(.spa-view--hidden) > .hero-card,
 [data-spa-view]:not(.spa-view--hidden) > .panel-day-summary {
-  border-color: color-mix(in srgb, var(--brand) 38%, var(--line));
-  box-shadow:
-    inset 3px 0 0 var(--brand),
-    var(--shadow-soft);
+  border-color: color-mix(in srgb, var(--brand) 42%, var(--line));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--brand) 10%, var(--surface)),
+      var(--surface) 72%
+    );
+  box-shadow: var(--shadow-soft);
 }
 
 [data-spa-view]:not(.spa-view--hidden) > .page-header .eyebrow,
@@ -1932,9 +1937,9 @@ body[data-active-spa-view='registro'] .metric--link[data-spa-nav='registro'],
 body[data-active-spa-view='cursos'] .metric--link[data-spa-nav='cursos'],
 body[data-active-spa-view='notas'] .metric--link[data-spa-nav='notas'],
 body[data-active-spa-view='asistencia'] .metric--link[data-spa-nav='asistencia'] {
-  border-color: color-mix(in srgb, var(--brand) 55%, var(--line));
+  border-color: color-mix(in srgb, var(--brand) 48%, var(--line));
   background: color-mix(in srgb, var(--brand) 12%, var(--surface));
-  box-shadow: inset 3px 0 0 var(--brand);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 22%, transparent);
 }
 
 @media (min-width: 560px) {
