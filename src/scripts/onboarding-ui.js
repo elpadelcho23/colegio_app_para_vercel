@@ -55,12 +55,32 @@ export function initOnboarding({
     node.setAttribute('hidden', '');
   }
 
+  function setTutorialHighlight(active) {
+    root.classList.toggle('onboarding--spotlight', active);
+    startBtn?.classList.toggle('is-spotlight', active);
+    document.querySelectorAll('[data-help-tour-item], [data-product-tour-start]').forEach((item) => {
+      item.classList.toggle('is-spotlight', active);
+    });
+    document.querySelector('[data-help-menu]')?.classList.toggle('help-menu--tour-pending', active);
+
+    if (active && startBtn && document.activeElement !== startBtn) {
+      window.requestAnimationFrame(() => {
+        try {
+          startBtn.focus({ preventScroll: true });
+        } catch {
+          startBtn.focus();
+        }
+      });
+    }
+  }
+
   function render() {
     const userId = getUserId();
     if (!userId) {
       hideNode(root);
       showNode(hero);
       hideNode(resume);
+      setTutorialHighlight(false);
       return;
     }
 
@@ -71,6 +91,7 @@ export function initOnboarding({
       hideNode(root);
       showNode(hero);
       hideNode(resume);
+      setTutorialHighlight(false);
       return;
     }
 
@@ -78,12 +99,14 @@ export function initOnboarding({
       hideNode(root);
       showNode(hero);
       showNode(resume);
+      setTutorialHighlight(false);
       return;
     }
 
     showNode(root);
     hideNode(hero);
     hideNode(resume);
+    setTutorialHighlight(true);
   }
 
   startBtn?.addEventListener('click', (event) => {

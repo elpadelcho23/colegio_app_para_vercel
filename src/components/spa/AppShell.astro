@@ -26,8 +26,13 @@ const { initialView = 'panel' } = Astro.props;
       </div>
 
       <div class="onboarding-actions">
-        <button type="button" class="btn btn-primary btn-block" data-setup-tutorial-start>
-          Sí, arrancamos
+        <button
+          type="button"
+          class="btn btn-primary btn-block onboarding-start-btn"
+          data-setup-tutorial-start
+        >
+          <span class="onboarding-start-badge">Recomendado</span>
+          Sí, arrancamos el tutorial
         </button>
         <button type="button" class="btn btn-ghost btn-block" data-onboarding-dismiss>
           Ahora no

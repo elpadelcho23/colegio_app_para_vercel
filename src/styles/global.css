@@ -1400,6 +1400,17 @@ h3 {
   gap: var(--space-4);
 }
 
+.onboarding--spotlight {
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--line));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--brand) 28%, transparent),
+    var(--shadow);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--brand) 14%, transparent), transparent 48%),
+    var(--surface);
+  animation: onboarding-card-in 0.45s ease both;
+}
+
 .onboarding-header h2 {
   margin-bottom: var(--space-2);
 }
@@ -1415,11 +1426,96 @@ h3 {
   gap: var(--space-3);
 }
 
+.onboarding-start-btn {
+  position: relative;
+  display: grid;
+  gap: 0.2rem;
+  justify-items: center;
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+  font-weight: 800;
+}
+
+.onboarding-start-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, #fff 82%, var(--brand));
+}
+
+.onboarding-start-btn.is-spotlight,
+[data-setup-tutorial-start].is-spotlight {
+  animation: onboarding-cta-pulse 1.6s ease-in-out 3;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--brand) 35%, transparent),
+    0 10px 24px color-mix(in srgb, var(--brand) 28%, transparent);
+}
+
+.help-menu--tour-pending .help-menu-toggle {
+  outline: 2px solid color-mix(in srgb, var(--brand) 55%, transparent);
+  outline-offset: 2px;
+  animation: onboarding-help-pulse 1.8s ease-in-out 2;
+}
+
+.help-menu-item--tour.is-spotlight,
+[data-help-tour-item].is-spotlight {
+  border: 1px solid color-mix(in srgb, var(--brand) 40%, var(--line));
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  font-weight: 800;
+}
+
 .onboarding-resume {
   justify-self: start;
   margin-bottom: var(--space-3);
   padding-inline: 0;
   font-size: 0.95rem;
+}
+
+@keyframes onboarding-card-in {
+  from {
+    opacity: 0.55;
+    transform: translateY(0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes onboarding-cta-pulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--brand) 30%, transparent),
+      0 10px 24px color-mix(in srgb, var(--brand) 22%, transparent);
+  }
+  50% {
+    transform: translateY(-1px);
+    box-shadow:
+      0 0 0 6px color-mix(in srgb, var(--brand) 18%, transparent),
+      0 14px 28px color-mix(in srgb, var(--brand) 30%, transparent);
+  }
+}
+
+@keyframes onboarding-help-pulse {
+  0%,
+  100% {
+    outline-color: color-mix(in srgb, var(--brand) 40%, transparent);
+  }
+  50% {
+    outline-color: color-mix(in srgb, var(--brand) 80%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding--spotlight,
+  .onboarding-start-btn.is-spotlight,
+  [data-setup-tutorial-start].is-spotlight,
+  .help-menu--tour-pending .help-menu-toggle {
+    animation: none;
+  }
 }
 
 .tools-view {

@@ -173,7 +173,13 @@ const isActive = (href: string) => {
         <summary class="help-menu-toggle" aria-label="Ayuda">?</summary>
         <div class="help-menu-panel" role="menu">
           <p class="help-menu-title">Ayuda</p>
-          <button type="button" class="help-menu-item" role="menuitem" data-product-tour-start>
+          <button
+            type="button"
+            class="help-menu-item help-menu-item--tour"
+            role="menuitem"
+            data-product-tour-start
+            data-help-tour-item
+          >
             ¿Arrancamos con el tutorial?
           </button>
           <button type="button" class="help-menu-item" role="menuitem" data-pwa-install-btn>
