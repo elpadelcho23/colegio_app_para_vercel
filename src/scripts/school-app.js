@@ -674,6 +674,7 @@ function openTeachingContextPicker() {
   const root = document.querySelector('[data-global-teaching-context]');
   const form = root?.querySelector('[data-gtc-form]');
   if (!root || !form) return;
+  closeMenu();
   form.classList.remove('is-hidden');
   form.hidden = false;
   refreshGlobalTeachingContextUi({ keepOpen: true });

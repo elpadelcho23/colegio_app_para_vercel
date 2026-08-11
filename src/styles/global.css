@@ -78,7 +78,7 @@ body {
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   color: var(--ink);
   background: var(--bg);
@@ -278,7 +278,7 @@ h3 {
 
 @media (min-width: 1024px) {
   .app-main {
-    min-height: 100vh;
+    min-height: 100dvh;
   }
 }
 
@@ -289,6 +289,7 @@ h3 {
   border-bottom: 1px solid rgba(217, 225, 220, 0.9);
   /* Sin backdrop-filter: crea containing block y aplasta el menú fixed en móvil. */
   background: color-mix(in srgb, var(--bg) 97%, var(--surface));
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .institution-strip,
@@ -552,6 +553,7 @@ h3 {
   background: var(--surface-muted);
   color: inherit;
   font: inherit;
+  min-height: 44px;
   padding: 0.55rem 0.9rem;
   cursor: pointer;
 }
@@ -940,10 +942,15 @@ h3 {
   .hero-help,
   .onboarding-lead,
   .onboarding-start-badge,
-  .attendance-matrix-scroll-hint,
-  .auth-pwa-install .section-title p,
-  .pwa-install-help {
+  .auth-pwa-install .section-title p {
     display: none !important;
+  }
+
+  /* Mantener visibles: hint de planilla e instrucciones de instalación. */
+  .attendance-matrix-scroll-hint {
+    display: block !important;
+    margin: 0 0 0.4rem;
+    font-size: 0.8rem;
   }
 
   .onboarding,
@@ -1488,6 +1495,12 @@ body.product-tour-menu-step .tour-target-active {
   box-shadow: var(--shadow);
 }
 
+/* En Asistencia/Notas la tarjeta del tour no tapa la barra Guardar. */
+body.product-tour-active[data-active-spa-view='asistencia'] .product-tour-card,
+body.product-tour-active[data-active-spa-view='notas'] .product-tour-card {
+  margin-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+}
+
 .product-tour-step {
   margin: 0;
   font-size: 0.78rem;
@@ -1717,6 +1730,7 @@ body.product-tour-menu-step .tour-target-active {
   background: var(--surface-muted);
   color: inherit;
   font: inherit;
+  min-height: 44px;
   padding: 0.55rem 0.9rem;
   cursor: pointer;
 }
@@ -2361,7 +2375,7 @@ td small {
 }
 
 .notes-list .tag button {
-  min-height: 40px;
+  min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0.35rem 0.55rem;
@@ -2370,7 +2384,7 @@ td small {
   font-size: 0.8rem;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 767px) {
   .table-wrap {
     overflow: visible;
   }
@@ -4005,8 +4019,15 @@ label.checkbox-row {
   background: #fafcfb;
 }
 
+.excel-preview-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
 .excel-preview-table table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
 }

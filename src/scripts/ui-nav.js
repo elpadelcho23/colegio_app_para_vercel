@@ -58,7 +58,9 @@ export function initMobileNav() {
     }, { signal });
   });
 
-  navMenu.querySelectorAll('a, .nav-form button, .nav-tab, [data-spa-nav]').forEach((element) => {
+  navMenu.querySelectorAll(
+    'a, .nav-form button, .nav-tab, [data-spa-nav], [data-gtc-open], [data-pwa-install-btn], [data-product-tour-start]',
+  ).forEach((element) => {
     element.addEventListener('click', () => setMenuState(false), { signal });
   });
 

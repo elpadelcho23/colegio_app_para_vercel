@@ -103,7 +103,9 @@ const TOUR_STEPS = [
     title: 'Ayuda',
     body: 'El “?” reabre el tutorial o te lleva a instalar la app.',
     bodyShort: 'El “?” reabre este tutorial.',
-    target: '[data-help-menu], [data-panel-summary]',
+    target: '[data-help-menu], [data-help-tour-item], [data-panel-summary]',
+    openMenuOnMobile: true,
+    openHelpOnMobile: true,
   },
 ];
 
@@ -184,6 +186,12 @@ export function initProductTour({ getUserId }) {
     if (menuStep) {
       openMenu();
       await waitForPaint();
+      if (step.openHelpOnMobile) {
+        document.querySelector('[data-help-menu]')?.setAttribute('open', '');
+        await waitForPaint();
+      }
+    } else {
+      document.querySelector('[data-help-menu]')?.removeAttribute('open');
     }
 
     const target = pickTarget(step.target);

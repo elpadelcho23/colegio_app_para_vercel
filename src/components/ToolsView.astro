@@ -155,10 +155,16 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
 
   <section class="panel tools-section pwa-install" data-pwa-install data-tools-section="install">
     <div class="section-title">
-      <h2>Instalar app (PC / Android)</h2>
-      <p>Usá Aula Clara como aplicación instalada. Se descarga desde este sitio, no desde una tienda de extensiones.</p>
+      <h2>
+        <span class="copy-long">Instalar app (PC / Android / iOS)</span>
+        <span class="copy-short">Instalar app</span>
+      </h2>
+      <p class="copy-collapse-mobile">Instalá desde esta web, sin tienda.</p>
     </div>
-    <button type="button" class="btn btn-primary" data-pwa-install-btn>Instalar en este dispositivo</button>
+    <button type="button" class="btn btn-primary" data-pwa-install-btn>
+      <span class="copy-long">Instalar en este dispositivo</span>
+      <span class="copy-short">Instalar</span>
+    </button>
     <p class="muted" data-pwa-install-status></p>
     <details class="pwa-install-help" data-pwa-install-help>
       <summary>Cómo instalar según el dispositivo</summary>
