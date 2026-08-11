@@ -1316,8 +1316,9 @@ h3 {
 .product-tour-backdrop {
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, #111 42%, transparent);
-  pointer-events: auto;
+  /* El oscurecido real lo hace el spotlight; esto queda de respaldo sin bloquear toques. */
+  background: transparent;
+  pointer-events: none;
 }
 
 .product-tour-spotlight {
