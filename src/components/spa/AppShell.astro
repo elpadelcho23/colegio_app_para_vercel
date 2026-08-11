@@ -20,8 +20,8 @@ const { initialView = 'panel' } = Astro.props;
       <div class="onboarding-header">
         <p class="eyebrow">Primeros pasos</p>
         <h2 id="onboarding-title">¿Arrancamos con el tutorial?</h2>
-        <p class="onboarding-lead">
-          Te muestro lo esencial en un minuto. Lo más rápido para cargar alumnos es Excel.
+        <p class="onboarding-lead copy-collapse-mobile">
+          Un minuto: curso actual, Excel y pasar lista.
         </p>
       </div>
 
@@ -31,8 +31,9 @@ const { initialView = 'panel' } = Astro.props;
           class="btn btn-primary btn-block onboarding-start-btn"
           data-setup-tutorial-start
         >
-          <span class="onboarding-start-badge">Recomendado</span>
-          Sí, arrancamos el tutorial
+          <span class="onboarding-start-badge copy-collapse-mobile">Recomendado</span>
+          <span class="copy-long">Sí, arrancamos el tutorial</span>
+          <span class="copy-short">Arrancar tutorial</span>
         </button>
         <button type="button" class="btn btn-ghost btn-block" data-onboarding-dismiss>
           Ahora no
@@ -41,17 +42,18 @@ const { initialView = 'panel' } = Astro.props;
     </section>
 
     <button type="button" class="onboarding-resume btn btn-ghost is-hidden" data-onboarding-resume hidden>
-      ¿Arrancamos con el tutorial?
+      <span class="copy-long">¿Arrancamos con el tutorial?</span>
+      <span class="copy-short">Ver tutorial</span>
     </button>
 
     <section class="hero-card" data-panel-hero>
       <p class="eyebrow">Hoy</p>
       <h1 data-panel-today-title>Hoy: elegí curso arriba</h1>
-      <p class="hero-help">Lo más rápido: importá alumnos con Excel. Si ya están, elegí el curso arriba.</p>
+      <p class="hero-help copy-collapse-mobile">Importá con Excel o elegí el curso arriba.</p>
 
       <div class="schedule-suggestion is-hidden" data-schedule-suggestion hidden>
         <p>
-          Sugerencia por horario:
+          Sugerencia:
           <strong data-schedule-suggestion-label></strong>
         </p>
         <button type="button" class="btn btn-secondary btn-sm" data-schedule-suggestion-apply>Usar ahora</button>
@@ -60,26 +62,32 @@ const { initialView = 'panel' } = Astro.props;
       <div class="hero-actions hero-actions--triple">
         <button type="button" data-spa-nav="asistencia" class="btn btn-primary hero-cta">Asistencia</button>
         <button type="button" data-spa-nav="actividades" class="btn btn-secondary hero-cta">Actividades</button>
-        <button type="button" data-spa-nav="herramientas" class="btn btn-secondary hero-cta">Importar alumnos</button>
+        <button type="button" data-spa-nav="herramientas" class="btn btn-secondary hero-cta">
+          <span class="copy-long">Importar alumnos</span>
+          <span class="copy-short">Excel</span>
+        </button>
       </div>
     </section>
 
     <section class="panel panel-day-summary" data-panel-summary>
       <div class="section-title">
         <h2>Resumen</h2>
-        <p>Números del curso elegido arriba. Tocá una tarjeta para ir a esa sección.</p>
+        <p class="copy-collapse-mobile">Tocá una tarjeta para abrir esa sección.</p>
       </div>
       <div class="metric-grid" data-dashboard></div>
       <div data-alerts></div>
       <div class="button-row summary-actions">
-        <button type="button" class="btn btn-secondary" data-print-course-notes>Imprimir notas del curso</button>
+        <button type="button" class="btn btn-secondary" data-print-course-notes>
+          <span class="copy-long">Imprimir notas del curso</span>
+          <span class="copy-short">Imprimir notas</span>
+        </button>
       </div>
     </section>
 
     <section class="panel" data-seguimiento>
       <div class="section-title">
         <h2>Seguimiento</h2>
-        <p>Quién no acredita asistencia o debe trabajos.</p>
+        <p class="copy-collapse-mobile">Asistencia o trabajos pendientes.</p>
       </div>
       <div class="list" data-seguimiento-list></div>
     </section>
@@ -88,7 +96,7 @@ const { initialView = 'panel' } = Astro.props;
       <summary class="panel-collapsible-summary">
         <span class="section-title">
           <h2>Horario (opcional)</h2>
-          <p>Solo sugiere el curso del día. No hace falta configurarlo para usar la app.</p>
+          <p class="copy-collapse-mobile">Sugiere el curso del día.</p>
         </span>
       </summary>
       <form class="form-grid" data-context-form>
@@ -124,15 +132,18 @@ const { initialView = 'panel' } = Astro.props;
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
         <h1>Cargar alumnos</h1>
-        <p>Lo más rápido: importá desde Excel. Escuela, curso, materias y listado entran juntos.</p>
+        <p class="copy-collapse-mobile">Importá desde Excel: escuela, curso, materias y listado.</p>
       </div>
-      <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block">Organizar cursos</button>
+      <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block">
+        <span class="copy-long">Organizar cursos</span>
+        <span class="copy-short">Cursos</span>
+      </button>
     </header>
 
     <section class="panel student-workspace">
       <div class="section-title">
         <h2>Importar desde Excel</h2>
-        <p>Recomendado si tenés (o podés armar) una planilla. Mapeá columnas y guardá plantillas.</p>
+        <p class="copy-collapse-mobile">Subí la planilla, mapeá columnas y guardá.</p>
       </div>
 
       <div class="student-mode-panel full-width" data-student-mode-panel="excel">
@@ -147,7 +158,7 @@ const { initialView = 'panel' } = Astro.props;
         <summary class="panel-collapsible-summary">
           <span class="section-title">
             <h2>Cargar uno a uno</h2>
-            <p>Opcional. Si preferís cargar a mano, abrí este formulario.</p>
+            <p class="copy-collapse-mobile">Formulario manual, opcional.</p>
           </span>
         </summary>
         <form class="form-grid" data-student-form>
@@ -260,9 +271,12 @@ const { initialView = 'panel' } = Astro.props;
       <div class="header-content">
         <p class="eyebrow">Organización</p>
         <h1>Cursos y divisiones</h1>
-        <p>Base de trabajo por ciclo lectivo: escuela, curso, materias y horarios.</p>
+        <p class="copy-collapse-mobile">Escuela, curso, materias y horarios del ciclo.</p>
       </div>
-      <button type="button" data-spa-nav="registro" class="btn btn-primary btn-block">Importar alumnos (Excel)</button>
+      <button type="button" data-spa-nav="registro" class="btn btn-primary btn-block">
+        <span class="copy-long">Importar alumnos (Excel)</span>
+        <span class="copy-short">Importar Excel</span>
+      </button>
     </header>
 
     <SchoolCyclePanel />
@@ -351,7 +365,7 @@ const { initialView = 'panel' } = Astro.props;
       <div class="header-content">
         <p class="eyebrow">Agenda docente</p>
         <h1>Actividades</h1>
-        <p>Creá, recibí entregas y corregí del curso de arriba.</p>
+        <p class="copy-collapse-mobile">Entregas y corrección del curso actual.</p>
       </div>
       <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block">Ir a calificaciones</button>
     </header>

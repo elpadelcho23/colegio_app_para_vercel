@@ -898,6 +898,106 @@ h3 {
   }
 }
 
+/* Texto más corto en pantallas angostas: menos carga visual. */
+.copy-short {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .copy-long {
+    display: none !important;
+  }
+
+  .copy-short {
+    display: inline !important;
+  }
+
+  .copy-collapse-mobile {
+    display: none !important;
+  }
+
+  .page-header {
+    gap: 0.55rem;
+    margin-bottom: 0.15rem;
+  }
+
+  .page-header .header-content > p:not(.eyebrow) {
+    display: none;
+  }
+
+  .page-header h1 {
+    font-size: 1.22rem;
+  }
+
+  .section-title {
+    gap: 0.15rem;
+  }
+
+  .section-title > p,
+  .filter-context-note,
+  .metric-hint,
+  .hero-help,
+  .onboarding-lead,
+  .onboarding-start-badge,
+  .attendance-matrix-scroll-hint,
+  .auth-pwa-install .section-title p,
+  .pwa-install-help {
+    display: none !important;
+  }
+
+  .onboarding,
+  .hero-card,
+  .panel {
+    gap: 0.7rem;
+  }
+
+  .onboarding-start-btn {
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+    gap: 0;
+  }
+
+  .hero-actions--triple .hero-cta {
+    min-height: 46px;
+    font-size: 0.98rem;
+  }
+
+  .metric {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .metric strong {
+    font-size: 1.4rem;
+  }
+
+  .product-tour-card {
+    max-height: min(34dvh, 16rem);
+    padding: 0.8rem 0.9rem;
+    gap: 0.35rem;
+  }
+
+  .product-tour-card h2 {
+    font-size: 1.02rem;
+  }
+
+  .product-tour-card p,
+  .product-tour-step {
+    font-size: 0.86rem;
+  }
+
+  .empty h3 {
+    font-size: 1rem;
+  }
+
+  .empty p {
+    font-size: 0.86rem;
+  }
+
+  .auth-guest-hint {
+    font-size: 0.8rem;
+  }
+}
+
 @media (min-width: 1024px) {
   body.app-body {
     padding-left: var(--sidebar-width);

@@ -10,10 +10,13 @@ const { spaMode = false } = Astro.props;
   <div class="header-content">
     <p class="eyebrow">Calificaciones</p>
     <h1>Notas</h1>
-    <p>Cargá notas y mirá el detalle del curso elegido arriba.</p>
+    <p class="copy-collapse-mobile">Cargá notas del curso actual.</p>
   </div>
   <div class="actions-group">
-    <button class="btn btn-ghost btn-block" type="button" data-print-course-notes>Imprimir notas del curso</button>
+    <button class="btn btn-ghost btn-block" type="button" data-print-course-notes>
+      <span class="copy-long">Imprimir notas del curso</span>
+      <span class="copy-short">Imprimir</span>
+    </button>
   </div>
 </header>
 
@@ -33,7 +36,7 @@ const { spaMode = false } = Astro.props;
         <small class="field-error" data-grade-subject-error hidden></small>
       </div>
     </div>
-    <p class="muted filter-context-note">Sigue el Curso actual. Podés ajustarlo acá o con Cambiar en el encabezado.</p>
+    <p class="muted filter-context-note copy-collapse-mobile">Sigue el Curso actual del encabezado.</p>
     <div class="context-gate is-hidden" data-context-gate hidden>
       <p>Elegí <strong>curso</strong> y <strong>materia</strong> para cargar notas.</p>
       <button type="button" class="btn btn-primary btn-sm" data-gtc-open>Elegir curso</button>

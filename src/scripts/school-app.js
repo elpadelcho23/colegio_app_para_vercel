@@ -1054,14 +1054,14 @@ function renderDashboard(root) {
   }).length;
 
   renderMetrics(root, [
-    { value: students.length, label: 'Alumnos', view: 'registro', hint: 'Ver alumnos' },
-    { value: courses.length, label: 'Cursos', view: 'cursos', hint: 'Ver cursos' },
-    { value: avg === null ? '-' : avg.toFixed(1), label: 'Promedio', view: 'notas', hint: 'Ver notas' },
+    { value: students.length, label: 'Alumnos', view: 'registro', hint: 'Abrir' },
+    { value: courses.length, label: 'Cursos', view: 'cursos', hint: 'Abrir' },
+    { value: avg === null ? '-' : avg.toFixed(1), label: 'Promedio', view: 'notas', hint: 'Abrir' },
     {
       value: present === null ? '-' : `${present.toFixed(0)}%`,
       label: 'Asistencia',
       view: 'asistencia',
-      hint: 'Pasar lista',
+      hint: 'Abrir',
     },
   ]);
 

@@ -6,7 +6,7 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
   <div class="header-content">
     <p class="eyebrow">Avanzado</p>
     <h1>Excel y cuenta</h1>
-    <p>Importá planillas o revisá sincronización y plan. Corregir está en Actividades.</p>
+    <p class="copy-collapse-mobile">Planillas, sincronización y plan.</p>
   </div>
 </header>
 
@@ -20,7 +20,8 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     aria-controls="tools-hub-excel"
     id="tools-hub-tab-excel"
   >
-    Importar Excel
+    <span class="copy-long">Importar Excel</span>
+    <span class="copy-short">Excel</span>
   </button>
   <button
     type="button"
@@ -31,7 +32,8 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     aria-controls="tools-hub-cuenta"
     id="tools-hub-tab-cuenta"
   >
-    Cuenta / instalar
+    <span class="copy-long">Cuenta / instalar</span>
+    <span class="copy-short">Cuenta</span>
   </button>
 </div>
 

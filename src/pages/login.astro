@@ -86,13 +86,16 @@ const registered = Astro.url.searchParams.get('registered');
 
         <form method="post" action="/api/auth/guest" class="auth-form auth-guest-form">
           <button class="btn btn-secondary btn-block" type="submit">Probar sin cuenta</button>
-          <p class="muted auth-guest-hint">Modo invitado: probá la app completa (cursos de ejemplo, clase virtual e IA; sin alumnos precargados). Al salir se borran los datos — creá una cuenta para guardarlos.</p>
+          <p class="muted auth-guest-hint">
+            <span class="copy-long">Modo invitado: probá la app completa (cursos de ejemplo, clase virtual e IA; sin alumnos precargados). Al salir se borran los datos — creá una cuenta para guardarlos.</span>
+            <span class="copy-short">Probá sin cuenta. Al salir se borran los datos.</span>
+          </p>
         </form>
 
         <section class="pwa-install auth-pwa-install" data-pwa-install>
           <div class="section-title">
             <h2>Instalar en PC o Android</h2>
-            <p>Dejá Aula Clara como app en tu dispositivo. No es una extensión de tienda: se instala desde esta web.</p>
+            <p class="copy-collapse-mobile">Instalá la app desde esta web.</p>
           </div>
           <button type="button" class="btn btn-primary btn-block" data-pwa-install-btn>
             Instalar app

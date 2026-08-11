@@ -5,91 +5,104 @@ import { closeMenu, openMenu } from './ui-nav.js';
 /**
  * Flujo completo de uso (pensado también para celular).
  * Cada paso navega a la pantalla real y destaca el control útil.
+ * `bodyShort` se usa en pantallas angostas para no saturar.
  */
 const TOUR_STEPS = [
   {
     id: 'bienvenida',
     view: 'panel',
-    title: 'Empezamos por el Panel',
-    body: 'Acá ves el día de trabajo. Primero elegís el curso arriba; después usás Asistencia, Notas o importás alumnos.',
+    title: 'Panel',
+    body: 'Acá arranca el día. Primero elegís el curso arriba; después Asistencia, Notas o Excel.',
+    bodyShort: 'Elegí el curso arriba y usá Asistencia, Notas o Excel.',
     target: '[data-panel-hero], [data-onboarding]',
   },
   {
     id: 'curso-actual',
     view: 'panel',
     title: 'Curso actual',
-    body: 'Tocá “Cambiar” y elegí escuela, curso y materia. Asistencia, Notas y Actividades usan siempre esta elección.',
+    body: 'Tocá “Cambiar” y elegí escuela, curso y materia. El resto de la app usa esa elección.',
+    bodyShort: 'Tocá “Cambiar” y elegí curso y materia.',
     target: '[data-global-teaching-context], [data-gtc-toggle]',
   },
   {
     id: 'resumen',
     view: 'panel',
-    title: 'Resumen del curso',
-    body: 'Estas 4 tarjetas muestran alumnos, cursos, promedio y asistencia. Tocá cualquiera para saltar a esa sección.',
+    title: 'Resumen',
+    body: 'Estas tarjetas muestran alumnos, cursos, promedio y asistencia. Tocá una para ir ahí.',
+    bodyShort: 'Tocá una tarjeta para abrir esa sección.',
     target: '[data-dashboard], [data-panel-summary]',
   },
   {
     id: 'excel',
     view: 'registro',
-    title: 'Cargá alumnos con Excel',
-    body: 'Lo más rápido: subí la planilla, confirmá las columnas y guardá. Escuela, curso, materias y alumnos entran juntos.',
+    title: 'Excel',
+    body: 'Subí la planilla, confirmá columnas y guardá. Escuela, curso, materias y alumnos entran juntos.',
+    bodyShort: 'Subí el Excel, confirmá columnas y guardá.',
     target: '[data-spa-view="registro"] [data-student-mode-panel="excel"], [data-spa-view="registro"] .excel-workspace',
   },
   {
     id: 'alumnos',
     view: 'registro',
-    title: 'Lista de alumnos',
-    body: 'Abajo ves quién ya está cargado. Si hace falta, también podés agregar uno a uno en “Cargar uno a uno”.',
+    title: 'Alumnos',
+    body: 'Abajo ves el listado cargado. Si hace falta, también podés agregar uno a uno.',
+    bodyShort: 'Acá ves el listado. Uno a uno es opcional.',
     target: '[data-spa-view="registro"] [data-student-list], [data-spa-view="registro"] .page-header',
   },
   {
     id: 'cursos',
     view: 'cursos',
-    title: 'Organizá cursos',
-    body: 'Acá gestionás divisiones y materias. Si importaste con Excel, suele estar casi listo; si no, creá el curso antes de pasar lista.',
+    title: 'Cursos',
+    body: 'Gestionás divisiones y materias. Con Excel suele estar listo; si no, creá el curso antes de pasar lista.',
+    bodyShort: 'Acá están cursos y materias.',
     target: '[data-spa-view="cursos"] .page-header, [data-spa-view="cursos"] [data-course-form]',
   },
   {
     id: 'asistencia',
     view: 'asistencia',
-    title: 'Pasá lista',
-    body: 'Marcá presente o ausente para el curso elegido arriba. En el celular cada alumno es una tarjeta fácil de tocar.',
+    title: 'Pasar lista',
+    body: 'Marcá presente o ausente del curso actual. En el celular cada alumno es una tarjeta.',
+    bodyShort: 'Marcá presente o ausente y seguí.',
     target: '[data-spa-view="asistencia"] [data-attendance-take-view], [data-spa-view="asistencia"] .page-header',
   },
   {
     id: 'asistencia-guardar',
     view: 'asistencia',
-    title: 'Guardá la asistencia',
-    body: 'Cuando termines, confirmá con Guardar. En el teléfono la barra queda fija abajo para no perderla al scrollear.',
+    title: 'Guardar',
+    body: 'Confirmá con Guardar. En el teléfono la barra queda fija abajo.',
+    bodyShort: 'Tocá Guardar abajo cuando termines.',
     target: '[data-spa-view="asistencia"] [data-attendance-save-bar]',
   },
   {
     id: 'notas',
     view: 'notas',
-    title: 'Cargá calificaciones',
-    body: 'Acá cargás notas del mismo curso actual. Revisá el listado y guardá cuando termines; el promedio del Panel se actualiza solo.',
+    title: 'Notas',
+    body: 'Cargá calificaciones del curso actual y guardá. El promedio del Panel se actualiza solo.',
+    bodyShort: 'Cargá notas del curso y guardá.',
     target: '[data-spa-view="notas"] [data-grades-take-view], [data-spa-view="notas"] .page-header',
   },
   {
     id: 'actividades',
     view: 'actividades',
-    title: 'Actividades y trabajos',
-    body: 'Desde acá armás contenidos, entregas y seguimiento. Si usás IA, también está en este panel.',
+    title: 'Actividades',
+    body: 'Armá contenidos, entregas y seguimiento. La IA también está acá.',
+    bodyShort: 'Contenidos, entregas y seguimiento.',
     target: '[data-spa-view="actividades"] .page-header, [data-spa-view="actividades"] .activity-flow-tabs',
   },
   {
     id: 'menu',
     view: 'panel',
-    title: 'Menú de paneles',
-    body: 'En el celular abrís el menú ☰ para cambiar de sección. En pantallas grandes el menú queda a la izquierda.',
+    title: 'Menú',
+    body: 'En el celular abrís ☰ para cambiar de sección. En PC el menú está a la izquierda.',
+    bodyShort: 'Usá ☰ para cambiar de sección.',
     target: '[data-menu-toggle], [data-nav-menu] .nav-tab.active, [data-nav-menu]',
     openMenuOnMobile: true,
   },
   {
     id: 'ayuda',
     view: 'panel',
-    title: 'Ayuda cuando la necesites',
-    body: 'El botón “?” vuelve a abrir este tutorial o te lleva a instalar la app. Ya podés usar el flujo completo del aula.',
+    title: 'Ayuda',
+    body: 'El “?” reabre el tutorial o te lleva a instalar la app.',
+    bodyShort: 'El “?” reabre este tutorial.',
     target: '[data-help-menu], [data-panel-summary]',
   },
 ];
@@ -101,6 +114,11 @@ function setTourStatus(userId, value) {
 
 function isMobileViewport() {
   return window.matchMedia('(max-width: 1023px)').matches;
+}
+
+function stepBody(step) {
+  if (isMobileViewport() && step.bodyShort) return step.bodyShort;
+  return step.body;
 }
 
 function waitForPaint() {
@@ -183,8 +201,8 @@ export function initProductTour({ getUserId }) {
 
     overlay.open({
       title: step.title,
-      body: step.body,
-      stepLabel: `${index + 1} de ${TOUR_STEPS.length}`,
+      body: stepBody(step),
+      stepLabel: `${index + 1}/${TOUR_STEPS.length}`,
       onNext: () => {
         void showStep(index + 1);
       },
