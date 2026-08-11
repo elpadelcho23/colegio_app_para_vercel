@@ -153,7 +153,26 @@ const gradeNotes = [
       <div class="section-title">
         <p>Hoja <strong>{STUDENT_EXCEL_SHEET}</strong> · podés usar otra estructura con plantilla personalizada.</p>
       </div>
+
+      <div class="excel-reference-fields" aria-label="Columnas de referencia">
+        {STUDENT_EXCEL_COLUMNS.map((column) => (
+          <article class="excel-ref-field">
+            <div class="excel-ref-field-head">
+              <strong>{column.label}</strong>
+              {column.required
+                ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
+                : <span class="excel-ref-tag excel-ref-tag-optional">opcional</span>}
+            </div>
+            <p class="excel-ref-field-hint">{column.hint}</p>
+            <p class="excel-ref-field-example">
+              Ej: {STUDENT_EXCEL_EXAMPLE_ROWS[0][column.label as keyof typeof STUDENT_EXCEL_EXAMPLE_ROWS[0]] || '—'}
+            </p>
+          </article>
+        ))}
+      </div>
+
       <div class="table-container excel-reference-table" role="region" aria-label="Ejemplo de hoja Excel de alumnos">
+        <p class="excel-reference-scroll-hint" aria-hidden="true">Deslizá → para ver todas las columnas</p>
         <table>
           <thead>
             <tr>
@@ -187,7 +206,22 @@ const gradeNotes = [
   ) : importType === 'asistencias' ? (
     <details class="excel-reference full-width">
       <summary>Ver columnas sugeridas (opcional)</summary>
+
+      <div class="excel-reference-fields" aria-label="Columnas sugeridas">
+        {attendanceColumns.map((column) => (
+          <article class="excel-ref-field">
+            <div class="excel-ref-field-head">
+              <strong>{column.label}</strong>
+              {column.required
+                ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
+                : <span class="excel-ref-tag excel-ref-tag-optional">opcional</span>}
+            </div>
+          </article>
+        ))}
+      </div>
+
       <div class="table-container excel-reference-table">
+        <p class="excel-reference-scroll-hint" aria-hidden="true">Deslizá → para ver todas las columnas</p>
         <table>
           <thead>
             <tr>
@@ -212,7 +246,22 @@ const gradeNotes = [
   ) : (
     <details class="excel-reference full-width">
       <summary>Ver columnas sugeridas (opcional)</summary>
+
+      <div class="excel-reference-fields" aria-label="Columnas sugeridas">
+        {gradeColumns.map((column) => (
+          <article class="excel-ref-field">
+            <div class="excel-ref-field-head">
+              <strong>{column.label}</strong>
+              {column.required
+                ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
+                : <span class="excel-ref-tag excel-ref-tag-optional">opcional</span>}
+            </div>
+          </article>
+        ))}
+      </div>
+
       <div class="table-container excel-reference-table">
+        <p class="excel-reference-scroll-hint" aria-hidden="true">Deslizá → para ver todas las columnas</p>
         <table>
           <thead>
             <tr>

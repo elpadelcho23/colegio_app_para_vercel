@@ -3522,10 +3522,19 @@ label.checkbox-row {
 }
 
 .excel-reference {
+  min-width: 0;
+  max-width: 100%;
   padding: 1rem;
   border: 1px solid var(--border, #d9e1dc);
   border-radius: 0.85rem;
   background: linear-gradient(180deg, #f8fbf9 0%, #ffffff 100%);
+  overflow: hidden;
+}
+
+.excel-reference .section-title,
+.excel-reference .section-title p {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .excel-reference .section-title h4 {
@@ -3533,16 +3542,66 @@ label.checkbox-row {
   font-size: 1rem;
 }
 
+.excel-reference-fields {
+  display: none;
+  gap: 0.55rem;
+  margin: 0.65rem 0 0.35rem;
+}
+
+.excel-ref-field {
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #d5e3dd;
+  border-radius: 0.65rem;
+  background: #fff;
+}
+
+.excel-ref-field-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+}
+
+.excel-ref-field-head strong {
+  font-size: 0.95rem;
+}
+
+.excel-ref-field-hint,
+.excel-ref-field-example {
+  margin: 0.3rem 0 0;
+  color: var(--muted, #5f6b66);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.excel-ref-field-example {
+  color: var(--ink, #1a1a1a);
+  font-weight: 600;
+}
+
 .excel-reference-table {
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
   border: 1px solid #c8d8d2;
   border-radius: 0.65rem;
   background: #fff;
 }
 
+.excel-reference-scroll-hint {
+  display: none;
+  margin: 0;
+  padding: 0.45rem 0.65rem 0;
+  color: var(--muted, #5f6b66);
+  font-size: 0.78rem;
+}
+
 .excel-reference-table table {
-  width: 100%;
-  min-width: 760px;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.88rem;
 }
@@ -3579,14 +3638,55 @@ label.checkbox-row {
   letter-spacing: 0.02em;
   background: rgba(255, 255, 255, 0.18);
   color: #eef7f3;
+  white-space: nowrap;
 }
 
 .excel-ref-tag-required {
   background: rgba(255, 255, 255, 0.28);
 }
 
+.excel-ref-tag-optional {
+  margin-left: 0;
+  background: color-mix(in srgb, var(--brand, #226c5f) 14%, #fff);
+  color: var(--brand-strong, #1a564c);
+}
+
 .excel-reference-notes {
   margin: 0.85rem 0 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.excel-reference-notes li {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 767px) {
+  .excel-reference {
+    padding: 0.75rem;
+  }
+
+  .excel-reference-fields {
+    display: grid;
+  }
+
+  .excel-reference-table {
+    display: none;
+  }
+
+  .excel-reference-notes {
+    font-size: 0.84rem;
+    line-height: 1.4;
+    padding-left: 1.05rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .excel-reference-table table {
+    min-width: 760px;
+  }
 }
 
 .excel-mapping {
