@@ -1409,6 +1409,92 @@ h3 {
   background: color-mix(in srgb, var(--brand) 8%, var(--surface));
 }
 
+.tour-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 96;
+  padding:
+    calc(0.35rem + env(safe-area-inset-top, 0px))
+    0.75rem
+    0.4rem;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface) 92%, transparent),
+    color-mix(in srgb, var(--surface) 78%, transparent) 70%,
+    transparent
+  );
+}
+
+.tour-progress.is-hidden,
+.tour-progress[hidden] {
+  display: none;
+}
+
+.tour-progress-inner {
+  width: min(28rem, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.tour-progress-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.15rem;
+}
+
+.tour-progress-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--brand-strong);
+}
+
+.tour-progress-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.tour-progress-cheer {
+  margin-left: auto;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 18%, var(--surface));
+  color: var(--brand-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.tour-progress-cheer.is-hidden,
+.tour-progress-cheer[hidden] {
+  display: none;
+}
+
+.tour-progress-cheer.is-pop {
+  animation: tour-cheer-pop 0.55s ease;
+}
+
+.tour-progress-track {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 14%, var(--line));
+  overflow: hidden;
+}
+
+.tour-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand), color-mix(in srgb, var(--brand) 70%, #7dcea0));
+  transition: width 0.35s ease;
+}
+
 .product-tour-overlay {
   position: fixed;
   inset: 0;
@@ -1416,6 +1502,7 @@ h3 {
   display: grid;
   place-items: end center;
   padding: 1rem;
+  padding-top: calc(2.75rem + env(safe-area-inset-top, 0px));
   padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   pointer-events: none;
 }
@@ -1547,6 +1634,39 @@ body.product-tour-soft-chrome .tour-target-active {
   gap: 0.55rem;
   pointer-events: auto;
   box-shadow: var(--shadow);
+}
+
+.product-tour-nudge {
+  margin: 0;
+  color: #7a5a00;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.product-tour-nudge.is-hidden,
+.product-tour-nudge[hidden] {
+  display: none;
+}
+
+.product-tour-actions .btn.is-waiting,
+.product-tour-actions .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@keyframes tour-cheer-pop {
+  0% {
+    transform: translateY(0.2rem) scale(0.92);
+    opacity: 0;
+  }
+  40% {
+    transform: translateY(0) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
 
 /* En Asistencia/Notas la tarjeta del tour no tapa la barra Guardar. */

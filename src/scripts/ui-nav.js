@@ -59,7 +59,7 @@ export function initMobileNav() {
   });
 
   navMenu.querySelectorAll(
-    'a, .nav-form button, .nav-tab, [data-spa-nav], [data-gtc-open], [data-pwa-install-btn], [data-product-tour-start]',
+    'a, .nav-form button, .nav-tab, [data-spa-nav], [data-gtc-open], [data-pwa-install-btn], [data-product-tour-start], [data-tour-start]',
   ).forEach((element) => {
     element.addEventListener('click', () => setMenuState(false), { signal });
   });

@@ -1,86 +1,263 @@
-import { productTourKey } from '../lib/client-storage-keys.ts';
+import { productGuidesKey, productTourKey } from '../lib/client-storage-keys.ts';
 import { showSpaView } from './spa-router.ts';
 import { closeMenu, openMenu } from './ui-nav.js';
 
 /**
- * Tour guiado: pocos pasos, cada uno abre/marca el control real.
- * Menos invasivo: dim suave + spotlight preciso (no pantallas enteras).
+ * Tutoriales guiados con barra de progreso.
+ * La barra solo avanza cuando el usuario completa la acción del paso.
+ * Tras el tutorial inicial se desbloquean guías temáticas en “?”.
  */
-const TOUR_STEPS = [
-  {
-    id: 'bienvenida',
-    view: 'panel',
-    title: 'Empezamos acá',
-    body: 'Este es tu Panel. El orden típico: elegí el curso arriba, cargá alumnos y pasá lista o notas.',
-    bodyShort: 'Curso arriba → Excel → Asistencia o Notas.',
-    target: '[data-panel-hero], [data-onboarding]',
+
+const BASIC_TOUR = {
+  id: 'basico',
+  title: 'Tutorial inicial',
+  steps: [
+    {
+      id: 'bienvenida',
+      view: 'panel',
+      title: 'Empezamos acá',
+      body: 'Este es tu Panel. Vas a elegir el curso, cargar alumnos y usar Asistencia o Notas.',
+      bodyShort: 'Curso → Excel → Asistencia o Notas.',
+      target: '[data-panel-hero], [data-onboarding]',
+      require: 'next',
+      nextLabel: 'Empezar',
+    },
+    {
+      id: 'curso-actual',
+      view: 'panel',
+      title: 'Curso actual',
+      body: 'Elegí curso y materia y tocá “Usar este curso”. La barra avanza cuando lo confirmás.',
+      bodyShort: 'Elegí curso y materia y confirmá.',
+      target: '[data-gtc-form], [data-global-teaching-context]',
+      preferTarget: '[data-gtc-toggle]',
+      openGtc: true,
+      softChrome: true,
+      require: 'teaching-context',
+    },
+    {
+      id: 'resumen',
+      view: 'panel',
+      title: 'Resumen',
+      body: 'Tocá una tarjeta del Resumen (Alumnos, Cursos, Promedio o Asistencia) para abrir esa sección.',
+      bodyShort: 'Tocá una tarjeta del Resumen.',
+      target: '[data-dashboard] .metric--link, [data-dashboard]',
+      require: 'click',
+      requireClick: '[data-dashboard] .metric--link, [data-dashboard] [data-spa-nav]',
+    },
+    {
+      id: 'excel',
+      view: 'registro',
+      title: 'Cargar con Excel',
+      body: 'Tocá la zona para subir el Excel o elegí un archivo. Así avanza la barra.',
+      bodyShort: 'Tocá para subir el Excel o elegí un archivo.',
+      target: '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file]',
+      require: 'click',
+      requireClick: '[data-excel-dropzone], [data-excel-file], [data-excel-workspace-form] input[type="file"]',
+    },
+    {
+      id: 'asistencia',
+      view: 'asistencia',
+      title: 'Pasar lista',
+      body: 'Marcá presente o ausente en un alumno. Si aún no hay alumnos, tocá el panel de pasar lista.',
+      bodyShort: 'Marcá presente/ausente o tocá el panel.',
+      target: '[data-spa-view="asistencia"] [data-attendance-list], [data-spa-view="asistencia"] [data-attendance-take-view]',
+      require: 'click',
+      requireClick: '[data-attendance-list] button, [data-attendance-take-view] button, [data-attendance-take-view]',
+    },
+    {
+      id: 'notas',
+      view: 'notas',
+      title: 'Notas',
+      body: 'Tocá el listado o un campo de calificación para practicar la carga de notas.',
+      bodyShort: 'Tocá el listado o un campo de nota.',
+      target: '[data-spa-view="notas"] [data-grade-bulk-list], [data-spa-view="notas"] [data-grades-take-view]',
+      require: 'click',
+      requireClick: '[data-grade-bulk-list] input, [data-grade-bulk-list] button, [data-grade-bulk-list], [data-grades-take-view]',
+    },
+    {
+      id: 'menu-ayuda',
+      view: 'panel',
+      title: 'Más guías en “?”',
+      body: 'Cuando termines, en Ayuda (?) vas a ver guías específicas: Excel, lista, notas y más.',
+      bodyShort: 'En “?” vas a ver guías específicas.',
+      target: '[data-help-menu], [data-menu-toggle]',
+      openMenuOnMobile: true,
+      openHelpOnMobile: true,
+      require: 'next',
+      nextLabel: 'Listo',
+    },
+  ],
+};
+
+const TOPIC_GUIDES = {
+  curso: {
+    id: 'curso',
+    title: 'Guía: Curso actual',
+    unlockAfterBasic: true,
+    steps: [
+      {
+        id: 'curso-abrir',
+        view: 'panel',
+        title: 'Abrir curso actual',
+        body: 'Tocá “Cambiar” para abrir escuela, curso y materia.',
+        bodyShort: 'Tocá “Cambiar”.',
+        target: '[data-gtc-toggle], [data-global-teaching-context]',
+        softChrome: true,
+        require: 'click',
+        requireClick: '[data-gtc-toggle], [data-gtc-open]',
+      },
+      {
+        id: 'curso-guardar',
+        view: 'panel',
+        title: 'Confirmar selección',
+        body: 'Elegí curso y materia y tocá “Usar este curso”.',
+        bodyShort: 'Confirmá curso y materia.',
+        target: '[data-gtc-form], [data-global-teaching-context]',
+        openGtc: true,
+        softChrome: true,
+        require: 'teaching-context',
+      },
+    ],
   },
-  {
-    id: 'curso-actual',
-    view: 'panel',
-    title: 'Curso actual',
-    body: 'Tocá “Cambiar”, elegí curso y materia, y confirmá. Todo el trabajo del día usa esta elección.',
-    bodyShort: 'Tocá “Cambiar”, elegí curso y materia, y confirmá.',
-    target: '[data-gtc-form], [data-global-teaching-context]',
-    preferTarget: '[data-gtc-toggle]',
-    openGtc: true,
-    softChrome: true,
-  },
-  {
-    id: 'resumen',
-    view: 'panel',
-    title: 'Resumen',
-    body: 'Estas tarjetas resumen el curso. Tocá una para ir a Alumnos, Cursos, Notas o Asistencia.',
-    bodyShort: 'Tocá una tarjeta para abrir esa sección.',
-    target: '[data-dashboard] .metric--link, [data-dashboard], [data-panel-summary]',
-  },
-  {
+  excel: {
     id: 'excel',
-    view: 'registro',
-    title: 'Cargar con Excel',
-    body: 'Lo más rápido para armar el aula: subí la planilla, confirmá columnas y guardá.',
-    bodyShort: 'Subí el Excel, confirmá columnas y guardá.',
-    target: '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-student-mode-panel="excel"], [data-spa-view="registro"] .excel-workspace',
+    title: 'Guía: Importar Excel',
+    unlockAfterBasic: true,
+    steps: [
+      {
+        id: 'excel-ir',
+        view: 'registro',
+        title: 'Ir a Alumnos',
+        body: 'Acá se importa el listado. Revisá la estructura de referencia si hace falta.',
+        bodyShort: 'Acá importás el listado.',
+        target: '[data-spa-view="registro"] .excel-workspace, [data-spa-view="registro"] .page-header',
+        require: 'next',
+        nextLabel: 'Seguir',
+      },
+      {
+        id: 'excel-subir',
+        view: 'registro',
+        title: 'Subir archivo',
+        body: 'Tocá la zona de carga o elegí un archivo Excel.',
+        bodyShort: 'Tocá para subir el Excel.',
+        target: '[data-excel-dropzone], [data-excel-file]',
+        require: 'click',
+        requireClick: '[data-excel-dropzone], [data-excel-file]',
+      },
+      {
+        id: 'excel-referencia',
+        view: 'registro',
+        title: 'Referencia',
+        body: 'Abrí “Ver estructura de referencia” para ver columnas obligatorias.',
+        bodyShort: 'Abrí la estructura de referencia.',
+        target: '[data-spa-view="registro"] .excel-reference, [data-spa-view="registro"] .excel-workspace',
+        require: 'click',
+        requireClick: '.excel-reference summary, .excel-reference',
+      },
+    ],
   },
-  {
+  asistencia: {
     id: 'asistencia',
-    view: 'asistencia',
-    title: 'Pasar lista',
-    body: 'Marcá presente o ausente y tocá Guardar abajo. En el celular la barra queda fija.',
-    bodyShort: 'Marcá presente/ausente y Guardá abajo.',
-    target: '[data-spa-view="asistencia"] [data-attendance-take-view], [data-spa-view="asistencia"] .page-header',
+    title: 'Guía: Pasar lista',
+    unlockAfterBasic: true,
+    steps: [
+      {
+        id: 'asis-contexto',
+        view: 'asistencia',
+        title: 'Curso arriba',
+        body: 'La lista usa el Curso actual. Si falta, cambialo arriba.',
+        bodyShort: 'Revisá el Curso actual arriba.',
+        target: '[data-global-teaching-context], [data-attendance-take-view]',
+        softChrome: true,
+        require: 'next',
+        nextLabel: 'Seguir',
+      },
+      {
+        id: 'asis-marcar',
+        view: 'asistencia',
+        title: 'Marcar alumnos',
+        body: 'Tocá Presente o Ausente. Si no hay alumnos, importá con Excel antes.',
+        bodyShort: 'Tocá Presente o Ausente.',
+        target: '[data-attendance-list], [data-attendance-take-view]',
+        require: 'click',
+        requireClick: '[data-attendance-list] button, [data-attendance-take-view] button, [data-attendance-take-view]',
+      },
+      {
+        id: 'asis-guardar',
+        view: 'asistencia',
+        title: 'Guardar',
+        body: 'Cuando termines, tocá Guardar en la barra de abajo.',
+        bodyShort: 'Tocá Guardar abajo.',
+        target: '[data-attendance-save-bar], [data-attendance-save]',
+        require: 'click',
+        requireClick: '[data-attendance-save], [data-attendance-save-bar]',
+      },
+    ],
   },
-  {
+  notas: {
     id: 'notas',
-    view: 'notas',
-    title: 'Notas',
-    body: 'Cargá calificaciones del mismo curso actual y guardá. El promedio del Panel se actualiza solo.',
-    bodyShort: 'Cargá notas del curso y Guardá.',
-    target: '[data-spa-view="notas"] [data-grades-take-view] .grade-bulk-list, [data-spa-view="notas"] [data-grades-take-view], [data-spa-view="notas"] .page-header',
+    title: 'Guía: Cargar notas',
+    unlockAfterBasic: true,
+    steps: [
+      {
+        id: 'notas-contexto',
+        view: 'notas',
+        title: 'Mismo curso',
+        body: 'Las notas siguen el Curso actual del encabezado.',
+        bodyShort: 'Usan el Curso actual.',
+        target: '[data-global-teaching-context], [data-grades-take-view]',
+        softChrome: true,
+        require: 'next',
+        nextLabel: 'Seguir',
+      },
+      {
+        id: 'notas-cargar',
+        view: 'notas',
+        title: 'Cargar',
+        body: 'Tocá un campo de calificación o el listado de alumnos.',
+        bodyShort: 'Tocá un campo o el listado.',
+        target: '[data-grade-bulk-list], [data-grades-take-view]',
+        require: 'click',
+        requireClick: '[data-grade-bulk-list] input, [data-grade-bulk-list], [data-grades-take-view]',
+      },
+      {
+        id: 'notas-guardar',
+        view: 'notas',
+        title: 'Guardar',
+        body: 'Confirmá con Guardar calificaciones.',
+        bodyShort: 'Tocá Guardar calificaciones.',
+        target: '[data-grades-save-bar], [data-grades-save]',
+        require: 'click',
+        requireClick: '[data-grades-save], [data-grades-save-bar]',
+      },
+    ],
   },
-  {
-    id: 'actividades',
-    view: 'actividades',
-    title: 'Actividades',
-    body: 'Acá están contenidos, entregas y seguimiento. Podés volver cuando lo necesites.',
-    bodyShort: 'Contenidos, entregas y seguimiento.',
-    target: '[data-spa-view="actividades"] .activity-flow-tabs, [data-spa-view="actividades"] .page-header',
-  },
-  {
-    id: 'menu-ayuda',
-    view: 'panel',
-    title: 'Menú y ayuda',
-    body: 'Con ☰ cambiás de sección. En “?” reabrís este tutorial o instalás la app.',
-    bodyShort: '☰ cambia de sección. “?” reabre el tutorial.',
-    target: '[data-help-tour-item], [data-help-menu], [data-menu-toggle]',
-    openMenuOnMobile: true,
-    openHelpOnMobile: true,
-  },
-];
+};
+
+function getTourStatus(userId) {
+  if (!userId) return '';
+  return localStorage.getItem(productTourKey(userId)) || '';
+}
 
 function setTourStatus(userId, value) {
   if (!userId) return;
   localStorage.setItem(productTourKey(userId), value);
+}
+
+function readGuides(userId) {
+  if (!userId) return {};
+  try {
+    return JSON.parse(localStorage.getItem(productGuidesKey(userId)) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+function markGuideDone(userId, guideId) {
+  if (!userId || !guideId) return;
+  const current = readGuides(userId);
+  current[guideId] = 'done';
+  localStorage.setItem(productGuidesKey(userId), JSON.stringify(current));
 }
 
 function isMobileViewport() {
@@ -123,8 +300,6 @@ function openGtcForTour() {
   const root = document.querySelector('[data-global-teaching-context]');
   const form = root?.querySelector('[data-gtc-form]');
   if (!(form instanceof HTMLElement) || !(root instanceof HTMLElement)) return;
-
-  // Abrir el selector sin depender de botones ocultos (ej. gate ya cerrado).
   form.classList.remove('is-hidden');
   form.hidden = false;
   root.classList.add('gtc--tour-open');
@@ -135,23 +310,57 @@ function closeGtcTourState() {
   document.querySelector('[data-global-teaching-context]')?.classList.remove('gtc--tour-open');
 }
 
+function teachingContextReady(detail) {
+  if (detail?.cursoId && detail?.materiaId) return true;
+  const summary = document.querySelector('[data-gtc-summary]')?.textContent || '';
+  return Boolean(summary && !/elegí curso/i.test(summary));
+}
+
 /**
- * Tour guiado de uso.
- * Se inicia desde el panel o desde el menú “?”.
+ * @param {{ getUserId: () => string | null }} options
  */
 export function initProductTour({ getUserId }) {
-  const startButtons = [
-    ...document.querySelectorAll('[data-product-tour-start], [data-setup-tutorial-start]'),
-  ];
   const overlay = ensureTourOverlay();
+  const progress = ensureTourProgress();
+  let activeTour = null;
   let stepIndex = 0;
   let running = false;
+  let stepCompleted = false;
+  let actionCleanup = null;
+
+  const refreshHelpMenu = () => {
+    const basicDone = Boolean(getTourStatus(getUserId()));
+    document.querySelectorAll('[data-tour-guides]').forEach((block) => {
+      block.hidden = !basicDone;
+      block.classList.toggle('is-hidden', !basicDone);
+    });
+    const guides = readGuides(getUserId());
+    document.querySelectorAll('[data-tour-start]').forEach((btn) => {
+      const id = btn.getAttribute('data-tour-start');
+      if (!id || id === 'basico') return;
+      btn.classList.toggle('is-guide-done', guides[id] === 'done');
+    });
+  };
+
+  const stopActionWatch = () => {
+    actionCleanup?.();
+    actionCleanup = null;
+  };
+
+  const cheer = () => {
+    progress.showCheer('¡Bien!');
+  };
 
   const finishTour = (status) => {
     running = false;
-    setTourStatus(getUserId(), status);
+    stopActionWatch();
+    const tourId = activeTour?.id || 'basico';
+    if (tourId === 'basico') setTourStatus(getUserId(), status);
+    else if (status === 'done') markGuideDone(getUserId(), tourId);
+
     overlay.clearSpotlight();
     overlay.close();
+    progress.hide();
     closeMenu();
     closeGtcTourState();
     showSpaView('panel');
@@ -161,12 +370,70 @@ export function initProductTour({ getUserId }) {
       'product-tour-menu-step',
       'product-tour-soft-chrome',
     );
+    activeTour = null;
+    refreshHelpMenu();
     window.dispatchEvent(new CustomEvent('aula-clara:local-data-changed'));
   };
 
+  const completeStepAction = () => {
+    if (!running || stepCompleted) return;
+    stepCompleted = true;
+    cheer();
+    progress.setProgress(stepIndex + 1, activeTour.steps.length);
+    overlay.setNextEnabled(true);
+    const nextBtn = document.querySelector('[data-tour-next]');
+    if (nextBtn instanceof HTMLButtonElement) {
+      nextBtn.textContent = stepIndex >= activeTour.steps.length - 1 ? 'Listo' : 'Siguiente';
+    }
+  };
+
+  const watchStepAction = (step) => {
+    stopActionWatch();
+    stepCompleted = false;
+
+    if (!step.require || step.require === 'next') {
+      stepCompleted = true;
+      overlay.setNextEnabled(true);
+      return;
+    }
+
+    overlay.setNextEnabled(false);
+
+    if (step.require === 'teaching-context') {
+      const onContext = (event) => {
+        if (teachingContextReady(event.detail)) completeStepAction();
+      };
+      window.addEventListener('aula-clara:teaching-context-changed', onContext);
+      // Si ya está listo, pedimos confirmación igual (submit); no auto-completar.
+      actionCleanup = () => window.removeEventListener('aula-clara:teaching-context-changed', onContext);
+      return;
+    }
+
+    if (step.require === 'click') {
+      const selector = step.requireClick || step.target;
+      const onClick = (event) => {
+        const hit = event.target?.closest?.(selector);
+        if (!hit) return;
+        completeStepAction();
+      };
+      const onChange = (event) => {
+        const hit = event.target?.closest?.(selector);
+        if (!hit) return;
+        completeStepAction();
+      };
+      document.addEventListener('click', onClick, true);
+      document.addEventListener('change', onChange, true);
+      actionCleanup = () => {
+        document.removeEventListener('click', onClick, true);
+        document.removeEventListener('change', onChange, true);
+      };
+    }
+  };
+
   const showStep = async (index) => {
+    if (!activeTour) return;
     stepIndex = index;
-    const step = TOUR_STEPS[index];
+    const step = activeTour.steps[index];
     if (!step) {
       finishTour('done');
       return;
@@ -186,6 +453,12 @@ export function initProductTour({ getUserId }) {
     overlay.setMenuMode(menuStep);
     overlay.setSoftChrome(softChrome && !menuStep);
 
+    progress.show({
+      label: activeTour.title,
+      current: index,
+      total: activeTour.steps.length,
+    });
+
     if (step.openGtc) {
       openGtcForTour();
       await waitForPaint();
@@ -203,7 +476,6 @@ export function initProductTour({ getUserId }) {
       document.querySelector('[data-help-menu]')?.removeAttribute('open');
     }
 
-    // Primero el control puntual (ej. Cambiar); si el form ya está abierto, priorizarlo.
     const target = pickTarget(step.target) || pickTarget(step.preferTarget);
     if (target && !menuStep) {
       const inStickyChrome = Boolean(target.closest('.app-shell'));
@@ -223,43 +495,139 @@ export function initProductTour({ getUserId }) {
       overlay.clearSpotlight();
     }
 
+    watchStepAction(step);
+
+    const needsAction = step.require && step.require !== 'next';
     overlay.open({
       title: step.title,
-      body: stepBody(step),
-      stepLabel: `${index + 1}/${TOUR_STEPS.length}`,
+      body: needsAction
+        ? `${stepBody(step)} Completá la acción para avanzar.`
+        : stepBody(step),
+      stepLabel: `${index + 1}/${activeTour.steps.length}`,
       onNext: () => {
+        if (!stepCompleted) {
+          overlay.nudge('Completá el paso marcado para seguir.');
+          return;
+        }
         void showStep(index + 1);
       },
       onSkip: () => finishTour('skipped'),
-      isLast: index === TOUR_STEPS.length - 1,
-      nextLabel: index === 0 ? 'Empezar' : undefined,
+      isLast: index === activeTour.steps.length - 1,
+      nextLabel: step.nextLabel || (index === 0 ? 'Empezar' : 'Siguiente'),
+      nextEnabled: stepCompleted,
     });
   };
 
-  const startTour = () => {
+  const startTourById = (tourId = 'basico') => {
     if (running) return;
+    const tour = tourId === 'basico' ? BASIC_TOUR : TOPIC_GUIDES[tourId];
+    if (!tour) return;
+    if (tour.unlockAfterBasic && !getTourStatus(getUserId())) {
+      window.alert('Primero completá o salí del tutorial inicial. Después se desbloquean las guías.');
+      return;
+    }
+    activeTour = tour;
     document.querySelector('[data-help-menu]')?.removeAttribute('open');
+    closeMenu();
     void showStep(0);
   };
 
-  startButtons.forEach((btn) => {
+  document.querySelectorAll('[data-product-tour-start], [data-setup-tutorial-start], [data-tour-start]').forEach((btn) => {
     btn.addEventListener('click', (event) => {
-      // El onboarding ya llama startTour; evitamos doble arranque en ese botón.
       if (btn.hasAttribute('data-setup-tutorial-start')) return;
       event.preventDefault();
-      startTour();
+      const id = btn.getAttribute('data-tour-start') || 'basico';
+      startTourById(id);
     });
   });
 
   window.addEventListener('resize', () => {
-    if (!running) return;
-    const step = TOUR_STEPS[stepIndex];
+    if (!running || !activeTour) return;
+    const step = activeTour.steps[stepIndex];
     if (!step) return;
     const target = pickTarget(step.target) || pickTarget(step.preferTarget);
     if (target && !step.openMenuOnMobile) overlay.setSpotlight(target);
   });
 
-  return { startTour };
+  window.addEventListener('aula-clara:local-data-changed', refreshHelpMenu);
+  refreshHelpMenu();
+
+  return {
+    startTour: () => startTourById('basico'),
+    startTourById,
+    refreshHelpMenu,
+  };
+}
+
+function ensureTourProgress() {
+  let root = document.querySelector('[data-tour-progress]');
+  if (!root) {
+    root = document.createElement('div');
+    root.className = 'tour-progress is-hidden';
+    root.setAttribute('data-tour-progress', '');
+    root.setAttribute('hidden', '');
+    root.innerHTML = `
+      <div class="tour-progress-inner">
+        <div class="tour-progress-meta">
+          <span class="tour-progress-label" data-tour-progress-label>Tutorial</span>
+          <span class="tour-progress-count" data-tour-progress-count>0/0</span>
+          <span class="tour-progress-cheer is-hidden" data-tour-progress-cheer hidden>¡Bien!</span>
+        </div>
+        <div class="tour-progress-track" aria-hidden="true">
+          <div class="tour-progress-fill" data-tour-progress-fill></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(root);
+  }
+
+  const labelEl = root.querySelector('[data-tour-progress-label]');
+  const countEl = root.querySelector('[data-tour-progress-count]');
+  const fillEl = root.querySelector('[data-tour-progress-fill]');
+  const cheerEl = root.querySelector('[data-tour-progress-cheer]');
+  let cheerTimer = null;
+
+  return {
+    show({ label, current, total }) {
+      if (labelEl) labelEl.textContent = label || 'Tutorial';
+      if (countEl) countEl.textContent = `${Math.min(current + 1, total)}/${total}`;
+      if (fillEl) fillEl.style.width = `${Math.round((current / Math.max(total, 1)) * 100)}%`;
+      root.classList.remove('is-hidden');
+      root.removeAttribute('hidden');
+    },
+    setProgress(completedSteps, total) {
+      const safeTotal = Math.max(total, 1);
+      const pct = Math.round((completedSteps / safeTotal) * 100);
+      if (countEl) countEl.textContent = `${Math.min(completedSteps, total)}/${total}`;
+      if (fillEl) fillEl.style.width = `${pct}%`;
+    },
+    showCheer(text = '¡Bien!') {
+      if (!(cheerEl instanceof HTMLElement)) return;
+      cheerEl.textContent = text;
+      cheerEl.classList.remove('is-hidden');
+      cheerEl.removeAttribute('hidden');
+      cheerEl.classList.remove('is-pop');
+      // reflow for animation restart
+      void cheerEl.offsetWidth;
+      cheerEl.classList.add('is-pop');
+      window.clearTimeout(cheerTimer);
+      cheerTimer = window.setTimeout(() => {
+        cheerEl.classList.add('is-hidden');
+        cheerEl.setAttribute('hidden', '');
+        cheerEl.classList.remove('is-pop');
+      }, 1600);
+    },
+    hide() {
+      window.clearTimeout(cheerTimer);
+      root.classList.add('is-hidden');
+      root.setAttribute('hidden', '');
+      if (cheerEl) {
+        cheerEl.classList.add('is-hidden');
+        cheerEl.setAttribute('hidden', '');
+      }
+      if (fillEl) fillEl.style.width = '0%';
+    },
+  };
 }
 
 function ensureTourOverlay() {
@@ -276,6 +644,7 @@ function ensureTourOverlay() {
         <p class="product-tour-step" data-tour-step></p>
         <h2 id="product-tour-title" data-tour-title></h2>
         <p data-tour-body></p>
+        <p class="product-tour-nudge is-hidden" data-tour-nudge hidden></p>
         <div class="product-tour-actions">
           <button type="button" class="btn btn-ghost" data-tour-skip>Salir</button>
           <button type="button" class="btn btn-primary" data-tour-next>Siguiente</button>
@@ -288,6 +657,7 @@ function ensureTourOverlay() {
   const titleEl = root.querySelector('[data-tour-title]');
   const bodyEl = root.querySelector('[data-tour-body]');
   const stepEl = root.querySelector('[data-tour-step]');
+  const nudgeEl = root.querySelector('[data-tour-nudge]');
   const nextBtn = root.querySelector('[data-tour-next]');
   const skipBtn = root.querySelector('[data-tour-skip]');
   const spotlight = root.querySelector('[data-tour-spotlight]');
@@ -295,6 +665,7 @@ function ensureTourOverlay() {
   let onNext = null;
   let onSkip = null;
   let spotlightTarget = null;
+  let nudgeTimer = null;
 
   const clearSpotlight = () => {
     spotlightTarget?.classList.remove('tour-target-active');
@@ -340,6 +711,24 @@ function ensureTourOverlay() {
     root.classList.toggle('product-tour-overlay--soft-chrome', enabled);
   };
 
+  const setNextEnabled = (enabled) => {
+    if (!(nextBtn instanceof HTMLButtonElement)) return;
+    nextBtn.disabled = !enabled;
+    nextBtn.classList.toggle('is-waiting', !enabled);
+  };
+
+  const nudge = (message) => {
+    if (!(nudgeEl instanceof HTMLElement)) return;
+    nudgeEl.textContent = message;
+    nudgeEl.classList.remove('is-hidden');
+    nudgeEl.removeAttribute('hidden');
+    window.clearTimeout(nudgeTimer);
+    nudgeTimer = window.setTimeout(() => {
+      nudgeEl.classList.add('is-hidden');
+      nudgeEl.setAttribute('hidden', '');
+    }, 2200);
+  };
+
   nextBtn?.addEventListener('click', () => onNext?.());
   skipBtn?.addEventListener('click', () => onSkip?.());
   backdrop?.addEventListener('click', (event) => {
@@ -348,13 +737,18 @@ function ensureTourOverlay() {
   });
 
   return {
-    open({ title, body, stepLabel, onNext: next, onSkip: skip, isLast, nextLabel }) {
+    open({ title, body, stepLabel, onNext: next, onSkip: skip, isLast, nextLabel, nextEnabled = true }) {
       onNext = next;
       onSkip = skip;
       if (titleEl) titleEl.textContent = title;
       if (bodyEl) bodyEl.textContent = body;
       if (stepEl) stepEl.textContent = stepLabel;
-      if (nextBtn) nextBtn.textContent = isLast ? 'Listo' : (nextLabel || 'Siguiente');
+      if (nextBtn) nextBtn.textContent = isLast ? (nextLabel || 'Listo') : (nextLabel || 'Siguiente');
+      setNextEnabled(nextEnabled);
+      if (nudgeEl) {
+        nudgeEl.classList.add('is-hidden');
+        nudgeEl.setAttribute('hidden', '');
+      }
       root.classList.remove('is-hidden');
       root.removeAttribute('hidden');
     },
@@ -372,5 +766,7 @@ function ensureTourOverlay() {
     rememberTarget,
     setMenuMode,
     setSoftChrome,
+    setNextEnabled,
+    nudge,
   };
 }

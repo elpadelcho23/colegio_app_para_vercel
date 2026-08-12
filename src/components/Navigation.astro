@@ -178,11 +178,29 @@ const isActive = (href: string) => {
             class="help-menu-item help-menu-item--tour"
             role="menuitem"
             data-product-tour-start
+            data-tour-start="basico"
             data-help-tour-item
           >
-            <span class="copy-long">¿Arrancamos con el tutorial?</span>
+            <span class="copy-long">Tutorial inicial</span>
             <span class="copy-short">Tutorial</span>
           </button>
+
+          <div class="help-menu-guides is-hidden" data-tour-guides hidden>
+            <p class="help-menu-title help-menu-title--sub">Guías</p>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="curso">
+              Curso actual
+            </button>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="excel">
+              Importar Excel
+            </button>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="asistencia">
+              Pasar lista
+            </button>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="notas">
+              Cargar notas
+            </button>
+          </div>
+
           <button type="button" class="help-menu-item" role="menuitem" data-pwa-install-btn>
             <span class="copy-long">Instalar app (PC / Android / iOS)</span>
             <span class="copy-short">Instalar app</span>
@@ -567,19 +585,24 @@ const isActive = (href: string) => {
 
   @media (max-width: 479px) {
     .global-teaching-context {
-      padding: 0.3rem 0.55rem 0.4rem;
+      width: calc(100% - 0.75rem);
+      padding: 0.5rem 0.6rem;
+    }
+
+    .gtc-label {
+      font-size: 0.68rem;
     }
 
     .gtc-summary strong {
-      font-size: 0.8rem;
+      font-size: 0.9rem;
     }
   }
 
   @media (min-width: 1024px) {
     .global-teaching-context {
-      width: 100%;
-      margin: 0;
-      padding: 0.65rem 0.85rem 0.85rem;
+      width: calc(100% - 1.5rem);
+      margin: 0.45rem 0.75rem 0.65rem;
+      padding: 0.7rem 0.8rem;
     }
   }
 </style>
