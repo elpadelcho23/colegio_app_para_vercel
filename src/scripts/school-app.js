@@ -763,7 +763,13 @@ function refreshGlobalTeachingContextUi({ keepOpen = false } = {}) {
     subjectSelect.value = ctx.materiaId || '';
   }
 
-  if (!keepOpen && form) {
+  // Durante el tutorial (gtc--tour-open) el form debe seguir visible: si se cierra,
+  // el spotlight fijo queda “flotando” donde estaba el form (sobre el menú).
+  const tourKeepsOpen = root.classList.contains('gtc--tour-open');
+  if ((keepOpen || tourKeepsOpen) && form) {
+    form.classList.remove('is-hidden');
+    form.hidden = false;
+  } else if (form) {
     form.classList.add('is-hidden');
     form.hidden = true;
   }

@@ -29,8 +29,8 @@ const BASIC_TOUR = {
       title: 'Curso actual',
       body: 'Elegí curso y materia y tocá “Usar este curso”. La barra avanza cuando lo confirmás.',
       bodyShort: 'Elegí curso y materia y confirmá.',
-      target: '[data-gtc-form], [data-global-teaching-context]',
-      preferTarget: '[data-gtc-toggle]',
+      // Anclar al bloque entero (no solo al botón Cambiar): el form puede reflowear el sidebar.
+      target: '[data-global-teaching-context]',
       openGtc: true,
       softChrome: true,
       require: 'teaching-context',
@@ -116,7 +116,7 @@ const TOPIC_GUIDES = {
         title: 'Confirmar selección',
         body: 'Elegí curso y materia y tocá “Usar este curso”.',
         bodyShort: 'Confirmá curso y materia.',
-        target: '[data-gtc-form], [data-global-teaching-context]',
+        target: '[data-global-teaching-context]',
         openGtc: true,
         softChrome: true,
         require: 'teaching-context',
@@ -518,14 +518,27 @@ function openGtcForTour() {
   const root = document.querySelector('[data-global-teaching-context]');
   const form = root?.querySelector('[data-gtc-form]');
   if (!(form instanceof HTMLElement) || !(root instanceof HTMLElement)) return;
-  form.classList.remove('is-hidden');
-  form.hidden = false;
+
+  // Marcar antes de abrir: refreshGlobalTeachingContextUi respeta gtc--tour-open
+  // y no vuelve a ocultar el form (si no, el spotlight queda flotando sobre el menú).
   root.classList.add('gtc--tour-open');
+
+  // Abrir por el mismo camino que “Elegir ahora” (no togglear Cambiar: cerraría el form).
+  const openTrigger = document.querySelector('[data-gtc-open]');
+  if (openTrigger instanceof HTMLElement) {
+    openTrigger.click();
+  } else {
+    form.classList.remove('is-hidden');
+    form.hidden = false;
+  }
+
   root.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function closeGtcTourState() {
-  document.querySelector('[data-global-teaching-context]')?.classList.remove('gtc--tour-open');
+  const root = document.querySelector('[data-global-teaching-context]');
+  if (!(root instanceof HTMLElement)) return;
+  root.classList.remove('gtc--tour-open');
 }
 
 function teachingContextReady(detail) {
@@ -581,6 +594,10 @@ export function initProductTour({ getUserId }) {
 
   const applySpotlight = (step, { scroll = false } = {}) => {
     if (!step) return;
+    // Si el paso necesita el form y se cerró, reabrirlo antes de medir.
+    if (step.openGtc && !gtcFormIsOpen()) {
+      openGtcForTour();
+    }
     const menuStep = isMenuStep(step);
     const target = resolveStepTarget(step);
     if (target && !menuStep) {
