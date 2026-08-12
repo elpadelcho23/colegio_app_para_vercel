@@ -3,107 +3,76 @@ import { showSpaView } from './spa-router.ts';
 import { closeMenu, openMenu } from './ui-nav.js';
 
 /**
- * Flujo completo de uso (pensado también para celular).
- * Cada paso navega a la pantalla real y destaca el control útil.
- * `bodyShort` se usa en pantallas angostas para no saturar.
+ * Tour guiado: pocos pasos, cada uno abre/marca el control real.
+ * Menos invasivo: dim suave + spotlight preciso (no pantallas enteras).
  */
 const TOUR_STEPS = [
   {
     id: 'bienvenida',
     view: 'panel',
-    title: 'Panel',
-    body: 'Acá arranca el día. Primero elegís el curso arriba; después Asistencia, Notas o Excel.',
-    bodyShort: 'Elegí el curso arriba y usá Asistencia, Notas o Excel.',
+    title: 'Empezamos acá',
+    body: 'Este es tu Panel. El orden típico: elegí el curso arriba, cargá alumnos y pasá lista o notas.',
+    bodyShort: 'Curso arriba → Excel → Asistencia o Notas.',
     target: '[data-panel-hero], [data-onboarding]',
   },
   {
     id: 'curso-actual',
     view: 'panel',
     title: 'Curso actual',
-    body: 'Tocá “Cambiar” y elegí escuela, curso y materia. El resto de la app usa esa elección.',
-    bodyShort: 'Tocá “Cambiar” y elegí curso y materia.',
-    target: '[data-global-teaching-context], [data-gtc-toggle]',
+    body: 'Tocá “Cambiar”, elegí curso y materia, y confirmá. Todo el trabajo del día usa esta elección.',
+    bodyShort: 'Tocá “Cambiar”, elegí curso y materia, y confirmá.',
+    target: '[data-gtc-form], [data-global-teaching-context]',
+    preferTarget: '[data-gtc-toggle]',
+    openGtc: true,
+    softChrome: true,
   },
   {
     id: 'resumen',
     view: 'panel',
     title: 'Resumen',
-    body: 'Estas tarjetas muestran alumnos, cursos, promedio y asistencia. Tocá una para ir ahí.',
+    body: 'Estas tarjetas resumen el curso. Tocá una para ir a Alumnos, Cursos, Notas o Asistencia.',
     bodyShort: 'Tocá una tarjeta para abrir esa sección.',
-    target: '[data-dashboard], [data-panel-summary]',
+    target: '[data-dashboard] .metric--link, [data-dashboard], [data-panel-summary]',
   },
   {
     id: 'excel',
     view: 'registro',
-    title: 'Excel',
-    body: 'Subí la planilla, confirmá columnas y guardá. Escuela, curso, materias y alumnos entran juntos.',
+    title: 'Cargar con Excel',
+    body: 'Lo más rápido para armar el aula: subí la planilla, confirmá columnas y guardá.',
     bodyShort: 'Subí el Excel, confirmá columnas y guardá.',
-    target: '[data-spa-view="registro"] [data-student-mode-panel="excel"], [data-spa-view="registro"] .excel-workspace',
-  },
-  {
-    id: 'alumnos',
-    view: 'registro',
-    title: 'Alumnos',
-    body: 'Abajo ves el listado cargado. Si hace falta, también podés agregar uno a uno.',
-    bodyShort: 'Acá ves el listado. Uno a uno es opcional.',
-    target: '[data-spa-view="registro"] [data-student-list], [data-spa-view="registro"] .page-header',
-  },
-  {
-    id: 'cursos',
-    view: 'cursos',
-    title: 'Cursos',
-    body: 'Gestionás divisiones y materias. Con Excel suele estar listo; si no, creá el curso antes de pasar lista.',
-    bodyShort: 'Acá están cursos y materias.',
-    target: '[data-spa-view="cursos"] .page-header, [data-spa-view="cursos"] [data-course-form]',
+    target: '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-student-mode-panel="excel"], [data-spa-view="registro"] .excel-workspace',
   },
   {
     id: 'asistencia',
     view: 'asistencia',
     title: 'Pasar lista',
-    body: 'Marcá presente o ausente del curso actual. En el celular cada alumno es una tarjeta.',
-    bodyShort: 'Marcá presente o ausente y seguí.',
+    body: 'Marcá presente o ausente y tocá Guardar abajo. En el celular la barra queda fija.',
+    bodyShort: 'Marcá presente/ausente y Guardá abajo.',
     target: '[data-spa-view="asistencia"] [data-attendance-take-view], [data-spa-view="asistencia"] .page-header',
-  },
-  {
-    id: 'asistencia-guardar',
-    view: 'asistencia',
-    title: 'Guardar',
-    body: 'Confirmá con Guardar. En el teléfono la barra queda fija abajo.',
-    bodyShort: 'Tocá Guardar abajo cuando termines.',
-    target: '[data-spa-view="asistencia"] [data-attendance-save-bar]',
   },
   {
     id: 'notas',
     view: 'notas',
     title: 'Notas',
-    body: 'Cargá calificaciones del curso actual y guardá. El promedio del Panel se actualiza solo.',
-    bodyShort: 'Cargá notas del curso y guardá.',
-    target: '[data-spa-view="notas"] [data-grades-take-view], [data-spa-view="notas"] .page-header',
+    body: 'Cargá calificaciones del mismo curso actual y guardá. El promedio del Panel se actualiza solo.',
+    bodyShort: 'Cargá notas del curso y Guardá.',
+    target: '[data-spa-view="notas"] [data-grades-take-view] .grade-bulk-list, [data-spa-view="notas"] [data-grades-take-view], [data-spa-view="notas"] .page-header',
   },
   {
     id: 'actividades',
     view: 'actividades',
     title: 'Actividades',
-    body: 'Armá contenidos, entregas y seguimiento. La IA también está acá.',
+    body: 'Acá están contenidos, entregas y seguimiento. Podés volver cuando lo necesites.',
     bodyShort: 'Contenidos, entregas y seguimiento.',
-    target: '[data-spa-view="actividades"] .page-header, [data-spa-view="actividades"] .activity-flow-tabs',
+    target: '[data-spa-view="actividades"] .activity-flow-tabs, [data-spa-view="actividades"] .page-header',
   },
   {
-    id: 'menu',
+    id: 'menu-ayuda',
     view: 'panel',
-    title: 'Menú',
-    body: 'En el celular abrís ☰ para cambiar de sección. En PC el menú está a la izquierda.',
-    bodyShort: 'Usá ☰ para cambiar de sección.',
-    target: '[data-menu-toggle], [data-nav-menu] .nav-tab.active, [data-nav-menu]',
-    openMenuOnMobile: true,
-  },
-  {
-    id: 'ayuda',
-    view: 'panel',
-    title: 'Ayuda',
-    body: 'El “?” reabre el tutorial o te lleva a instalar la app.',
-    bodyShort: 'El “?” reabre este tutorial.',
-    target: '[data-help-menu], [data-help-tour-item], [data-panel-summary]',
+    title: 'Menú y ayuda',
+    body: 'Con ☰ cambiás de sección. En “?” reabrís este tutorial o instalás la app.',
+    bodyShort: '☰ cambia de sección. “?” reabre el tutorial.',
+    target: '[data-help-tour-item], [data-help-menu], [data-menu-toggle]',
     openMenuOnMobile: true,
     openHelpOnMobile: true,
   },
@@ -131,19 +100,44 @@ function waitForPaint() {
   });
 }
 
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function isVisible(node) {
+  if (!(node instanceof HTMLElement)) return false;
+  if (node.closest('.spa-view--hidden')) return false;
+  if (node.hasAttribute('hidden') || node.classList.contains('is-hidden')) return false;
+  const style = window.getComputedStyle(node);
+  if (style.display === 'none' || style.visibility === 'hidden') return false;
+  const rect = node.getBoundingClientRect();
+  return rect.width > 2 && rect.height > 2;
+}
+
 function pickTarget(selector) {
   if (!selector) return null;
-  return [...document.querySelectorAll(selector)].find((node) => {
-    if (!(node instanceof HTMLElement)) return false;
-    if (node.closest('.spa-view--hidden')) return false;
-    const rect = node.getBoundingClientRect();
-    return rect.width > 2 && rect.height > 2;
-  }) || null;
+  return [...document.querySelectorAll(selector)].find((node) => isVisible(node)) || null;
+}
+
+function openGtcForTour() {
+  const root = document.querySelector('[data-global-teaching-context]');
+  const form = root?.querySelector('[data-gtc-form]');
+  if (!(form instanceof HTMLElement) || !(root instanceof HTMLElement)) return;
+
+  // Abrir el selector sin depender de botones ocultos (ej. gate ya cerrado).
+  form.classList.remove('is-hidden');
+  form.hidden = false;
+  root.classList.add('gtc--tour-open');
+  root.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeGtcTourState() {
+  document.querySelector('[data-global-teaching-context]')?.classList.remove('gtc--tour-open');
 }
 
 /**
- * Tour guiado de uso completo.
- * Se inicia desde el panel (“¿Arrancamos con el tutorial?”) o desde el menú “?”.
+ * Tour guiado de uso.
+ * Se inicia desde el panel o desde el menú “?”.
  */
 export function initProductTour({ getUserId }) {
   const startButtons = [
@@ -159,9 +153,14 @@ export function initProductTour({ getUserId }) {
     overlay.clearSpotlight();
     overlay.close();
     closeMenu();
+    closeGtcTourState();
     showSpaView('panel');
     document.querySelector('[data-help-menu]')?.removeAttribute('open');
-    document.body.classList.remove('product-tour-active', 'product-tour-menu-step');
+    document.body.classList.remove(
+      'product-tour-active',
+      'product-tour-menu-step',
+      'product-tour-soft-chrome',
+    );
     window.dispatchEvent(new CustomEvent('aula-clara:local-data-changed'));
   };
 
@@ -176,12 +175,22 @@ export function initProductTour({ getUserId }) {
     running = true;
     document.body.classList.add('product-tour-active');
     closeMenu();
+    closeGtcTourState();
     showSpaView(step.view);
     await waitForPaint();
 
     const menuStep = Boolean(step.openMenuOnMobile && isMobileViewport());
+    const softChrome = Boolean(step.softChrome);
     document.body.classList.toggle('product-tour-menu-step', menuStep);
+    document.body.classList.toggle('product-tour-soft-chrome', softChrome && !menuStep);
     overlay.setMenuMode(menuStep);
+    overlay.setSoftChrome(softChrome && !menuStep);
+
+    if (step.openGtc) {
+      openGtcForTour();
+      await waitForPaint();
+      await wait(40);
+    }
 
     if (menuStep) {
       openMenu();
@@ -194,9 +203,16 @@ export function initProductTour({ getUserId }) {
       document.querySelector('[data-help-menu]')?.removeAttribute('open');
     }
 
-    const target = pickTarget(step.target);
+    // Primero el control puntual (ej. Cambiar); si el form ya está abierto, priorizarlo.
+    const target = pickTarget(step.target) || pickTarget(step.preferTarget);
     if (target && !menuStep) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      const inStickyChrome = Boolean(target.closest('.app-shell'));
+      target.scrollIntoView({
+        behavior: 'smooth',
+        block: inStickyChrome ? 'nearest' : 'center',
+        inline: 'nearest',
+      });
+      await wait(120);
       await waitForPaint();
       overlay.setSpotlight(target);
     } else if (target && menuStep) {
@@ -239,8 +255,8 @@ export function initProductTour({ getUserId }) {
     if (!running) return;
     const step = TOUR_STEPS[stepIndex];
     if (!step) return;
-    const target = pickTarget(step.target);
-    if (target) overlay.setSpotlight(target);
+    const target = pickTarget(step.target) || pickTarget(step.preferTarget);
+    if (target && !step.openMenuOnMobile) overlay.setSpotlight(target);
   });
 
   return { startTour };
@@ -301,12 +317,12 @@ function ensureTourOverlay() {
     if (!(target instanceof HTMLElement) || !(spotlight instanceof HTMLElement)) return;
     rememberTarget(target);
 
-    const pad = 8;
+    const pad = 10;
     const rect = target.getBoundingClientRect();
-    const top = Math.max(8, rect.top - pad);
-    const left = Math.max(8, rect.left - pad);
-    const width = Math.min(window.innerWidth - left - 8, rect.width + pad * 2);
-    const height = Math.min(window.innerHeight - top - 8, rect.height + pad * 2);
+    const top = Math.max(6, rect.top - pad);
+    const left = Math.max(6, rect.left - pad);
+    const width = Math.min(window.innerWidth - left - 6, rect.width + pad * 2);
+    const height = Math.min(window.innerHeight - top - 6, rect.height + pad * 2);
 
     spotlight.style.top = `${top}px`;
     spotlight.style.left = `${left}px`;
@@ -320,9 +336,12 @@ function ensureTourOverlay() {
     root.classList.toggle('product-tour-overlay--menu', enabled);
   };
 
+  const setSoftChrome = (enabled) => {
+    root.classList.toggle('product-tour-overlay--soft-chrome', enabled);
+  };
+
   nextBtn?.addEventListener('click', () => onNext?.());
   skipBtn?.addEventListener('click', () => onSkip?.());
-  // Solo el botón Salir cierra: así se puede tocar la zona destacada (curso, Excel, etc.).
   backdrop?.addEventListener('click', (event) => {
     if (root.classList.contains('product-tour-overlay--menu')) return;
     event.preventDefault();
@@ -344,6 +363,7 @@ function ensureTourOverlay() {
       onSkip = null;
       clearSpotlight();
       setMenuMode(false);
+      setSoftChrome(false);
       root.classList.add('is-hidden');
       root.setAttribute('hidden', '');
     },
@@ -351,5 +371,6 @@ function ensureTourOverlay() {
     clearSpotlight,
     rememberTarget,
     setMenuMode,
+    setSoftChrome,
   };
 }
