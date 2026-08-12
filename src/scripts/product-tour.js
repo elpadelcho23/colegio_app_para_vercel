@@ -4,9 +4,10 @@ import { navigateToToolsSection } from './tools-ui.js';
 import { closeMenu, openMenu } from './ui-nav.js';
 
 /**
- * Tutoriales guiados con barra de progreso.
- * La barra solo avanza cuando el usuario completa la acción del paso.
- * Tras el tutorial inicial se desbloquean guías temáticas en “?”.
+ * Tutoriales guiados (patrón SaaS: checklist corta + guías bajo demanda).
+ * - Tutorial inicial: 5 pasos del camino crítico (mapa → curso → alumnos → lista → ayuda).
+ * - Guías temáticas: se desbloquean al terminar/omitir el inicial; 2–4 pasos cada una.
+ * - Acciones reales cuando se puede; softRequire si el aula aún no tiene datos.
  */
 
 const BASIC_TOUR = {
@@ -14,11 +15,13 @@ const BASIC_TOUR = {
   title: 'Tutorial inicial',
   steps: [
     {
-      id: 'bienvenida',
+      id: 'mapa',
       view: 'panel',
-      title: 'Empezamos acá',
-      body: 'Este es tu Panel. Vas a elegir el curso, cargar alumnos y usar Asistencia o Notas.',
-      bodyShort: 'Curso → Excel → Asistencia o Notas.',
+      title: 'El orden del día',
+      body: 'Primero elegís el Curso actual. Después cargás alumnos y pasás lista o notas.',
+      bodyShort: 'Curso → alumnos → lista o notas.',
+      why: 'Con este mapa no te perdés en el menú.',
+      actionHint: 'Tocá Empezar',
       target: '[data-panel-hero], [data-onboarding]',
       require: 'next',
       nextLabel: 'Empezar',
@@ -26,64 +29,55 @@ const BASIC_TOUR = {
     {
       id: 'curso-actual',
       view: 'panel',
-      title: 'Curso actual',
-      body: 'Elegí curso y materia y tocá “Usar este curso”. La barra avanza cuando lo confirmás.',
-      bodyShort: 'Elegí curso y materia y confirmá.',
-      // Anclar al bloque entero (no solo al botón Cambiar): el form puede reflowear el sidebar.
+      title: 'Elegí el curso de hoy',
+      body: 'En Curso actual elegí escuela, curso y materia. Después tocá “Usar este curso”.',
+      bodyShort: 'Curso + materia → Usar este curso.',
+      why: 'Asistencia, notas y actividades usan siempre esta elección.',
+      actionHint: 'Confirmá con “Usar este curso”',
       target: '[data-global-teaching-context]',
       openGtc: true,
       softChrome: true,
       require: 'teaching-context',
-    },
-    {
-      id: 'resumen',
-      view: 'panel',
-      title: 'Resumen',
-      body: 'Tocá una tarjeta del Resumen (Alumnos, Cursos, Promedio o Asistencia) para abrir esa sección.',
-      bodyShort: 'Tocá una tarjeta del Resumen.',
-      target: '[data-dashboard] .metric--link, [data-dashboard]',
-      require: 'click',
-      requireClick: '[data-dashboard] .metric--link, [data-dashboard] [data-spa-nav]',
+      autoAdvance: true,
     },
     {
       id: 'excel',
       view: 'registro',
-      title: 'Cargar con Excel',
-      body: 'Tocá la zona para subir el Excel o elegí un archivo. Así avanza la barra.',
-      bodyShort: 'Tocá para subir el Excel o elegí un archivo.',
-      target: '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file]',
+      title: 'Cargá alumnos',
+      body: 'Tocá la zona de Excel para subir el listado. Si ya tenés alumnos, podés Seguir.',
+      bodyShort: 'Subí el Excel o Seguí si ya hay alumnos.',
+      why: 'Sin alumnos no podés pasar lista ni cargar notas.',
+      actionHint: 'Tocá la zona de carga',
+      target: '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file], [data-spa-view="registro"] .excel-workspace',
       require: 'click',
       requireClick:
         '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file], [data-spa-view="registro"] [data-excel-workspace-form] input[type="file"]',
+      softRequire: true,
+      autoAdvance: true,
     },
     {
       id: 'asistencia',
       view: 'asistencia',
-      title: 'Pasar lista',
-      body: 'Marcá presente o ausente en un alumno. Si aún no hay alumnos, tocá el panel de pasar lista.',
-      bodyShort: 'Marcá presente/ausente o tocá el panel.',
+      title: 'Pasá lista',
+      body: 'Marcá Presente o Ausente. Si todavía no hay alumnos, Seguí y volvé cuando los cargues.',
+      bodyShort: 'Presente/Ausente, o Seguí si no hay alumnos.',
+      why: 'Es el uso diario más común.',
+      actionHint: 'Tocá Presente o Ausente',
       target: '[data-spa-view="asistencia"] [data-attendance-list], [data-spa-view="asistencia"] [data-attendance-take-view]',
       require: 'click',
       requireClick:
         '[data-spa-view="asistencia"] [data-attendance-list] button, [data-spa-view="asistencia"] [data-attendance-take-view] button, [data-spa-view="asistencia"] [data-attendance-take-view]',
+      softRequire: true,
+      autoAdvance: true,
     },
     {
-      id: 'notas',
-      view: 'notas',
-      title: 'Notas',
-      body: 'Tocá el listado o un campo de calificación para practicar la carga de notas.',
-      bodyShort: 'Tocá el listado o un campo de nota.',
-      target: '[data-spa-view="notas"] [data-grade-bulk-list], [data-spa-view="notas"] [data-grades-take-view]',
-      require: 'click',
-      requireClick:
-        '[data-spa-view="notas"] [data-grade-bulk-list] input, [data-spa-view="notas"] [data-grade-bulk-list] button, [data-spa-view="notas"] [data-grade-bulk-list], [data-spa-view="notas"] [data-grades-take-view]',
-    },
-    {
-      id: 'menu-ayuda',
+      id: 'mas-guias',
       view: 'panel',
-      title: 'Más guías en “?”',
-      body: 'Cuando termines, en Ayuda (?) vas a ver guías: curso, Excel, lista, notas, cursos, actividades y cuenta.',
-      bodyShort: 'En “?” vas a ver más guías.',
+      title: 'Más ayuda cuando haga falta',
+      body: 'En “?” quedan guías cortas: curso, Excel, lista, notas, cursos y actividades.',
+      bodyShort: 'En “?” hay más guías cortas.',
+      why: 'Aprendés el resto cuando lo necesitás, no todo de golpe.',
+      actionHint: 'Tocá Listo',
       target: '[data-help-menu], [data-menu-toggle]',
       openMenuOnMobile: true,
       openHelpOnMobile: true,
@@ -102,24 +96,30 @@ const TOPIC_GUIDES = {
       {
         id: 'curso-abrir',
         view: 'panel',
-        title: 'Abrir curso actual',
-        body: 'Tocá “Cambiar” para abrir escuela, curso y materia.',
+        title: 'Abrí el selector',
+        body: 'Tocá “Cambiar” abajo a la izquierda para abrir escuela, curso y materia.',
         bodyShort: 'Tocá “Cambiar”.',
+        why: 'Todo el trabajo del día depende de esta elección.',
+        actionHint: 'Tocá Cambiar',
         target: '[data-gtc-toggle], [data-global-teaching-context]',
         softChrome: true,
         require: 'click',
         requireClick: '[data-gtc-toggle], [data-gtc-open]',
+        autoAdvance: true,
       },
       {
         id: 'curso-guardar',
         view: 'panel',
-        title: 'Confirmar selección',
+        title: 'Confirmá la selección',
         body: 'Elegí curso y materia y tocá “Usar este curso”.',
         bodyShort: 'Confirmá curso y materia.',
+        why: 'Así Asistencia y Notas ya saben en qué aula estás.',
+        actionHint: 'Tocá “Usar este curso”',
         target: '[data-global-teaching-context]',
         openGtc: true,
         softChrome: true,
         require: 'teaching-context',
+        autoAdvance: true,
       },
     ],
   },
@@ -131,9 +131,11 @@ const TOPIC_GUIDES = {
       {
         id: 'excel-ir',
         view: 'registro',
-        title: 'Ir a Alumnos',
-        body: 'Acá se importa el listado. Revisá la estructura de referencia si hace falta.',
+        title: 'Sección Alumnos',
+        body: 'Acá importás el listado. Si no conocés el formato, mirá la referencia.',
         bodyShort: 'Acá importás el listado.',
+        why: 'Es el camino más rápido para armar el aula.',
+        actionHint: 'Tocá Seguir',
         target: '[data-spa-view="registro"] .excel-workspace, [data-spa-view="registro"] .page-header',
         require: 'next',
         nextLabel: 'Seguir',
@@ -141,23 +143,31 @@ const TOPIC_GUIDES = {
       {
         id: 'excel-subir',
         view: 'registro',
-        title: 'Subir archivo',
+        title: 'Subí el archivo',
         body: 'Tocá la zona de carga o elegí un archivo Excel.',
         bodyShort: 'Tocá para subir el Excel.',
+        why: 'Con un archivo cargás muchos alumnos de una vez.',
+        actionHint: 'Tocá la zona de carga',
         target: '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file]',
         require: 'click',
         requireClick:
           '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file], [data-spa-view="registro"] [data-excel-workspace-form] input[type="file"]',
+        softRequire: true,
+        autoAdvance: true,
       },
       {
         id: 'excel-referencia',
         view: 'registro',
-        title: 'Referencia',
-        body: 'Abrí “Ver estructura de referencia” para ver columnas obligatorias.',
+        title: 'Si falla el mapeo',
+        body: 'Abrí “Ver estructura de referencia” para ver las columnas esperadas.',
         bodyShort: 'Abrí la estructura de referencia.',
+        why: 'Te evita errores de columnas mal detectadas.',
+        actionHint: 'Abrí la referencia',
         target: '[data-spa-view="registro"] .excel-reference, [data-spa-view="registro"] .excel-workspace',
         require: 'click',
         requireClick: '[data-spa-view="registro"] .excel-reference summary, [data-spa-view="registro"] .excel-reference',
+        softRequire: true,
+        autoAdvance: true,
       },
     ],
   },
@@ -169,9 +179,11 @@ const TOPIC_GUIDES = {
       {
         id: 'asis-contexto',
         view: 'asistencia',
-        title: 'Curso arriba',
-        body: 'La lista usa el Curso actual. Si falta, cambialo arriba.',
-        bodyShort: 'Revisá el Curso actual arriba.',
+        title: 'Mirá el Curso actual',
+        body: 'La lista usa el Curso actual del encabezado. Si no es el correcto, cambialo.',
+        bodyShort: 'Revisá el Curso actual.',
+        why: 'Evita pasar lista del curso equivocado.',
+        actionHint: 'Tocá Seguir cuando el curso esté bien',
         target: '[data-global-teaching-context], [data-attendance-take-view]',
         softChrome: true,
         require: 'next',
@@ -180,23 +192,31 @@ const TOPIC_GUIDES = {
       {
         id: 'asis-marcar',
         view: 'asistencia',
-        title: 'Marcar alumnos',
-        body: 'Tocá Presente o Ausente. Si no hay alumnos, importá con Excel antes.',
+        title: 'Marcá alumnos',
+        body: 'Tocá Presente o Ausente. Si no hay alumnos, importá con Excel y volvé.',
         bodyShort: 'Tocá Presente o Ausente.',
+        why: 'Un toque por alumno alcanza.',
+        actionHint: 'Tocá Presente o Ausente',
         target: '[data-spa-view="asistencia"] [data-attendance-list], [data-spa-view="asistencia"] [data-attendance-take-view]',
         require: 'click',
         requireClick:
           '[data-spa-view="asistencia"] [data-attendance-list] button, [data-spa-view="asistencia"] [data-attendance-take-view] button, [data-spa-view="asistencia"] [data-attendance-take-view]',
+        softRequire: true,
+        autoAdvance: true,
       },
       {
         id: 'asis-guardar',
         view: 'asistencia',
-        title: 'Guardar',
-        body: 'Cuando haya cambios, Guardar aparece abajo. Tocá la barra de guardar para practicar.',
-        bodyShort: 'Tocá la barra Guardar abajo.',
-        target: '[data-spa-view="asistencia"] [data-attendance-save-bar]',
+        title: 'Guardá los cambios',
+        body: 'Cuando marques asistencia, aparece Guardar abajo. Tocá esa barra si la ves; si no, Seguí.',
+        bodyShort: 'Tocá Guardar abajo si aparece.',
+        why: 'Sin guardar, la lista no queda registrada.',
+        actionHint: 'Tocá Guardar (o Seguí)',
+        target: '[data-spa-view="asistencia"] [data-attendance-save-bar], [data-spa-view="asistencia"] [data-attendance-take-view]',
         require: 'click',
         requireClick: '[data-spa-view="asistencia"] [data-attendance-save-bar]',
+        softRequire: true,
+        autoAdvance: true,
       },
     ],
   },
@@ -211,6 +231,8 @@ const TOPIC_GUIDES = {
         title: 'Mismo curso',
         body: 'Las notas siguen el Curso actual del encabezado.',
         bodyShort: 'Usan el Curso actual.',
+        why: 'Así el promedio del Panel se actualiza solo.',
+        actionHint: 'Tocá Seguir',
         target: '[data-global-teaching-context], [data-grades-take-view]',
         softChrome: true,
         require: 'next',
@@ -219,23 +241,31 @@ const TOPIC_GUIDES = {
       {
         id: 'notas-cargar',
         view: 'notas',
-        title: 'Cargar',
-        body: 'Tocá un campo de calificación o el listado de alumnos.',
+        title: 'Cargá una nota',
+        body: 'Tocá un campo de calificación o el listado. Si no hay alumnos, Seguí.',
         bodyShort: 'Tocá un campo o el listado.',
+        why: 'La carga es alumno por alumno, en el mismo curso.',
+        actionHint: 'Tocá un campo de nota',
         target: '[data-spa-view="notas"] [data-grade-bulk-list], [data-spa-view="notas"] [data-grades-take-view]',
         require: 'click',
         requireClick:
           '[data-spa-view="notas"] [data-grade-bulk-list] input, [data-spa-view="notas"] [data-grade-bulk-list], [data-spa-view="notas"] [data-grades-take-view]',
+        softRequire: true,
+        autoAdvance: true,
       },
       {
         id: 'notas-guardar',
         view: 'notas',
-        title: 'Guardar',
-        body: 'Cuando haya cambios, Guardar calificaciones aparece abajo. Tocá esa barra.',
-        bodyShort: 'Tocá la barra Guardar abajo.',
-        target: '[data-spa-view="notas"] [data-grades-save-bar]',
+        title: 'Guardá calificaciones',
+        body: 'Si hay cambios, Guardar aparece abajo. Tocá esa barra; si no está, Seguí.',
+        bodyShort: 'Tocá Guardar abajo si aparece.',
+        why: 'Las notas se sincronizan cuando guardás.',
+        actionHint: 'Tocá Guardar (o Seguí)',
+        target: '[data-spa-view="notas"] [data-grades-save-bar], [data-spa-view="notas"] [data-grades-take-view]',
         require: 'click',
         requireClick: '[data-spa-view="notas"] [data-grades-save-bar]',
+        softRequire: true,
+        autoAdvance: true,
       },
     ],
   },
@@ -248,8 +278,10 @@ const TOPIC_GUIDES = {
         id: 'cursos-ir',
         view: 'cursos',
         title: 'Sección Cursos',
-        body: 'Acá creás escuelas, divisiones y cargás cursos desde Excel.',
+        body: 'Acá creás escuelas, divisiones y cursos (también desde Excel).',
         bodyShort: 'Acá creás cursos y escuelas.',
+        why: 'Sin curso no hay alumnos ni lista.',
+        actionHint: 'Tocá Seguir',
         target: '[data-spa-view="cursos"] .page-header, [data-spa-view="cursos"] [data-course-form]',
         require: 'next',
         nextLabel: 'Seguir',
@@ -257,35 +289,47 @@ const TOPIC_GUIDES = {
       {
         id: 'cursos-escuela',
         view: 'cursos',
-        title: 'Añadir escuela',
+        title: 'Añadí una escuela',
         body: 'Escribí el nombre y tocá “Añadir escuela”, o tocá el campo para practicar.',
         bodyShort: 'Tocá el campo o “Añadir escuela”.',
+        why: 'La escuela agrupa tus cursos.',
+        actionHint: 'Tocá el campo de escuela',
         target: '[data-spa-view="cursos"] [data-new-school], [data-spa-view="cursos"] [data-add-school]',
         require: 'click',
         requireClick:
           '[data-spa-view="cursos"] [data-new-school], [data-spa-view="cursos"] [data-add-school]',
+        softRequire: true,
+        autoAdvance: true,
       },
       {
         id: 'cursos-form',
         view: 'cursos',
-        title: 'Nuevo curso',
+        title: 'Creá un curso',
         body: 'Completá escuela, nombre y turno. Tocá el formulario o “Crear curso”.',
         bodyShort: 'Tocá el formulario de nuevo curso.',
+        why: 'Después vas a elegir ese curso como “Curso actual”.',
+        actionHint: 'Tocá el formulario',
         target: '[data-spa-view="cursos"] [data-course-form]',
         require: 'click',
         requireClick: '[data-spa-view="cursos"] [data-course-form]',
+        softRequire: true,
+        autoAdvance: true,
       },
       {
         id: 'cursos-lista',
         view: 'cursos',
-        title: 'Cursos activos',
-        body: 'Los cursos creados aparecen en esta sección. Tocá el panel para ubicarlo.',
+        title: 'Revisá cursos activos',
+        body: 'Los cursos creados aparecen acá. Tocá el panel para ubicarlo.',
         bodyShort: 'Tocá el panel de cursos activos.',
+        why: 'Confirmás que el curso quedó listo para usar.',
+        actionHint: 'Tocá el listado de cursos',
         target: '[data-spa-view="cursos"] [data-course-list]',
         preferTarget: '[data-spa-view="cursos"] .responsive-grid > .panel',
         require: 'click',
         requireClick:
           '[data-spa-view="cursos"] [data-course-list], [data-spa-view="cursos"] .responsive-grid > .panel',
+        softRequire: true,
+        autoAdvance: true,
       },
     ],
   },
@@ -297,9 +341,11 @@ const TOPIC_GUIDES = {
       {
         id: 'act-ir',
         view: 'actividades',
-        title: 'Flujo de actividades',
-        body: 'Crear → clase virtual → entregas → corregir. Empezá en Crear.',
+        title: 'El flujo de actividades',
+        body: 'Orden típico: Crear → Clase virtual → Entregas → Corregir.',
         bodyShort: 'Crear, clase, entregas y corregir.',
+        why: 'Cada pestaña es una etapa del trabajo.',
+        actionHint: 'Tocá Seguir',
         target: '[data-spa-view="actividades"] [data-activity-flow-tabs], [data-spa-view="actividades"] .page-header',
         openActivityTab: 'contenido',
         require: 'next',
@@ -308,14 +354,18 @@ const TOPIC_GUIDES = {
       {
         id: 'act-crear',
         view: 'actividades',
-        title: 'Crear actividad',
-        body: 'Tocá el formulario o el título para practicar la carga de una actividad.',
+        title: 'Creá una actividad',
+        body: 'Tocá el formulario o el título para practicar la carga.',
         bodyShort: 'Tocá el formulario de crear.',
+        why: 'Desde acá nacen las actividades del curso.',
+        actionHint: 'Tocá el formulario',
         target: '[data-spa-view="actividades"] [data-activity-form], [data-spa-view="actividades"] [data-activity-workspace]',
         openActivityTab: 'contenido',
         require: 'click',
         requireClick:
           '[data-spa-view="actividades"] [data-activity-form], [data-spa-view="actividades"] [data-activity-workspace]',
+        softRequire: true,
+        autoAdvance: true,
       },
       {
         id: 'act-clase',
@@ -323,10 +373,13 @@ const TOPIC_GUIDES = {
         title: 'Clase virtual',
         body: 'Tocá la pestaña “Clase virtual” para armar un link de clase.',
         bodyShort: 'Tocá “Clase virtual”.',
+        why: 'Los alumnos entran con un link, sin instalar nada.',
+        actionHint: 'Tocá “Clase virtual”',
         target: '[data-spa-view="actividades"] [data-activity-flow-tab="clase"]',
         openActivityTab: 'contenido',
         require: 'click',
         requireClick: '[data-spa-view="actividades"] [data-activity-flow-tab="clase"]',
+        autoAdvance: true,
       },
       {
         id: 'act-entregas',
@@ -334,11 +387,15 @@ const TOPIC_GUIDES = {
         title: 'Entregas y corregir',
         body: 'Tocá “Recibir entregas” o “Corregir” para ver esas etapas.',
         bodyShort: 'Tocá Entregas o Corregir.',
+        why: 'Ahí cerrás el ciclo de la actividad.',
+        actionHint: 'Tocá Entregas o Corregir',
         target: '[data-spa-view="actividades"] [data-activity-flow-tabs]',
         openActivityTab: 'clase',
         require: 'click',
         requireClick:
           '[data-spa-view="actividades"] [data-activity-flow-tab="entregas"], [data-spa-view="actividades"] [data-activity-flow-tab="corregir"]',
+        softRequire: true,
+        autoAdvance: true,
       },
     ],
   },
@@ -351,8 +408,10 @@ const TOPIC_GUIDES = {
         id: 'herr-ir',
         view: 'herramientas',
         title: 'Excel y cuenta',
-        body: 'Acá están las importaciones avanzadas, la sincronización y la instalación de la app.',
+        body: 'Acá están importaciones avanzadas, sincronización e instalación de la app.',
         bodyShort: 'Excel avanzado, sync e instalar.',
+        why: 'Es el lugar de configuración, no del día a día.',
+        actionHint: 'Tocá Seguir',
         target: '[data-spa-view="herramientas"] .page-header, [data-spa-view="herramientas"] [data-tools-hub-tabs]',
         openToolsHub: 'excel',
         require: 'next',
@@ -364,33 +423,44 @@ const TOPIC_GUIDES = {
         title: 'Cuenta / instalar',
         body: 'Tocá la pestaña “Cuenta / instalar”.',
         bodyShort: 'Tocá “Cuenta / instalar”.',
+        why: 'Ahí sincronizás e instalás la app.',
+        actionHint: 'Tocá la pestaña Cuenta',
         target: '[data-spa-view="herramientas"] [data-tools-hub-tab="cuenta"]',
         openToolsHub: 'excel',
         require: 'click',
         requireClick: '[data-spa-view="herramientas"] [data-tools-hub-tab="cuenta"]',
+        autoAdvance: true,
       },
       {
         id: 'herr-sync',
         view: 'herramientas',
         title: 'Sincronizar',
-        body: 'Tocá “Sincronizar ahora” si ves cambios pendientes.',
-        bodyShort: 'Tocá “Sincronizar ahora”.',
+        body: 'Tocá “Sincronizar ahora” si ves cambios pendientes. Si no hace falta, Seguí.',
+        bodyShort: 'Tocá “Sincronizar ahora” (o Seguí).',
+        why: 'Mantiene los datos alineados entre dispositivos.',
+        actionHint: 'Tocá Sincronizar (o Seguí)',
         target: '[data-spa-view="herramientas"] [data-sync-button], [data-spa-view="herramientas"] [data-sync-tools]',
         openToolsHub: 'cuenta',
         require: 'click',
         requireClick: '[data-spa-view="herramientas"] [data-sync-button]',
+        softRequire: true,
+        autoAdvance: true,
       },
       {
         id: 'herr-install',
         view: 'herramientas',
-        title: 'Instalar app',
+        title: 'Instalá la app',
         body: 'Tocá Instalar o abrí “Cómo instalar según el dispositivo”.',
         bodyShort: 'Tocá Instalar o la ayuda.',
+        why: 'En el celular se siente como app nativa.',
+        actionHint: 'Tocá Instalar o la ayuda',
         target: '[data-spa-view="herramientas"] [data-pwa-install], [data-spa-view="herramientas"] [data-tools-section="install"]',
         openToolsHub: 'cuenta',
         require: 'click',
         requireClick:
           '[data-spa-view="herramientas"] [data-tools-section="install"] [data-pwa-install-btn], [data-spa-view="herramientas"] [data-pwa-install-help]',
+        softRequire: true,
+        autoAdvance: true,
       },
     ],
   },
@@ -402,9 +472,11 @@ const TOPIC_GUIDES = {
       {
         id: 'panel-hoy',
         view: 'panel',
-        title: 'Hoy',
+        title: 'Hoy en el Panel',
         body: 'El Panel resume el día. Desde acá saltás a Asistencia, Actividades o Excel.',
         bodyShort: 'Atajos del día en el Panel.',
+        why: 'Es tu punto de partida cada mañana.',
+        actionHint: 'Tocá Seguir',
         target: '[data-spa-view="panel"] [data-panel-hero]',
         require: 'next',
         nextLabel: 'Seguir',
@@ -412,13 +484,17 @@ const TOPIC_GUIDES = {
       {
         id: 'panel-resumen',
         view: 'panel',
-        title: 'Resumen',
-        body: 'Tocá una tarjeta del Resumen para abrir esa sección.',
+        title: 'Tarjetas del Resumen',
+        body: 'Tocá una tarjeta (Alumnos, Cursos, Promedio o Asistencia) para abrir esa sección.',
         bodyShort: 'Tocá una tarjeta del Resumen.',
+        why: 'Son atajos, no solo números.',
+        actionHint: 'Tocá una tarjeta',
         target: '[data-spa-view="panel"] [data-dashboard], [data-spa-view="panel"] [data-panel-summary]',
         require: 'click',
         requireClick:
           '[data-spa-view="panel"] [data-dashboard] .metric--link, [data-spa-view="panel"] [data-dashboard] [data-spa-nav], [data-spa-view="panel"] [data-dashboard]',
+        softRequire: true,
+        autoAdvance: true,
       },
       {
         id: 'panel-seguimiento',
@@ -426,9 +502,13 @@ const TOPIC_GUIDES = {
         title: 'Seguimiento',
         body: 'Abajo está el seguimiento del curso. Tocá ese panel para ubicarlo.',
         bodyShort: 'Tocá Seguimiento.',
+        why: 'Te muestra cómo viene el curso en el tiempo.',
+        actionHint: 'Tocá Seguimiento',
         target: '[data-spa-view="panel"] [data-seguimiento]',
         require: 'click',
         requireClick: '[data-spa-view="panel"] [data-seguimiento]',
+        softRequire: true,
+        autoAdvance: true,
       },
     ],
   },
@@ -560,6 +640,7 @@ export function initProductTour({ getUserId }) {
   let actionCleanup = null;
   let layoutCleanup = null;
   let spotlightSyncTimer = 0;
+  let autoAdvanceTimer = 0;
 
   const refreshHelpMenu = () => {
     const basicDone = Boolean(getTourStatus(getUserId()));
@@ -582,6 +663,7 @@ export function initProductTour({ getUserId }) {
 
   const stopLayoutWatch = () => {
     window.clearTimeout(spotlightSyncTimer);
+    window.clearTimeout(autoAdvanceTimer);
     layoutCleanup?.();
     layoutCleanup = null;
   };
@@ -720,17 +802,30 @@ export function initProductTour({ getUserId }) {
     cheer();
     progress.setProgress(stepIndex + 1, activeTour.steps.length);
     overlay.setNextEnabled(true);
+    const step = activeTour.steps[stepIndex];
     const nextBtn = document.querySelector('[data-tour-next]');
     if (nextBtn instanceof HTMLButtonElement) {
-      nextBtn.textContent = stepIndex >= activeTour.steps.length - 1 ? 'Listo' : 'Siguiente';
+      const isLast = stepIndex >= activeTour.steps.length - 1;
+      nextBtn.textContent = isLast
+        ? (step?.nextLabel || 'Listo')
+        : (step?.autoAdvance ? 'Siguiente…' : (step?.nextLabel || 'Siguiente'));
     }
     // Tras completar (ej. Cambiar), el layout puede haber movido el ancla.
     scheduleSpotlightSync({ delay: 30 });
+
+    if (step?.autoAdvance) {
+      window.clearTimeout(autoAdvanceTimer);
+      autoAdvanceTimer = window.setTimeout(() => {
+        if (!running || !stepCompleted) return;
+        void showStep(stepIndex + 1);
+      }, 900);
+    }
   };
 
   const watchStepAction = (step) => {
     stopActionWatch();
     stepCompleted = false;
+    window.clearTimeout(autoAdvanceTimer);
 
     if (!step.require || step.require === 'next') {
       stepCompleted = true;
@@ -738,7 +833,8 @@ export function initProductTour({ getUserId }) {
       return;
     }
 
-    overlay.setNextEnabled(false);
+    // softRequire: se puede Seguir sin completar (aula vacía, barra Guardar oculta, etc.).
+    overlay.setNextEnabled(Boolean(step.softRequire));
 
     if (step.require === 'teaching-context') {
       const onContext = (event) => {
@@ -859,23 +955,32 @@ export function initProductTour({ getUserId }) {
     scheduleSpotlightSync({ delay: 180 });
 
     const needsAction = step.require && step.require !== 'next';
+    const soft = Boolean(step.softRequire);
+    let nextLabel = step.nextLabel;
+    if (!nextLabel) {
+      if (index === 0) nextLabel = 'Empezar';
+      else if (needsAction && soft && !stepCompleted) nextLabel = 'Seguir';
+      else nextLabel = 'Siguiente';
+    }
+
     overlay.open({
       title: step.title,
-      body: needsAction
-        ? `${stepBody(step)} Completá la acción para avanzar.`
-        : stepBody(step),
-      stepLabel: `${index + 1}/${activeTour.steps.length}`,
+      body: stepBody(step),
+      why: step.why || '',
+      actionHint: step.actionHint || (needsAction ? 'Completá la acción marcada' : ''),
+      stepLabel: `Paso ${index + 1} de ${activeTour.steps.length}`,
       onNext: () => {
-        if (!stepCompleted) {
-          overlay.nudge('Completá el paso marcado para seguir.');
+        window.clearTimeout(autoAdvanceTimer);
+        if (!stepCompleted && needsAction && !soft) {
+          overlay.nudge(step.actionHint || 'Completá el paso marcado para seguir.');
           return;
         }
         void showStep(index + 1);
       },
       onSkip: () => finishTour('skipped'),
       isLast: index === activeTour.steps.length - 1,
-      nextLabel: step.nextLabel || (index === 0 ? 'Empezar' : 'Siguiente'),
-      nextEnabled: stepCompleted,
+      nextLabel,
+      nextEnabled: stepCompleted || soft || !needsAction,
     });
   };
 
@@ -996,7 +1101,9 @@ function ensureTourOverlay() {
       <div class="product-tour-card" role="dialog" aria-modal="true" aria-labelledby="product-tour-title">
         <p class="product-tour-step" data-tour-step></p>
         <h2 id="product-tour-title" data-tour-title></h2>
+        <p class="product-tour-action is-hidden" data-tour-action hidden></p>
         <p data-tour-body></p>
+        <p class="product-tour-why is-hidden" data-tour-why hidden></p>
         <p class="product-tour-nudge is-hidden" data-tour-nudge hidden></p>
         <div class="product-tour-actions">
           <button type="button" class="btn btn-ghost" data-tour-skip>Salir</button>
@@ -1007,9 +1114,29 @@ function ensureTourOverlay() {
     document.body.appendChild(root);
   }
 
+  const card = root.querySelector('.product-tour-card');
+  if (card && !card.querySelector('[data-tour-action]')) {
+    const title = card.querySelector('#product-tour-title, [data-tour-title]');
+    const action = document.createElement('p');
+    action.className = 'product-tour-action is-hidden';
+    action.setAttribute('data-tour-action', '');
+    action.hidden = true;
+    title?.after(action);
+  }
+  if (card && !card.querySelector('[data-tour-why]')) {
+    const body = card.querySelector('[data-tour-body]');
+    const why = document.createElement('p');
+    why.className = 'product-tour-why is-hidden';
+    why.setAttribute('data-tour-why', '');
+    why.hidden = true;
+    body?.after(why);
+  }
+
   const titleEl = root.querySelector('[data-tour-title]');
   const bodyEl = root.querySelector('[data-tour-body]');
   const stepEl = root.querySelector('[data-tour-step]');
+  const actionEl = root.querySelector('[data-tour-action]');
+  const whyEl = root.querySelector('[data-tour-why]');
   const nudgeEl = root.querySelector('[data-tour-nudge]');
   const nextBtn = root.querySelector('[data-tour-next]');
   const skipBtn = root.querySelector('[data-tour-skip]');
@@ -1019,6 +1146,20 @@ function ensureTourOverlay() {
   let onSkip = null;
   let spotlightTarget = null;
   let nudgeTimer = null;
+
+  const setMetaLine = (node, text) => {
+    if (!(node instanceof HTMLElement)) return;
+    const value = String(text || '').trim();
+    if (!value) {
+      node.textContent = '';
+      node.classList.add('is-hidden');
+      node.setAttribute('hidden', '');
+      return;
+    }
+    node.textContent = value;
+    node.classList.remove('is-hidden');
+    node.removeAttribute('hidden');
+  };
 
   const clearSpotlight = () => {
     spotlightTarget?.classList.remove('tour-target-active');
@@ -1106,12 +1247,25 @@ function ensureTourOverlay() {
   });
 
   return {
-    open({ title, body, stepLabel, onNext: next, onSkip: skip, isLast, nextLabel, nextEnabled = true }) {
+    open({
+      title,
+      body,
+      why = '',
+      actionHint = '',
+      stepLabel,
+      onNext: next,
+      onSkip: skip,
+      isLast,
+      nextLabel,
+      nextEnabled = true,
+    }) {
       onNext = next;
       onSkip = skip;
       if (titleEl) titleEl.textContent = title;
       if (bodyEl) bodyEl.textContent = body;
       if (stepEl) stepEl.textContent = stepLabel;
+      setMetaLine(actionEl, actionHint ? `Acción: ${actionHint}` : '');
+      setMetaLine(whyEl, why ? `Por qué: ${why}` : '');
       if (nextBtn) nextBtn.textContent = isLast ? (nextLabel || 'Listo') : (nextLabel || 'Siguiente');
       setNextEnabled(nextEnabled);
       if (nudgeEl) {

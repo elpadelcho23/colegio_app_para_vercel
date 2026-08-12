@@ -1639,16 +1639,41 @@ body.product-tour-soft-chrome .tour-target-active {
   position: relative;
   z-index: 3;
   width: min(26rem, calc(100vw - 1.5rem));
-  max-height: min(38dvh, 20rem);
+  max-height: min(42dvh, 22rem);
   overflow: auto;
   padding: 1rem 1.1rem;
   border-radius: var(--radius-md, 0.75rem);
   border: 1px solid var(--line);
   background: var(--surface);
   display: grid;
-  gap: 0.55rem;
+  gap: 0.45rem;
   pointer-events: auto;
   box-shadow: var(--shadow);
+}
+
+.product-tour-action {
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid color-mix(in srgb, var(--brand) 28%, var(--line));
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  color: var(--brand-strong, var(--brand));
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.product-tour-action.is-hidden,
+.product-tour-action[hidden],
+.product-tour-why.is-hidden,
+.product-tour-why[hidden] {
+  display: none;
+}
+
+.product-tour-why {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .product-tour-nudge {
@@ -1673,7 +1698,7 @@ body.product-tour-soft-chrome .tour-target-active {
 body.product-tour-active[data-active-spa-view='asistencia'] .product-tour-card,
 body.product-tour-active[data-active-spa-view='notas'] .product-tour-card {
   margin-bottom: 0;
-  max-height: min(34dvh, 18rem);
+  max-height: min(36dvh, 19rem);
 }
 
 .product-tour-actions {
