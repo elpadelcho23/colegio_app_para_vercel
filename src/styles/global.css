@@ -1414,7 +1414,7 @@ h3 {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 96;
+  z-index: 120;
   padding:
     calc(0.35rem + env(safe-area-inset-top, 0px))
     0.75rem
@@ -1498,18 +1498,30 @@ h3 {
 .product-tour-overlay {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: 110;
   display: grid;
   place-items: end center;
+  align-content: end;
+  justify-items: center;
   padding: 1rem;
   padding-top: calc(2.75rem + env(safe-area-inset-top, 0px));
   padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   pointer-events: none;
+  overflow: visible;
 }
 
 .product-tour-overlay.is-hidden,
 .product-tour-overlay[hidden] {
   display: none;
+}
+
+/* En Asistencia/Notas la tarjeta va arriba: abajo la tapa la barra Guardar / el panel. */
+body.product-tour-active[data-active-spa-view='asistencia'] .product-tour-overlay,
+body.product-tour-active[data-active-spa-view='notas'] .product-tour-overlay {
+  place-items: start center;
+  align-content: start;
+  padding-top: calc(3.35rem + env(safe-area-inset-top, 0px));
+  padding-bottom: 1rem;
 }
 
 .product-tour-backdrop {
@@ -1622,9 +1634,9 @@ body.product-tour-soft-chrome .tour-target-active {
 
 .product-tour-card {
   position: relative;
-  z-index: 2;
-  width: min(26rem, 100%);
-  max-height: min(42dvh, 22rem);
+  z-index: 3;
+  width: min(26rem, calc(100vw - 1.5rem));
+  max-height: min(38dvh, 20rem);
   overflow: auto;
   padding: 1rem 1.1rem;
   border-radius: var(--radius-md, 0.75rem);
@@ -1654,6 +1666,22 @@ body.product-tour-soft-chrome .tour-target-active {
   cursor: not-allowed;
 }
 
+/* En Asistencia/Notas la tarjeta del tour no tapa la barra Guardar. */
+body.product-tour-active[data-active-spa-view='asistencia'] .product-tour-card,
+body.product-tour-active[data-active-spa-view='notas'] .product-tour-card {
+  margin-bottom: 0;
+  max-height: min(34dvh, 18rem);
+}
+
+.product-tour-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+}
+
 @keyframes tour-cheer-pop {
   0% {
     transform: translateY(0.2rem) scale(0.92);
@@ -1667,12 +1695,6 @@ body.product-tour-soft-chrome .tour-target-active {
     transform: translateY(0) scale(1);
     opacity: 1;
   }
-}
-
-/* En Asistencia/Notas la tarjeta del tour no tapa la barra Guardar. */
-body.product-tour-active[data-active-spa-view='asistencia'] .product-tour-card,
-body.product-tour-active[data-active-spa-view='notas'] .product-tour-card {
-  margin-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
 }
 
 .product-tour-step {
