@@ -282,6 +282,29 @@ const isActive = (href: string) => {
     box-shadow: none;
   }
 
+  .help-menu-guides {
+    display: grid;
+    gap: 0.15rem;
+    margin: 0.35rem 0 0.25rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--line, #d9e1dc);
+  }
+
+  .help-menu-guides.is-hidden,
+  .help-menu-guides[hidden] {
+    display: none;
+  }
+
+  .help-menu-title--sub {
+    margin-top: 0.15rem;
+  }
+
+  .help-menu-item.is-guide-done::after {
+    content: ' ✓';
+    color: var(--brand, #226c5f);
+    font-weight: 800;
+  }
+
   .nav-section-label--secondary {
     margin-top: 0.65rem;
     font-size: 0.72rem;
