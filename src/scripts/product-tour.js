@@ -496,6 +496,24 @@ function pickTarget(selector) {
   return [...document.querySelectorAll(selector)].find((node) => isVisible(node)) || null;
 }
 
+function gtcFormIsOpen() {
+  return isVisible(document.querySelector('[data-gtc-form]'));
+}
+
+/**
+ * Elige el ancla del spotlight.
+ * Si el form de Curso actual ya está abierto (o el paso lo abre), priorizar el form
+ * para no dejar el recuadro en la posición vieja del botón “Cambiar”.
+ */
+function resolveStepTarget(step) {
+  if (!step) return null;
+  const preferForm = Boolean(step.openGtc) || gtcFormIsOpen();
+  if (preferForm) {
+    return pickTarget(step.target) || pickTarget(step.preferTarget);
+  }
+  return pickTarget(step.preferTarget) || pickTarget(step.target);
+}
+
 function openGtcForTour() {
   const root = document.querySelector('[data-global-teaching-context]');
   const form = root?.querySelector('[data-gtc-form]');
@@ -527,6 +545,8 @@ export function initProductTour({ getUserId }) {
   let running = false;
   let stepCompleted = false;
   let actionCleanup = null;
+  let layoutCleanup = null;
+  let spotlightSyncTimer = 0;
 
   const refreshHelpMenu = () => {
     const basicDone = Boolean(getTourStatus(getUserId()));
@@ -547,13 +567,115 @@ export function initProductTour({ getUserId }) {
     actionCleanup = null;
   };
 
+  const stopLayoutWatch = () => {
+    window.clearTimeout(spotlightSyncTimer);
+    layoutCleanup?.();
+    layoutCleanup = null;
+  };
+
   const cheer = () => {
     progress.showCheer('¡Bien!');
+  };
+
+  const isMenuStep = (step) => Boolean(step?.openMenuOnMobile && isMobileViewport());
+
+  const applySpotlight = (step, { scroll = false } = {}) => {
+    if (!step) return;
+    const menuStep = isMenuStep(step);
+    const target = resolveStepTarget(step);
+    if (target && !menuStep) {
+      if (scroll) {
+        const inStickyChrome = Boolean(target.closest('.app-shell'));
+        target.scrollIntoView({
+          behavior: 'smooth',
+          block: inStickyChrome ? 'nearest' : 'center',
+          inline: 'nearest',
+        });
+      }
+      overlay.setSpotlight(target);
+      return;
+    }
+    if (target && menuStep) {
+      overlay.clearSpotlight();
+      overlay.rememberTarget(target);
+      return;
+    }
+    overlay.clearSpotlight();
+  };
+
+  /** Reposiciona el spotlight tras abrir “Cambiar” / cambios de layout del sidebar. */
+  const syncSpotlight = ({ scroll = false } = {}) => {
+    if (!running || !activeTour) return;
+    const step = activeTour.steps[stepIndex];
+    if (!step) return;
+    applySpotlight(step, { scroll });
+  };
+
+  const scheduleSpotlightSync = ({ scroll = false, delay = 0 } = {}) => {
+    window.clearTimeout(spotlightSyncTimer);
+    spotlightSyncTimer = window.setTimeout(() => {
+      void (async () => {
+        await waitForPaint();
+        await wait(40);
+        syncSpotlight({ scroll });
+        // Segunda pasada: el flex del sidebar a veces termina de acomodarse después.
+        await wait(160);
+        await waitForPaint();
+        syncSpotlight({ scroll: false });
+      })();
+    }, delay);
+  };
+
+  const watchLayoutForSpotlight = (step) => {
+    stopLayoutWatch();
+    if (!step || isMenuStep(step)) return;
+
+    const cleanups = [];
+    const onLayout = () => scheduleSpotlightSync({ delay: 16 });
+
+    window.addEventListener('resize', onLayout);
+    window.addEventListener('scroll', onLayout, true);
+    cleanups.push(() => {
+      window.removeEventListener('resize', onLayout);
+      window.removeEventListener('scroll', onLayout, true);
+    });
+
+    const shell = document.querySelector('.app-shell');
+    const gtc = document.querySelector('[data-global-teaching-context]');
+    const form = gtc?.querySelector('[data-gtc-form]');
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(onLayout);
+      if (shell) ro.observe(shell);
+      if (gtc) ro.observe(gtc);
+      if (form) ro.observe(form);
+      cleanups.push(() => ro.disconnect());
+    }
+
+    if (typeof MutationObserver !== 'undefined' && form) {
+      const mo = new MutationObserver(onLayout);
+      mo.observe(form, { attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+      cleanups.push(() => mo.disconnect());
+    }
+
+    // Al tocar Cambiar/Elegir, el form abre y el sidebar reflowea: el spotlight fijo
+    // quedaba “congelado” a media altura (sobre Avanzado / Excel).
+    const onGtcInteract = (event) => {
+      const hit = event.target?.closest?.('[data-gtc-toggle], [data-gtc-open], [data-gtc-form]');
+      if (!hit) return;
+      scheduleSpotlightSync({ delay: 30 });
+    };
+    document.addEventListener('click', onGtcInteract, true);
+    cleanups.push(() => document.removeEventListener('click', onGtcInteract, true));
+
+    layoutCleanup = () => {
+      cleanups.forEach((fn) => fn());
+    };
   };
 
   const finishTour = (status) => {
     running = false;
     stopActionWatch();
+    stopLayoutWatch();
     const tourId = activeTour?.id || 'basico';
     if (tourId === 'basico') setTourStatus(getUserId(), status);
     else if (status === 'done') markGuideDone(getUserId(), tourId);
@@ -585,6 +707,8 @@ export function initProductTour({ getUserId }) {
     if (nextBtn instanceof HTMLButtonElement) {
       nextBtn.textContent = stepIndex >= activeTour.steps.length - 1 ? 'Listo' : 'Siguiente';
     }
+    // Tras completar (ej. Cambiar), el layout puede haber movido el ancla.
+    scheduleSpotlightSync({ delay: 30 });
   };
 
   const watchStepAction = (step) => {
@@ -640,13 +764,14 @@ export function initProductTour({ getUserId }) {
     }
 
     running = true;
+    stopLayoutWatch();
     document.body.classList.add('product-tour-active');
     closeMenu();
     closeGtcTourState();
     showSpaView(step.view);
     await waitForPaint();
 
-    const menuStep = Boolean(step.openMenuOnMobile && isMobileViewport());
+    const menuStep = isMenuStep(step);
     const softChrome = Boolean(step.softChrome);
     document.body.classList.toggle('product-tour-menu-step', menuStep);
     document.body.classList.toggle('product-tour-soft-chrome', softChrome && !menuStep);
@@ -692,7 +817,7 @@ export function initProductTour({ getUserId }) {
       document.querySelector('[data-help-menu]')?.removeAttribute('open');
     }
 
-    const target = pickTarget(step.preferTarget) || pickTarget(step.target);
+    const target = resolveStepTarget(step);
     if (target && !menuStep) {
       const inStickyChrome = Boolean(target.closest('.app-shell'));
       target.scrollIntoView({
@@ -711,7 +836,10 @@ export function initProductTour({ getUserId }) {
       overlay.clearSpotlight();
     }
 
+    watchLayoutForSpotlight(step);
     watchStepAction(step);
+    // Por si el scroll/smooth o el flex del shell terminan después del primer paint.
+    scheduleSpotlightSync({ delay: 180 });
 
     const needsAction = step.require && step.require !== 'next';
     overlay.open({
@@ -755,14 +883,6 @@ export function initProductTour({ getUserId }) {
       const id = btn.getAttribute('data-tour-start') || 'basico';
       startTourById(id);
     });
-  });
-
-  window.addEventListener('resize', () => {
-    if (!running || !activeTour) return;
-    const step = activeTour.steps[stepIndex];
-    if (!step) return;
-    const target = pickTarget(step.preferTarget) || pickTarget(step.target);
-    if (target && !step.openMenuOnMobile) overlay.setSpotlight(target);
   });
 
   window.addEventListener('aula-clara:local-data-changed', refreshHelpMenu);
@@ -900,12 +1020,28 @@ function ensureTourOverlay() {
   };
 
   const setSpotlight = (target) => {
-    clearSpotlight();
-    if (!(target instanceof HTMLElement) || !(spotlight instanceof HTMLElement)) return;
-    rememberTarget(target);
+    if (!(target instanceof HTMLElement) || !(spotlight instanceof HTMLElement)) {
+      clearSpotlight();
+      return;
+    }
+
+    // Reusar el mismo target evita parpadeo al reposicionar tras abrir “Cambiar”.
+    if (spotlightTarget !== target) {
+      spotlightTarget?.classList.remove('tour-target-active');
+      spotlightTarget = target;
+      spotlightTarget.classList.add('tour-target-active');
+    }
 
     const pad = 10;
     const rect = target.getBoundingClientRect();
+    // Si el ancla quedó sin tamaño real (p. ej. mid-reflow), ocultar en vez de
+    // dejar un cuadrado mínimo “flotando” a media altura del menú.
+    if (rect.width < 2 || rect.height < 2) {
+      spotlight.classList.add('is-hidden');
+      spotlight.setAttribute('hidden', '');
+      return;
+    }
+
     const top = Math.max(6, rect.top - pad);
     const left = Math.max(6, rect.left - pad);
     const width = Math.min(window.innerWidth - left - 6, rect.width + pad * 2);
@@ -913,8 +1049,8 @@ function ensureTourOverlay() {
 
     spotlight.style.top = `${top}px`;
     spotlight.style.left = `${left}px`;
-    spotlight.style.width = `${Math.max(width, 44)}px`;
-    spotlight.style.height = `${Math.max(height, 44)}px`;
+    spotlight.style.width = `${width}px`;
+    spotlight.style.height = `${height}px`;
     spotlight.classList.remove('is-hidden');
     spotlight.removeAttribute('hidden');
   };
