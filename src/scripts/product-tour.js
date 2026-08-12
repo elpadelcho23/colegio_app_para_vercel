@@ -1,5 +1,6 @@
 import { productGuidesKey, productTourKey } from '../lib/client-storage-keys.ts';
 import { showSpaView } from './spa-router.ts';
+import { navigateToToolsSection } from './tools-ui.js';
 import { closeMenu, openMenu } from './ui-nav.js';
 
 /**
@@ -52,7 +53,8 @@ const BASIC_TOUR = {
       bodyShort: 'Tocá para subir el Excel o elegí un archivo.',
       target: '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file]',
       require: 'click',
-      requireClick: '[data-excel-dropzone], [data-excel-file], [data-excel-workspace-form] input[type="file"]',
+      requireClick:
+        '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file], [data-spa-view="registro"] [data-excel-workspace-form] input[type="file"]',
     },
     {
       id: 'asistencia',
@@ -62,7 +64,8 @@ const BASIC_TOUR = {
       bodyShort: 'Marcá presente/ausente o tocá el panel.',
       target: '[data-spa-view="asistencia"] [data-attendance-list], [data-spa-view="asistencia"] [data-attendance-take-view]',
       require: 'click',
-      requireClick: '[data-attendance-list] button, [data-attendance-take-view] button, [data-attendance-take-view]',
+      requireClick:
+        '[data-spa-view="asistencia"] [data-attendance-list] button, [data-spa-view="asistencia"] [data-attendance-take-view] button, [data-spa-view="asistencia"] [data-attendance-take-view]',
     },
     {
       id: 'notas',
@@ -72,14 +75,15 @@ const BASIC_TOUR = {
       bodyShort: 'Tocá el listado o un campo de nota.',
       target: '[data-spa-view="notas"] [data-grade-bulk-list], [data-spa-view="notas"] [data-grades-take-view]',
       require: 'click',
-      requireClick: '[data-grade-bulk-list] input, [data-grade-bulk-list] button, [data-grade-bulk-list], [data-grades-take-view]',
+      requireClick:
+        '[data-spa-view="notas"] [data-grade-bulk-list] input, [data-spa-view="notas"] [data-grade-bulk-list] button, [data-spa-view="notas"] [data-grade-bulk-list], [data-spa-view="notas"] [data-grades-take-view]',
     },
     {
       id: 'menu-ayuda',
       view: 'panel',
       title: 'Más guías en “?”',
-      body: 'Cuando termines, en Ayuda (?) vas a ver guías específicas: Excel, lista, notas y más.',
-      bodyShort: 'En “?” vas a ver guías específicas.',
+      body: 'Cuando termines, en Ayuda (?) vas a ver guías: curso, Excel, lista, notas, cursos, actividades y cuenta.',
+      bodyShort: 'En “?” vas a ver más guías.',
       target: '[data-help-menu], [data-menu-toggle]',
       openMenuOnMobile: true,
       openHelpOnMobile: true,
@@ -140,9 +144,10 @@ const TOPIC_GUIDES = {
         title: 'Subir archivo',
         body: 'Tocá la zona de carga o elegí un archivo Excel.',
         bodyShort: 'Tocá para subir el Excel.',
-        target: '[data-excel-dropzone], [data-excel-file]',
+        target: '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file]',
         require: 'click',
-        requireClick: '[data-excel-dropzone], [data-excel-file]',
+        requireClick:
+          '[data-spa-view="registro"] [data-excel-dropzone], [data-spa-view="registro"] [data-excel-file], [data-spa-view="registro"] [data-excel-workspace-form] input[type="file"]',
       },
       {
         id: 'excel-referencia',
@@ -152,7 +157,7 @@ const TOPIC_GUIDES = {
         bodyShort: 'Abrí la estructura de referencia.',
         target: '[data-spa-view="registro"] .excel-reference, [data-spa-view="registro"] .excel-workspace',
         require: 'click',
-        requireClick: '.excel-reference summary, .excel-reference',
+        requireClick: '[data-spa-view="registro"] .excel-reference summary, [data-spa-view="registro"] .excel-reference',
       },
     ],
   },
@@ -178,19 +183,20 @@ const TOPIC_GUIDES = {
         title: 'Marcar alumnos',
         body: 'Tocá Presente o Ausente. Si no hay alumnos, importá con Excel antes.',
         bodyShort: 'Tocá Presente o Ausente.',
-        target: '[data-attendance-list], [data-attendance-take-view]',
+        target: '[data-spa-view="asistencia"] [data-attendance-list], [data-spa-view="asistencia"] [data-attendance-take-view]',
         require: 'click',
-        requireClick: '[data-attendance-list] button, [data-attendance-take-view] button, [data-attendance-take-view]',
+        requireClick:
+          '[data-spa-view="asistencia"] [data-attendance-list] button, [data-spa-view="asistencia"] [data-attendance-take-view] button, [data-spa-view="asistencia"] [data-attendance-take-view]',
       },
       {
         id: 'asis-guardar',
         view: 'asistencia',
         title: 'Guardar',
-        body: 'Cuando termines, tocá Guardar en la barra de abajo.',
-        bodyShort: 'Tocá Guardar abajo.',
-        target: '[data-attendance-save-bar], [data-attendance-save]',
+        body: 'Cuando haya cambios, Guardar aparece abajo. Tocá la barra de guardar para practicar.',
+        bodyShort: 'Tocá la barra Guardar abajo.',
+        target: '[data-spa-view="asistencia"] [data-attendance-save-bar]',
         require: 'click',
-        requireClick: '[data-attendance-save], [data-attendance-save-bar]',
+        requireClick: '[data-spa-view="asistencia"] [data-attendance-save-bar]',
       },
     ],
   },
@@ -216,19 +222,213 @@ const TOPIC_GUIDES = {
         title: 'Cargar',
         body: 'Tocá un campo de calificación o el listado de alumnos.',
         bodyShort: 'Tocá un campo o el listado.',
-        target: '[data-grade-bulk-list], [data-grades-take-view]',
+        target: '[data-spa-view="notas"] [data-grade-bulk-list], [data-spa-view="notas"] [data-grades-take-view]',
         require: 'click',
-        requireClick: '[data-grade-bulk-list] input, [data-grade-bulk-list], [data-grades-take-view]',
+        requireClick:
+          '[data-spa-view="notas"] [data-grade-bulk-list] input, [data-spa-view="notas"] [data-grade-bulk-list], [data-spa-view="notas"] [data-grades-take-view]',
       },
       {
         id: 'notas-guardar',
         view: 'notas',
         title: 'Guardar',
-        body: 'Confirmá con Guardar calificaciones.',
-        bodyShort: 'Tocá Guardar calificaciones.',
-        target: '[data-grades-save-bar], [data-grades-save]',
+        body: 'Cuando haya cambios, Guardar calificaciones aparece abajo. Tocá esa barra.',
+        bodyShort: 'Tocá la barra Guardar abajo.',
+        target: '[data-spa-view="notas"] [data-grades-save-bar]',
         require: 'click',
-        requireClick: '[data-grades-save], [data-grades-save-bar]',
+        requireClick: '[data-spa-view="notas"] [data-grades-save-bar]',
+      },
+    ],
+  },
+  cursos: {
+    id: 'cursos',
+    title: 'Guía: Crear cursos',
+    unlockAfterBasic: true,
+    steps: [
+      {
+        id: 'cursos-ir',
+        view: 'cursos',
+        title: 'Sección Cursos',
+        body: 'Acá creás escuelas, divisiones y cargás cursos desde Excel.',
+        bodyShort: 'Acá creás cursos y escuelas.',
+        target: '[data-spa-view="cursos"] .page-header, [data-spa-view="cursos"] [data-course-form]',
+        require: 'next',
+        nextLabel: 'Seguir',
+      },
+      {
+        id: 'cursos-escuela',
+        view: 'cursos',
+        title: 'Añadir escuela',
+        body: 'Escribí el nombre y tocá “Añadir escuela”, o tocá el campo para practicar.',
+        bodyShort: 'Tocá el campo o “Añadir escuela”.',
+        target: '[data-spa-view="cursos"] [data-new-school], [data-spa-view="cursos"] [data-add-school]',
+        require: 'click',
+        requireClick:
+          '[data-spa-view="cursos"] [data-new-school], [data-spa-view="cursos"] [data-add-school]',
+      },
+      {
+        id: 'cursos-form',
+        view: 'cursos',
+        title: 'Nuevo curso',
+        body: 'Completá escuela, nombre y turno. Tocá el formulario o “Crear curso”.',
+        bodyShort: 'Tocá el formulario de nuevo curso.',
+        target: '[data-spa-view="cursos"] [data-course-form]',
+        require: 'click',
+        requireClick: '[data-spa-view="cursos"] [data-course-form]',
+      },
+      {
+        id: 'cursos-lista',
+        view: 'cursos',
+        title: 'Cursos activos',
+        body: 'Los cursos creados aparecen en esta sección. Tocá el panel para ubicarlo.',
+        bodyShort: 'Tocá el panel de cursos activos.',
+        target: '[data-spa-view="cursos"] [data-course-list]',
+        preferTarget: '[data-spa-view="cursos"] .responsive-grid > .panel',
+        require: 'click',
+        requireClick:
+          '[data-spa-view="cursos"] [data-course-list], [data-spa-view="cursos"] .responsive-grid > .panel',
+      },
+    ],
+  },
+  actividades: {
+    id: 'actividades',
+    title: 'Guía: Actividades',
+    unlockAfterBasic: true,
+    steps: [
+      {
+        id: 'act-ir',
+        view: 'actividades',
+        title: 'Flujo de actividades',
+        body: 'Crear → clase virtual → entregas → corregir. Empezá en Crear.',
+        bodyShort: 'Crear, clase, entregas y corregir.',
+        target: '[data-spa-view="actividades"] [data-activity-flow-tabs], [data-spa-view="actividades"] .page-header',
+        openActivityTab: 'contenido',
+        require: 'next',
+        nextLabel: 'Seguir',
+      },
+      {
+        id: 'act-crear',
+        view: 'actividades',
+        title: 'Crear actividad',
+        body: 'Tocá el formulario o el título para practicar la carga de una actividad.',
+        bodyShort: 'Tocá el formulario de crear.',
+        target: '[data-spa-view="actividades"] [data-activity-form], [data-spa-view="actividades"] [data-activity-workspace]',
+        openActivityTab: 'contenido',
+        require: 'click',
+        requireClick:
+          '[data-spa-view="actividades"] [data-activity-form], [data-spa-view="actividades"] [data-activity-workspace]',
+      },
+      {
+        id: 'act-clase',
+        view: 'actividades',
+        title: 'Clase virtual',
+        body: 'Tocá la pestaña “Clase virtual” para armar un link de clase.',
+        bodyShort: 'Tocá “Clase virtual”.',
+        target: '[data-spa-view="actividades"] [data-activity-flow-tab="clase"]',
+        openActivityTab: 'contenido',
+        require: 'click',
+        requireClick: '[data-spa-view="actividades"] [data-activity-flow-tab="clase"]',
+      },
+      {
+        id: 'act-entregas',
+        view: 'actividades',
+        title: 'Entregas y corregir',
+        body: 'Tocá “Recibir entregas” o “Corregir” para ver esas etapas.',
+        bodyShort: 'Tocá Entregas o Corregir.',
+        target: '[data-spa-view="actividades"] [data-activity-flow-tabs]',
+        openActivityTab: 'clase',
+        require: 'click',
+        requireClick:
+          '[data-spa-view="actividades"] [data-activity-flow-tab="entregas"], [data-spa-view="actividades"] [data-activity-flow-tab="corregir"]',
+      },
+    ],
+  },
+  herramientas: {
+    id: 'herramientas',
+    title: 'Guía: Cuenta e instalar',
+    unlockAfterBasic: true,
+    steps: [
+      {
+        id: 'herr-ir',
+        view: 'herramientas',
+        title: 'Excel y cuenta',
+        body: 'Acá están las importaciones avanzadas, la sincronización y la instalación de la app.',
+        bodyShort: 'Excel avanzado, sync e instalar.',
+        target: '[data-spa-view="herramientas"] .page-header, [data-spa-view="herramientas"] [data-tools-hub-tabs]',
+        openToolsHub: 'excel',
+        require: 'next',
+        nextLabel: 'Seguir',
+      },
+      {
+        id: 'herr-cuenta',
+        view: 'herramientas',
+        title: 'Cuenta / instalar',
+        body: 'Tocá la pestaña “Cuenta / instalar”.',
+        bodyShort: 'Tocá “Cuenta / instalar”.',
+        target: '[data-spa-view="herramientas"] [data-tools-hub-tab="cuenta"]',
+        openToolsHub: 'excel',
+        require: 'click',
+        requireClick: '[data-spa-view="herramientas"] [data-tools-hub-tab="cuenta"]',
+      },
+      {
+        id: 'herr-sync',
+        view: 'herramientas',
+        title: 'Sincronizar',
+        body: 'Tocá “Sincronizar ahora” si ves cambios pendientes.',
+        bodyShort: 'Tocá “Sincronizar ahora”.',
+        target: '[data-spa-view="herramientas"] [data-sync-button], [data-spa-view="herramientas"] [data-sync-tools]',
+        openToolsHub: 'cuenta',
+        require: 'click',
+        requireClick: '[data-spa-view="herramientas"] [data-sync-button]',
+      },
+      {
+        id: 'herr-install',
+        view: 'herramientas',
+        title: 'Instalar app',
+        body: 'Tocá Instalar o abrí “Cómo instalar según el dispositivo”.',
+        bodyShort: 'Tocá Instalar o la ayuda.',
+        target: '[data-spa-view="herramientas"] [data-pwa-install], [data-spa-view="herramientas"] [data-tools-section="install"]',
+        openToolsHub: 'cuenta',
+        require: 'click',
+        requireClick:
+          '[data-spa-view="herramientas"] [data-tools-section="install"] [data-pwa-install-btn], [data-spa-view="herramientas"] [data-pwa-install-help]',
+      },
+    ],
+  },
+  panel: {
+    id: 'panel',
+    title: 'Guía: Panel y resumen',
+    unlockAfterBasic: true,
+    steps: [
+      {
+        id: 'panel-hoy',
+        view: 'panel',
+        title: 'Hoy',
+        body: 'El Panel resume el día. Desde acá saltás a Asistencia, Actividades o Excel.',
+        bodyShort: 'Atajos del día en el Panel.',
+        target: '[data-spa-view="panel"] [data-panel-hero]',
+        require: 'next',
+        nextLabel: 'Seguir',
+      },
+      {
+        id: 'panel-resumen',
+        view: 'panel',
+        title: 'Resumen',
+        body: 'Tocá una tarjeta del Resumen para abrir esa sección.',
+        bodyShort: 'Tocá una tarjeta del Resumen.',
+        target: '[data-spa-view="panel"] [data-dashboard], [data-spa-view="panel"] [data-panel-summary]',
+        require: 'click',
+        requireClick:
+          '[data-spa-view="panel"] [data-dashboard] .metric--link, [data-spa-view="panel"] [data-dashboard] [data-spa-nav], [data-spa-view="panel"] [data-dashboard]',
+      },
+      {
+        id: 'panel-seguimiento',
+        view: 'panel',
+        title: 'Seguimiento',
+        body: 'Abajo está el seguimiento del curso. Tocá ese panel para ubicarlo.',
+        bodyShort: 'Tocá Seguimiento.',
+        target: '[data-spa-view="panel"] [data-seguimiento]',
+        require: 'click',
+        requireClick: '[data-spa-view="panel"] [data-seguimiento]',
       },
     ],
   },
@@ -465,6 +665,22 @@ export function initProductTour({ getUserId }) {
       await wait(40);
     }
 
+    if (step.openToolsHub) {
+      navigateToToolsSection(step.openToolsHub === 'cuenta' ? 'cuenta' : 'excel');
+      await waitForPaint();
+      await wait(40);
+    }
+
+    if (step.openActivityTab) {
+      window.dispatchEvent(
+        new CustomEvent('aula-clara:open-activity-flow', {
+          detail: { tab: step.openActivityTab },
+        }),
+      );
+      await waitForPaint();
+      await wait(40);
+    }
+
     if (menuStep) {
       openMenu();
       await waitForPaint();
@@ -476,7 +692,7 @@ export function initProductTour({ getUserId }) {
       document.querySelector('[data-help-menu]')?.removeAttribute('open');
     }
 
-    const target = pickTarget(step.target) || pickTarget(step.preferTarget);
+    const target = pickTarget(step.preferTarget) || pickTarget(step.target);
     if (target && !menuStep) {
       const inStickyChrome = Boolean(target.closest('.app-shell'));
       target.scrollIntoView({
@@ -545,7 +761,7 @@ export function initProductTour({ getUserId }) {
     if (!running || !activeTour) return;
     const step = activeTour.steps[stepIndex];
     if (!step) return;
-    const target = pickTarget(step.target) || pickTarget(step.preferTarget);
+    const target = pickTarget(step.preferTarget) || pickTarget(step.target);
     if (target && !step.openMenuOnMobile) overlay.setSpotlight(target);
   });
 
@@ -770,3 +986,5 @@ function ensureTourOverlay() {
     nudge,
   };
 }
+
+export { BASIC_TOUR, TOPIC_GUIDES };

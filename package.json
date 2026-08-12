@@ -10,7 +10,8 @@
     "build": "astro build",
     "backup:qa": "node src/server/backup-qa.ts",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "verify:guides": "node scripts/verify-product-guides.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^10.0.8",

@@ -754,6 +754,9 @@ h3 {
   background: var(--surface);
   box-shadow: 0 8px 24px color-mix(in srgb, #000 12%, transparent);
   box-sizing: border-box;
+  max-height: min(70vh, 28rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .help-menu-title {
