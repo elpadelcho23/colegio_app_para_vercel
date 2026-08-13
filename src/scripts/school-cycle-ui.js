@@ -57,7 +57,7 @@ export function initSchoolCycleUi(deps) {
       fillCycleSelect(select, ciclo);
     });
     document.querySelectorAll('[data-cycle-active-hint]').forEach((hint) => {
-      hint.textContent = `Mostrando cursos y horarios del ciclo ${ciclo}.`;
+      hint.textContent = `Mostrando cursos y horarios del ciclo ${ciclo}`;
     });
     document.querySelectorAll('[data-cycle-clone-source]').forEach((select) => {
       const cycles = listAvailableCycles(readCourses()).filter((year) => year !== activeCiclo());

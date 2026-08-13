@@ -4781,6 +4781,23 @@ label.checkbox-row {
   gap: 1rem;
 }
 
+.school-cycle-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.school-cycle-heading .btn {
+  flex-shrink: 0;
+}
+
+.courses-workspace {
+  display: grid;
+  gap: 1rem;
+}
+
 .school-cycle-active {
   display: grid;
   gap: 0.45rem;

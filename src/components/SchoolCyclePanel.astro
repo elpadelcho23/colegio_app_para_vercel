@@ -11,11 +11,19 @@ const currentYear = new Date().getFullYear();
   class:list={['school-cycle-panel', 'panel', { 'school-cycle-panel--compact': compact }]}
   data-school-cycle
 >
-  <div class="section-title">
-    <h2>Ciclo escolar anual</h2>
-    <p>
-      El ciclo agrupa cursos por año lectivo. Podés reutilizar divisiones, materias y horarios de un ciclo anterior.
-    </p>
+  <div class="section-title school-cycle-heading">
+    <div>
+      <h2>Ciclo escolar anual</h2>
+      <p>
+        El ciclo agrupa cursos por año lectivo. Podés reutilizar divisiones, materias y horarios
+        de un ciclo anterior.
+      </p>
+    </div>
+    {!compact && (
+      <button type="button" class="btn btn-ghost" data-tour-start="ciclo">
+        Cómo usarlo
+      </button>
+    )}
   </div>
 
   <div class="school-cycle-active">
@@ -29,18 +37,22 @@ const currentYear = new Date().getFullYear();
   </div>
 
   {!compact && (
-    <details class="school-cycle-clone" open>
+    <details class="school-cycle-clone" data-cycle-clone open>
       <summary>Iniciar ciclo reutilizando estructura anterior</summary>
+      <p class="muted school-cycle-clone-help">
+        Copiá escuelas, cursos y (si querés) los bloques de horario a un año nuevo. Los alumnos
+        del ciclo viejo no se mezclan.
+      </p>
       <div class="form-grid school-cycle-clone-form">
         <label>
           <span>Escuela</span>
-          <select data-cycle-clone-school aria-label="Escuela para clonar ciclo">
+          <select data-cycle-clone-school aria-label="Escuela para copiar cursos">
             <option value="">Todas las escuelas</option>
           </select>
         </label>
         <label>
           <span>Copiar desde</span>
-          <select data-cycle-clone-source aria-label="Ciclo origen"></select>
+          <select data-cycle-clone-source aria-label="Ciclo de origen"></select>
         </label>
         <label>
           <span>Crear ciclo</span>

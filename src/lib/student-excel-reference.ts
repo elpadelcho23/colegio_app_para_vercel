@@ -41,11 +41,8 @@ export const STUDENT_EXCEL_EXAMPLE_ROWS = [
 ] as const;
 
 export const STUDENT_EXCEL_NOTES = [
-  'La app detecta encabezados aunque no estén en la fila 1 (títulos arriba, datos más abajo).',
-  'Si tu Excel usa otra estructura, asigná las columnas manualmente y guardá una plantilla para la próxima vez.',
-  'Podés mapear Apellido y Nombre por separado: la app los une automáticamente.',
-  'Columnas flexibles: Colegio/Escuela, Alumno/Nombre, Documento/DNI, etc.',
-  'Turno acepta Mañana, Tarde, Noche (con o sin tilde).',
-  'Si la escuela o el curso no existen, se crean al importar.',
-  'Las filas con error se omiten; el resto se carga igual.',
+  'Detecta encabezados aunque no estén en la fila 1.',
+  'Si tu Excel es distinto, asigná columnas y guardá plantilla.',
+  'Apellido y Nombre por separado se unen solos.',
+  'Turno: Mañana, Tarde o Noche.',
 ] as const;

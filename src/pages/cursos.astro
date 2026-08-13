@@ -14,8 +14,11 @@ import SchoolCyclePanel from '../components/SchoolCyclePanel.astro';
       <a class="btn btn-primary btn-block" href="/herramientas?tab=importar&tipo=alumnos">Importar alumnos (Excel)</a>
     </header>
 
-    <SchoolCyclePanel />
-
+    <section class="courses-workspace" data-course-workspace>
+      <div class="section-title">
+        <h2>Cursos del ciclo activo</h2>
+        <p>Creá una división nueva o revisá las que ya existen en el ciclo activo.</p>
+      </div>
     <section class="responsive-grid">
       <form class="panel form-grid" data-course-form>
         <div class="section-title">
@@ -64,6 +67,9 @@ import SchoolCyclePanel from '../components/SchoolCyclePanel.astro';
         <div class="list" data-course-list></div>
       </section>
     </section>
+    </section>
+
+    <SchoolCyclePanel />
 
     <section class="panel" data-subjects>
       <div class="section-title">

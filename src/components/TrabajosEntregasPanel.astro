@@ -11,12 +11,12 @@ const isCorregir = mode === 'corregir';
 
 <section class="panel tools-section" data-tools-section="entregas" data-entregas-panel={mode}>
   <div class="section-title">
-    <h2>{isCorregir ? 'Corregir entregas' : 'Entregas de alumnos'}</h2>
+    <h2>{isCorregir ? 'Corregir entregas' : 'Entregas'}</h2>
     <p>
       {
         isCorregir
-          ? 'Para Corregir con IA la entrega debe tener alumno vinculado y un archivo PDF, DOCX o TXT. Si falta el alumno, vinculalo en la tarjeta.'
-          : 'Subí trabajos entregados (PDF, Word, TXT o imágenes) vinculados a una actividad y a un alumno del curso actual.'
+          ? 'Con alumno y archivo PDF, DOCX o TXT podés corregir con IA.'
+          : 'Subí el trabajo de un alumno del curso.'
       }
     </p>
   </div>
@@ -39,7 +39,7 @@ const isCorregir = mode === 'corregir';
         data-max-file-mb={TRABAJO_UPLOAD_LIMITS.maxFileMb}
       >
         <label class="full-width">
-          <span>Actividad del curso</span>
+          <span>Actividad</span>
           <select name="actividadId" data-trabajo-actividad-select required>
             <option value="">Elegí una actividad</option>
           </select>
@@ -50,7 +50,7 @@ const isCorregir = mode === 'corregir';
           <select name="alumnoId" data-trabajo-alumno-select required>
             <option value="">Elegí un alumno</option>
           </select>
-          <small class="muted">Obligatorio para poder usar Corregir con IA y guardar la nota.</small>
+          <small class="muted">Hace falta para corregir con IA y guardar la nota.</small>
         </label>
 
         <label class="full-width">
@@ -69,13 +69,12 @@ const isCorregir = mode === 'corregir';
             data-trabajo-files
           />
           <small class="muted">
-            Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} archivos · {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u.
-            Para Corregir con IA usá PDF, DOCX o TXT (las fotos todavía no).
+            Hasta {TRABAJO_UPLOAD_LIMITS.maxFiles} · {TRABAJO_UPLOAD_LIMITS.maxFileMb} MB c/u. IA: PDF, DOCX o TXT.
           </small>
         </label>
 
         <label class="full-width">
-          <span>Observaciones (opcional)</span>
+          <span>Notas (opcional)</span>
           <input name="observaciones" placeholder="Ej: entrega en papel y digital" />
         </label>
 
@@ -87,20 +86,20 @@ const isCorregir = mode === 'corregir';
 
     <section class="full-width">
       <div class="section-title">
-        <h3>{isCorregir ? 'Entregas para corregir' : 'Trabajos cargados en este curso'}</h3>
+        <h3>{isCorregir ? 'Para corregir' : 'Trabajos cargados'}</h3>
       </div>
       <div class="filters-grid">
         <select data-trabajo-estado-filter aria-label="Estado de calificación">
           {isCorregir ? (
             <>
-              <option value="enviado" selected>Pendiente de calificar</option>
+              <option value="enviado" selected>Pendiente</option>
               <option value="calificado">Ya calificado</option>
               <option value="">Todas</option>
             </>
           ) : (
             <>
               <option value="">Todos</option>
-              <option value="enviado">Pendiente de calificar</option>
+              <option value="enviado">Pendiente</option>
               <option value="calificado">Calificado</option>
             </>
           )}
@@ -115,7 +114,7 @@ const isCorregir = mode === 'corregir';
   <form method="dialog" class="panel form-grid" data-trabajo-reenviar-form>
     <div class="section-title">
       <h2>Reenviar trabajo</h2>
-      <p>Enviá el mismo material a otro curso, turno o materia.</p>
+      <p>Al mismo material en otro curso.</p>
     </div>
 
     <input type="hidden" name="reenviarDesdeId" />
@@ -138,7 +137,7 @@ const isCorregir = mode === 'corregir';
     <label class="full-width">
       <span>Alumno (opcional)</span>
       <select name="alumnoId" data-reenviar-alumno>
-        <option value="">Sin alumno específico</option>
+        <option value="">Sin alumno</option>
       </select>
     </label>
 

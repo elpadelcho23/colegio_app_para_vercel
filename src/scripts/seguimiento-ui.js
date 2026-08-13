@@ -82,7 +82,7 @@ export function initTeacherFeatures(deps) {
     if (!followUp.length) {
       replaceContent(list, emptyState(
         'Sin alumnos en seguimiento',
-        'Con el filtro actual nadie está libre ni en riesgo. Tomá más asistencia o cargá trabajos para afinar sugerencias.',
+        'Nadie en riesgo con este filtro. Cargá más asistencia o trabajos.',
       ));
       return;
     }
@@ -286,7 +286,7 @@ export function initTeacherFeatures(deps) {
         const rate = row.rate === null ? '-' : `${row.rate.toFixed(0)}%`;
         tr.appendChild(el('td', {}, rate));
         const ok = row.rate !== null && row.rate >= threshold;
-        tr.appendChild(el('td', {}, ok ? 'Acredita' : row.rate === null ? '-' : 'Libre'));
+        tr.appendChild(el('td', {}, ok ? 'Llega al %' : row.rate === null ? '-' : 'No llega'));
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);

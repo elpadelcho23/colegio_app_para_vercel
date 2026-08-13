@@ -222,5 +222,5 @@ export function cloneSchoolCycle(options: CloneSchoolCycleOptions): CloneSchoolC
 }
 
 export function formatCicloLabel(ciclo: number) {
-  return `Ciclo ${ciclo}`;
+  return `Año ${ciclo}`;
 }

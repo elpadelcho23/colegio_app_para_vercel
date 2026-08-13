@@ -271,6 +271,72 @@ const TOPIC_GUIDES = {
       },
     ],
   },
+  ciclo: {
+    id: 'ciclo',
+    title: 'Guía: Ciclo escolar',
+    unlockAfterBasic: true,
+    steps: [
+      {
+        id: 'ciclo-cursos',
+        view: 'cursos',
+        title: 'Cursos arriba',
+        body: 'Arriba están “Nuevo curso” y “Cursos activos”. Más abajo está el ciclo anual, que filtra qué divisiones ves.',
+        bodyShort: 'Los cursos van arriba; el ciclo, abajo.',
+        why: 'Primero las divisiones, y más abajo el año lectivo.',
+        actionHint: 'Tocá el panel o Seguí',
+        target: '[data-spa-view="cursos"] [data-course-workspace], [data-spa-view="cursos"] [data-course-form]',
+        require: 'click',
+        requireClick:
+          '[data-spa-view="cursos"] [data-course-workspace], [data-spa-view="cursos"] [data-course-form], [data-spa-view="cursos"] [data-course-list]',
+        softRequire: true,
+        autoAdvance: true,
+      },
+      {
+        id: 'ciclo-activo',
+        view: 'cursos',
+        title: 'Elegí el ciclo activo',
+        body: 'El ciclo es el año lectivo. Solo ves cursos, alumnos y horarios de ese año. Cambialo acá cuando pases de 2026 a 2027, por ejemplo.',
+        bodyShort: 'Elegí el año lectivo activo.',
+        why: 'Si el ciclo está mal, parece que “faltan” cursos o alumnos.',
+        actionHint: 'Tocá el selector o Seguí',
+        target: '[data-spa-view="cursos"] [data-cycle-active], [data-spa-view="cursos"] [data-school-cycle]',
+        require: 'click',
+        requireClick: '[data-spa-view="cursos"] [data-cycle-active]',
+        softRequire: true,
+        autoAdvance: true,
+      },
+      {
+        id: 'ciclo-clonar',
+        view: 'cursos',
+        title: 'Reutilizar un ciclo anterior',
+        body: 'Abrí este bloque para copiar escuelas, cursos y horarios a un año nuevo. Los alumnos del ciclo viejo no se mezclan.',
+        bodyShort: 'Copiá la estructura a un año nuevo.',
+        why: 'Así no volvés a cargar 6to 1ra a mano cada marzo.',
+        actionHint: 'Tocá el bloque o Seguí',
+        target: '[data-spa-view="cursos"] [data-cycle-clone]',
+        openCycleClone: true,
+        require: 'click',
+        requireClick: '[data-spa-view="cursos"] [data-cycle-clone]',
+        softRequire: true,
+        autoAdvance: true,
+      },
+      {
+        id: 'ciclo-campos',
+        view: 'cursos',
+        title: 'Origen y destino',
+        body: 'Elegí de qué ciclo copiar, a qué año crear (ej. 2027) y si también querés los bloques de horario. Después tocá “Clonar estructura al nuevo ciclo”.',
+        bodyShort: 'Copiar desde → crear ciclo → clonar.',
+        why: 'El destino tiene que ser un año distinto al origen.',
+        actionHint: 'Tocá el botón o Seguí',
+        target: '[data-spa-view="cursos"] [data-cycle-clone-submit], [data-spa-view="cursos"] [data-cycle-clone]',
+        openCycleClone: true,
+        require: 'click',
+        requireClick: '[data-spa-view="cursos"] [data-cycle-clone-submit]',
+        softRequire: true,
+        nextLabel: 'Listo',
+      },
+    ],
+  },
   cursos: {
     id: 'cursos',
     title: 'Guía: Crear cursos',
@@ -280,11 +346,11 @@ const TOPIC_GUIDES = {
         id: 'cursos-ir',
         view: 'cursos',
         title: 'Sección Cursos',
-        body: 'Acá creás escuelas, divisiones y cursos (también desde Excel).',
+        body: 'Acá creás escuelas, divisiones y cursos (también desde Excel). El ciclo escolar queda más abajo.',
         bodyShort: 'Acá creás cursos y escuelas.',
         why: 'Sin curso no hay alumnos ni lista.',
         actionHint: 'Tocá Seguir',
-        target: '[data-spa-view="cursos"] .page-header, [data-spa-view="cursos"] [data-course-form]',
+        target: '[data-spa-view="cursos"] [data-course-workspace], [data-spa-view="cursos"] [data-course-form]',
         require: 'next',
         nextLabel: 'Seguir',
       },
@@ -903,6 +969,13 @@ export function initProductTour({ getUserId }) {
       openGtcForTour();
       await waitForPaint();
       await wait(40);
+    }
+
+    if (step.openCycleClone) {
+      document.querySelectorAll('[data-cycle-clone]').forEach((el) => {
+        if (el instanceof HTMLDetailsElement) el.open = true;
+      });
+      await waitForPaint();
     }
 
     if (step.openToolsHub) {
