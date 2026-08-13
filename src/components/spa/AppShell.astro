@@ -19,34 +19,41 @@ const { initialView = 'panel' } = Astro.props;
     <section class="onboarding hero-card is-hidden" data-onboarding hidden aria-labelledby="onboarding-title">
       <div class="onboarding-header">
         <p class="eyebrow">Primeros pasos</p>
-        <h2 id="onboarding-title">Configurá tu aula</h2>
-        <p class="onboarding-progress" data-onboarding-progress aria-live="polite">Paso 1 de 5</p>
+        <h2 id="onboarding-title">¿Arrancamos con el tutorial?</h2>
+        <p class="onboarding-lead copy-collapse-mobile">
+          5 pasos: mapa del día, curso actual, alumnos, pasar lista y dónde pedir más ayuda.
+        </p>
       </div>
 
-      <ol class="onboarding-steps" data-onboarding-steps aria-label="Pasos de configuración inicial"></ol>
-
       <div class="onboarding-actions">
-        <button type="button" class="btn btn-primary btn-block" data-onboarding-cta data-spa-nav="cursos">
-          Crear curso
+        <button
+          type="button"
+          class="btn btn-primary btn-block onboarding-start-btn"
+          data-setup-tutorial-start
+        >
+          <span class="onboarding-start-badge copy-collapse-mobile">Recomendado</span>
+          <span class="copy-long">Sí, arrancamos el tutorial</span>
+          <span class="copy-short">Arrancar tutorial</span>
         </button>
         <button type="button" class="btn btn-ghost btn-block" data-onboarding-dismiss>
-          Omitir por ahora
+          Ahora no
         </button>
       </div>
     </section>
 
     <button type="button" class="onboarding-resume btn btn-ghost is-hidden" data-onboarding-resume hidden>
-      Completar configuración
+      <span class="copy-long">¿Arrancamos con el tutorial?</span>
+      <span class="copy-short">Ver tutorial</span>
     </button>
 
     <section class="hero-card" data-panel-hero>
       <p class="eyebrow">Hoy</p>
       <h1 data-panel-today-title>Hoy: elegí curso arriba</h1>
-      <p class="hero-help">Todo usa el Curso actual del encabezado. Si faltan alumnos, importá un Excel.</p>
+      <p class="hero-help copy-collapse-mobile">Importá con Excel o elegí el curso arriba.</p>
 
       <div class="schedule-suggestion is-hidden" data-schedule-suggestion hidden>
         <p>
-          Sugerencia por horario:
+          Sugerencia:
           <strong data-schedule-suggestion-label></strong>
         </p>
         <button type="button" class="btn btn-secondary btn-sm" data-schedule-suggestion-apply>Usar ahora</button>
@@ -55,26 +62,32 @@ const { initialView = 'panel' } = Astro.props;
       <div class="hero-actions hero-actions--triple">
         <button type="button" data-spa-nav="asistencia" class="btn btn-primary hero-cta">Asistencia</button>
         <button type="button" data-spa-nav="actividades" class="btn btn-secondary hero-cta">Actividades</button>
-        <button type="button" data-spa-nav="herramientas" class="btn btn-secondary hero-cta">Importar alumnos</button>
+        <button type="button" data-spa-nav="herramientas" class="btn btn-secondary hero-cta">
+          <span class="copy-long">Importar alumnos</span>
+          <span class="copy-short">Excel</span>
+        </button>
       </div>
     </section>
 
-    <section class="panel panel-day-summary">
+    <section class="panel panel-day-summary" data-panel-summary>
       <div class="section-title">
         <h2>Resumen</h2>
-        <p>Números del curso elegido arriba.</p>
+        <p class="copy-collapse-mobile">Tocá una tarjeta para abrir esa sección.</p>
       </div>
       <div class="metric-grid" data-dashboard></div>
       <div data-alerts></div>
       <div class="button-row summary-actions">
-        <button type="button" class="btn btn-secondary" data-print-course-notes>Imprimir notas del curso</button>
+        <button type="button" class="btn btn-secondary" data-print-course-notes>
+          <span class="copy-long">Imprimir notas del curso</span>
+          <span class="copy-short">Imprimir notas</span>
+        </button>
       </div>
     </section>
 
     <section class="panel" data-seguimiento>
       <div class="section-title">
         <h2>Seguimiento</h2>
-        <p>Quién no acredita asistencia o debe trabajos.</p>
+        <p class="copy-collapse-mobile">Asistencia o trabajos pendientes.</p>
       </div>
       <div class="list" data-seguimiento-list></div>
     </section>
@@ -83,7 +96,7 @@ const { initialView = 'panel' } = Astro.props;
       <summary class="panel-collapsible-summary">
         <span class="section-title">
           <h2>Horario (opcional)</h2>
-          <p>Solo sugiere el curso del día. No hace falta configurarlo para usar la app.</p>
+          <p class="copy-collapse-mobile">Sugiere el curso del día.</p>
         </span>
       </summary>
       <form class="form-grid" data-context-form>
@@ -118,95 +131,79 @@ const { initialView = 'panel' } = Astro.props;
     <header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
-        <h1>Registro simple</h1>
-        <p>Cargá alumnos uno a uno con curso y materias.</p>
+        <h1>Cargar alumnos</h1>
+        <p class="copy-collapse-mobile">Importá desde Excel: escuela, curso, materias y listado.</p>
       </div>
-      <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block">Organizar cursos</button>
+      <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block">
+        <span class="copy-long">Organizar cursos</span>
+        <span class="copy-short">Cursos</span>
+      </button>
     </header>
 
     <section class="panel student-workspace">
       <div class="section-title">
-        <h2>Registrar alumnos</h2>
-        <p>Cargá alumnos uno a uno o importá desde Excel con una plantilla personalizada.</p>
+        <h2>Importar desde Excel</h2>
+        <p class="copy-collapse-mobile">Subí la planilla, mapeá columnas y guardá.</p>
       </div>
 
-      <div class="activity-mode-picker full-width" role="tablist" aria-label="Modo de registro">
-        <label class="template-card activity-mode-card">
-          <input type="radio" name="studentMode" value="manual" checked data-student-mode-input />
-          <span>
-            <strong>Cargar uno a uno</strong>
-            <small>Completá nombre, escuela, curso, materias y contacto.</small>
-          </span>
-        </label>
-        <label class="template-card activity-mode-card">
-          <input type="radio" name="studentMode" value="excel" data-student-mode-input />
-          <span>
-            <strong>Cargar desde hoja Excel</strong>
-            <small>Mapeá columnas y guardá plantillas reutilizables.</small>
-          </span>
-        </label>
+      <div class="student-mode-panel full-width" data-student-mode-panel="excel">
+        <ExcelImportWorkspace
+          importType="alumnos"
+          title="Cargar alumnos desde Excel"
+          description="Subí el archivo y confirmá las columnas."
+        />
       </div>
 
-      <section class="responsive-grid">
-        <div class="student-mode-panel full-width" data-student-mode-panel="manual">
-          <form class="panel form-grid" data-student-form>
-            <div class="section-title">
-              <h2>Nuevo alumno</h2>
-            </div>
-
-            <div class="input-group full-width">
-              <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /><small class="field-error" hidden></small></label>
-              <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
-            </div>
-
-            <label class="full-width">
-              <span>Escuela</span>
-              <select name="escuela" data-student-school required></select>
-              <small class="field-error" hidden></small>
-            </label>
-
-            <label class="full-width">
-              <span>Curso</span>
-              <select name="cursoId" required></select>
-              <small class="field-error" hidden></small>
-            </label>
-
-            <fieldset class="subject-picker">
-              <legend>Materias del alumno</legend>
-              <div class="subject-search" data-student-subjects></div>
-              <div class="inline-form">
-                <input name="nuevaMateria" data-student-new-subject placeholder="Escribí el nombre de la materia..." aria-label="Nueva materia" />
-                <button class="btn btn-secondary" type="button" data-student-add-subject>Agregar materia</button>
-              </div>
-            </fieldset>
-
-            <label class="full-width">
-              <span>Tutor o contacto</span>
-              <input name="tutor" />
-            </label>
-
-            <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
-          </form>
-        </div>
-
-        <div class="student-mode-panel full-width is-hidden" data-student-mode-panel="excel">
-          <ExcelImportWorkspace importType="alumnos" />
-        </div>
-
-        <section class="panel">
-          <div class="section-title">
-            <h2>Alumnos cargados</h2>
-            <p>Listado con curso, materias y promedio actualizado.</p>
+      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual">
+        <summary class="panel-collapsible-summary">
+          <span class="section-title">
+            <h2>Cargar uno a uno</h2>
+            <p class="copy-collapse-mobile">Formulario manual, opcional.</p>
+          </span>
+        </summary>
+        <form class="form-grid" data-student-form>
+          <div class="input-group full-width">
+            <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /><small class="field-error" hidden></small></label>
+            <label><span>DNI opcional</span><input name="dni" inputmode="numeric" /></label>
           </div>
-          <div class="list" data-student-list></div>
-        </section>
-      </section>
 
-      <p class="tools-nav-link-wrap">
-        <button type="button" class="tools-nav-link" data-tools-focus="excel" data-tools-tab="alumnos">
-          ¿Muchos alumnos? Importá desde Excel y cuenta →
-        </button>
-      </p>
+          <label class="full-width">
+            <span>Escuela</span>
+            <select name="escuela" data-student-school required></select>
+            <small class="field-error" hidden></small>
+          </label>
+
+          <label class="full-width">
+            <span>Curso</span>
+            <select name="cursoId" required></select>
+            <small class="field-error" hidden></small>
+          </label>
+
+          <fieldset class="subject-picker">
+            <legend>Materias del alumno</legend>
+            <div class="subject-search" data-student-subjects></div>
+            <div class="inline-form">
+              <input name="nuevaMateria" data-student-new-subject placeholder="Escribí el nombre de la materia..." aria-label="Nueva materia" />
+              <button class="btn btn-secondary" type="button" data-student-add-subject>Agregar materia</button>
+            </div>
+          </fieldset>
+
+          <label class="full-width">
+            <span>Tutor o contacto</span>
+            <input name="tutor" />
+          </label>
+
+          <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
+        </form>
+      </details>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Alumnos cargados</h2>
+          <p>Listado con curso, materias y promedio actualizado.</p>
+        </div>
+        <div class="list" data-student-list></div>
+      </section>
     </section>
 
     <dialog class="modal modal--wide" data-student-profile-dialog>
@@ -274,9 +271,12 @@ const { initialView = 'panel' } = Astro.props;
       <div class="header-content">
         <p class="eyebrow">Organización</p>
         <h1>Cursos y divisiones</h1>
-        <p>Base de trabajo por ciclo lectivo: escuela, curso, materias y horarios.</p>
+        <p class="copy-collapse-mobile">Escuela, curso, materias y horarios del ciclo.</p>
       </div>
-      <button type="button" data-spa-nav="registro" class="btn btn-secondary btn-block" >Cargar alumnos</button>
+      <button type="button" data-spa-nav="registro" class="btn btn-primary btn-block">
+        <span class="copy-long">Importar alumnos (Excel)</span>
+        <span class="copy-short">Importar Excel</span>
+      </button>
     </header>
 
     <SchoolCyclePanel />
@@ -365,7 +365,7 @@ const { initialView = 'panel' } = Astro.props;
       <div class="header-content">
         <p class="eyebrow">Agenda docente</p>
         <h1>Actividades</h1>
-        <p>Creá, recibí entregas y corregí del curso de arriba.</p>
+        <p class="copy-collapse-mobile">Entregas y corrección del curso actual.</p>
       </div>
       <button type="button" data-spa-nav="notas" class="btn btn-secondary btn-block">Ir a calificaciones</button>
     </header>

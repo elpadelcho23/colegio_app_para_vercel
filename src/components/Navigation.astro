@@ -4,12 +4,12 @@ const user = Astro.locals.user;
 const isGuest = Boolean(user?.is_guest);
 
 const spaLinks = [
-  { view: 'panel', href: '/', label: 'Panel', shortLabel: 'Panel' },
-  { view: 'registro', href: '/registro', label: 'Alumnos', shortLabel: 'Alumnos' },
-  { view: 'cursos', href: '/cursos', label: 'Cursos', shortLabel: 'Cursos' },
-  { view: 'asistencia', href: '/asistencia', label: 'Asistencia', shortLabel: 'Asist.' },
-  { view: 'notas', href: '/notas', label: 'Calificaciones', shortLabel: 'Calificaciones' },
-  { view: 'actividades', href: '/actividades', label: 'Actividades', shortLabel: 'Actividades' },
+  { view: 'panel', href: '/', label: 'Panel' },
+  { view: 'registro', href: '/registro', label: 'Alumnos' },
+  { view: 'cursos', href: '/cursos', label: 'Cursos' },
+  { view: 'asistencia', href: '/asistencia', label: 'Asistencia' },
+  { view: 'notas', href: '/notas', label: 'Calificaciones' },
+  { view: 'actividades', href: '/actividades', label: 'Actividades' },
 ] as const;
 
 const staticLinks = [
@@ -29,18 +29,6 @@ const isActive = (href: string) => {
       <span class="institution-strip-secondary">Seguimiento escolar simple para docentes</span>
     </div>
     {user && (
-      <button
-        type="button"
-        class="sync-indicator"
-        data-sync-indicator
-        aria-label="Estado de sincronización"
-        title="Sincronización"
-      >
-        <span class="sync-indicator-dot" aria-hidden="true"></span>
-        <span class="sync-indicator-label" data-sync-indicator-label>Guardado</span>
-      </button>
-    )}
-    {user && (
       <label class="global-cycle-picker global-cycle-picker--strip">
         <span>Ciclo</span>
         <select data-global-cycle aria-label="Ciclo lectivo activo"></select>
@@ -56,7 +44,6 @@ const isActive = (href: string) => {
   {isGuest && (
     <div class="guest-banner" role="status" data-guest-banner>
       <strong>Modo invitado</strong>
-      <span>Podés probar la app completa (incluida clase virtual e IA). Al salir se borran los datos — creá una cuenta para guardarlos. Recargar no borra lo importado.</span>
     </div>
   )}
   <nav class="topbar" aria-label="Navegación principal">
@@ -78,21 +65,40 @@ const isActive = (href: string) => {
       </a>
     )}
 
-    <button
-      class="menu-toggle"
-      type="button"
-      aria-label="Abrir menú"
-      aria-controls="main-navigation-menu"
-      aria-expanded="false"
-      data-menu-toggle
-    >
-      <span></span>
-      <span></span>
-      <span></span>
-    </button>
+    <div class="topbar-actions">
+      {user && (
+        <button
+          type="button"
+          class="sync-indicator"
+          data-sync-indicator
+          aria-label="Estado de sincronización"
+          title="Sincronización"
+        >
+          <span class="sync-indicator-dot" aria-hidden="true"></span>
+          <span class="sync-indicator-label" data-sync-indicator-label>Guardado</span>
+        </button>
+      )}
+      <button
+        class="menu-toggle"
+        type="button"
+        aria-label="Abrir menú"
+        aria-controls="main-navigation-menu"
+        aria-expanded="false"
+        data-menu-toggle
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
 
     <div class="nav-links" id="main-navigation-menu" data-nav-menu role="menu">
-      <p class="nav-section-label">Menú</p>
+      <div class="nav-links-head">
+        <p class="nav-section-label">Menú</p>
+        <button type="button" class="nav-links-close btn btn-ghost btn-sm" data-menu-close aria-label="Cerrar menú">
+          Cerrar
+        </button>
+      </div>
       {user && (
         <div class="nav-cycle-picker">
           <label class="global-cycle-picker">
@@ -167,11 +173,54 @@ const isActive = (href: string) => {
         <summary class="help-menu-toggle" aria-label="Ayuda">?</summary>
         <div class="help-menu-panel" role="menu">
           <p class="help-menu-title">Ayuda</p>
-          <button type="button" class="help-menu-item" role="menuitem" data-product-tour-start>
-            Tour rápido: Asistencia y Notas
+          <button
+            type="button"
+            class="help-menu-item help-menu-item--tour"
+            role="menuitem"
+            data-product-tour-start
+            data-tour-start="basico"
+            data-help-tour-item
+          >
+            <span class="copy-long">Tutorial inicial</span>
+            <span class="copy-short">Tutorial</span>
+          </button>
+
+          <div class="help-menu-guides is-hidden" data-tour-guides hidden>
+            <p class="help-menu-title help-menu-title--sub">Guías del día a día</p>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="curso">
+              Curso actual
+            </button>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="excel">
+              Importar Excel
+            </button>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="asistencia">
+              Pasar lista
+            </button>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="notas">
+              Cargar notas
+            </button>
+            <p class="help-menu-title help-menu-title--sub">Más tarde</p>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="panel">
+              Panel y resumen
+            </button>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="cursos">
+              Crear cursos
+            </button>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="actividades">
+              Actividades
+            </button>
+            <button type="button" class="help-menu-item" role="menuitem" data-tour-start="herramientas">
+              Cuenta e instalar
+            </button>
+          </div>
+
+          <button type="button" class="help-menu-item" role="menuitem" data-pwa-install-btn>
+            <span class="copy-long">Instalar app (PC / Android / iOS)</span>
+            <span class="copy-short">Instalar app</span>
           </button>
           <button type="button" class="help-menu-item" role="menuitem" data-gtc-open>
-            Cambiar curso actual
+            <span class="copy-long">Cambiar curso actual</span>
+            <span class="copy-short">Cambiar curso</span>
           </button>
         </div>
       </details>
@@ -214,21 +263,6 @@ const isActive = (href: string) => {
   )}
 </header>
 
-{spaEnabled && user && (
-  <nav class="mobile-bottom-nav" aria-label="Acceso rápido" data-mobile-bottom-nav>
-    {spaLinks.map((link) => (
-      <button
-        type="button"
-        class="mobile-bottom-nav-item"
-        data-spa-nav={link.view}
-        aria-label={link.label}
-      >
-        <span class="mobile-bottom-nav-label">{link.shortLabel}</span>
-      </button>
-    ))}
-  </nav>
-)}
-
 <style>
   .brand-button {
     border: 0;
@@ -254,9 +288,34 @@ const isActive = (href: string) => {
 
   .nav-tab.active,
   .nav-tab[aria-current='page'] {
-    background: color-mix(in srgb, var(--brand) 14%, var(--surface));
-    color: var(--brand);
-    font-weight: 700;
+    background: color-mix(in srgb, var(--brand) 16%, var(--surface));
+    color: var(--brand-strong, var(--brand));
+    font-weight: 800;
+    border: 1px solid color-mix(in srgb, var(--brand) 28%, transparent);
+    box-shadow: none;
+  }
+
+  .help-menu-guides {
+    display: grid;
+    gap: 0.15rem;
+    margin: 0.35rem 0 0.25rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--line, #d9e1dc);
+  }
+
+  .help-menu-guides.is-hidden,
+  .help-menu-guides[hidden] {
+    display: none;
+  }
+
+  .help-menu-title--sub {
+    margin-top: 0.15rem;
+  }
+
+  .help-menu-item.is-guide-done::after {
+    content: ' ✓';
+    color: var(--brand, #226c5f);
+    font-weight: 800;
   }
 
   .nav-section-label--secondary {
@@ -272,11 +331,19 @@ const isActive = (href: string) => {
     font-size: 0.95rem;
   }
 
+  .topbar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
   .sync-indicator {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    min-height: 2rem;
+    min-height: 44px;
     width: auto;
     max-width: 11rem;
     padding: 0.25rem 0.55rem 0.25rem 0.45rem;
@@ -316,16 +383,37 @@ const isActive = (href: string) => {
     background: #6b7280;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 1023px) {
     .sync-indicator-label {
       display: none;
     }
 
     .sync-indicator {
-      width: 2rem;
+      width: 44px;
+      min-width: 44px;
+      height: 44px;
       max-width: none;
       padding: 0;
       justify-content: center;
+      border-radius: var(--radius, 0.65rem);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .topbar-actions {
+      margin: 0.55rem 0 0.35rem;
+      margin-left: 0;
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .sync-indicator {
+      max-width: none;
+      width: 100%;
+      justify-content: flex-start;
+      border-radius: 0.55rem;
+      min-height: 2.4rem;
+      padding: 0.4rem 0.65rem;
     }
   }
 
@@ -365,10 +453,18 @@ const isActive = (href: string) => {
 
   .global-teaching-context {
     width: min(var(--content-max, 1120px), calc(100% - 24px));
-    margin: 0 auto;
-    padding: 0.55rem 0.75rem 0.75rem;
-    border-bottom: 1px solid var(--line, #d9e1dc);
-    background: color-mix(in srgb, var(--surface, #fff) 92%, var(--bg, #f3f6f4));
+    margin: 0.35rem auto 0.55rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--brand, #226c5f) 32%, var(--line, #d9e1dc));
+    border-radius: 0.75rem;
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--brand, #226c5f) 14%, var(--surface, #fff)),
+        color-mix(in srgb, var(--brand, #226c5f) 5%, var(--surface, #fff)) 55%,
+        var(--surface, #fff)
+      );
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--brand, #226c5f) 12%, transparent);
   }
 
   .gtc-summary-row {
@@ -380,20 +476,23 @@ const isActive = (href: string) => {
 
   .gtc-summary {
     display: grid;
-    gap: 0.1rem;
+    gap: 0.15rem;
     min-width: 0;
   }
 
   .gtc-label {
-    font-size: 0.72rem;
-    letter-spacing: 0.04em;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--muted, #5f6b66);
+    color: var(--brand-strong, #1a564c);
   }
 
   .gtc-summary strong {
-    font-size: 1.05rem;
+    font-size: 1.08rem;
+    font-weight: 800;
     line-height: 1.3;
+    color: var(--ink, #1a1a1a);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -404,9 +503,25 @@ const isActive = (href: string) => {
     color: var(--muted, #5f6b66);
   }
 
+  .gtc-summary-row [data-gtc-toggle] {
+    border-color: color-mix(in srgb, var(--brand, #226c5f) 35%, var(--line, #d9e1dc));
+    background: color-mix(in srgb, var(--brand, #226c5f) 10%, var(--surface, #fff));
+    color: var(--brand-strong, #1a564c);
+    font-weight: 800;
+  }
+
   .global-teaching-context.gtc--needs-context {
-    border-bottom-color: color-mix(in srgb, var(--warning, #c47b1a) 45%, var(--line, #d9e1dc));
-    background: color-mix(in srgb, var(--warning, #c47b1a) 8%, var(--surface, #fff));
+    border-color: color-mix(in srgb, var(--warning, #c47b1a) 50%, var(--line, #d9e1dc));
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--warning, #c47b1a) 16%, var(--surface, #fff)),
+        color-mix(in srgb, var(--warning, #c47b1a) 6%, var(--surface, #fff))
+      );
+  }
+
+  .global-teaching-context.gtc--needs-context .gtc-label {
+    color: color-mix(in srgb, var(--warning, #c47b1a) 75%, #5a3d00);
   }
 
   .global-teaching-context.gtc--needs-context .gtc-summary strong {
@@ -456,21 +571,74 @@ const isActive = (href: string) => {
     }
 
     .global-teaching-context {
-      width: 100%;
-      padding-left: 0.85rem;
-      padding-right: 0.85rem;
+      width: calc(100% - 1rem);
+      margin: 0.35rem auto 0.45rem;
+      padding: 0.55rem 0.7rem;
+      border-radius: 0.7rem;
+    }
+
+    .gtc-summary-row {
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .gtc-label {
+      font-size: 0.7rem;
+      margin: 0;
+    }
+
+    .gtc-summary {
+      gap: 0.08rem;
+      min-width: 0;
+      flex: 1;
     }
 
     .gtc-summary strong {
-      white-space: normal;
+      font-size: 0.95rem;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .gtc-hint {
+      display: none;
+    }
+
+    .gtc-summary-row .btn {
+      flex-shrink: 0;
+      min-height: 44px;
+      padding: 0.4rem 0.8rem;
+      font-size: 0.84rem;
+    }
+
+    .gtc-form {
+      margin-top: 0.45rem;
+      gap: 0.4rem;
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 479px) {
+    .global-teaching-context {
+      width: calc(100% - 0.75rem);
+      padding: 0.5rem 0.6rem;
+    }
+
+    .gtc-label {
+      font-size: 0.68rem;
+    }
+
+    .gtc-summary strong {
+      font-size: 0.9rem;
     }
   }
 
   @media (min-width: 1024px) {
     .global-teaching-context {
-      width: 100%;
-      margin: 0;
-      padding: 0.65rem 0.85rem 0.85rem;
+      width: calc(100% - 1.5rem);
+      margin: 0.45rem 0.75rem 0.65rem;
+      padding: 0.7rem 0.8rem;
     }
   }
 </style>

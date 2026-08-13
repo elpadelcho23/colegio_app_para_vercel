@@ -6,7 +6,7 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
   <div class="header-content">
     <p class="eyebrow">Avanzado</p>
     <h1>Excel y cuenta</h1>
-    <p>Importá planillas o revisá sincronización y plan. Corregir está en Actividades.</p>
+    <p class="copy-collapse-mobile">Planillas, sincronización y plan.</p>
   </div>
 </header>
 
@@ -20,7 +20,8 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     aria-controls="tools-hub-excel"
     id="tools-hub-tab-excel"
   >
-    Importar Excel
+    <span class="copy-long">Importar Excel</span>
+    <span class="copy-short">Excel</span>
   </button>
   <button
     type="button"
@@ -31,7 +32,8 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     aria-controls="tools-hub-cuenta"
     id="tools-hub-tab-cuenta"
   >
-    Cuenta / sincronización
+    <span class="copy-long">Cuenta / instalar</span>
+    <span class="copy-short">Cuenta</span>
   </button>
 </div>
 
@@ -45,7 +47,7 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
 >
   <div class="section-title">
     <h2>Importar Excel</h2>
-    <p>Subí el archivo y confirmá las columnas.</p>
+    <p>Subí el archivo y confirmá las columnas. También está en Alumnos (recomendado).</p>
   </div>
 
   <div class="tools-tabs" role="tablist" aria-label="Tipo de importación Excel">
@@ -149,6 +151,29 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     </div>
 
     <button class="btn btn-primary" type="button" data-sync-button>Sincronizar ahora</button>
+  </section>
+
+  <section class="panel tools-section pwa-install" data-pwa-install data-tools-section="install">
+    <div class="section-title">
+      <h2>
+        <span class="copy-long">Instalar app (PC / Android / iOS)</span>
+        <span class="copy-short">Instalar app</span>
+      </h2>
+      <p class="copy-collapse-mobile">Instalá desde esta web, sin tienda.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-pwa-install-btn>
+      <span class="copy-long">Instalar en este dispositivo</span>
+      <span class="copy-short">Instalar</span>
+    </button>
+    <p class="muted" data-pwa-install-status></p>
+    <details class="pwa-install-help" data-pwa-install-help>
+      <summary>Cómo instalar según el dispositivo</summary>
+      <ul>
+        <li><strong>Android (Chrome):</strong> tocá Instalar, o Menú ⋮ → Instalar app.</li>
+        <li><strong>PC (Chrome / Edge):</strong> tocá Instalar, o el ícono ⊕ en la barra de direcciones.</li>
+        <li><strong>iPhone / iPad (Safari):</strong> Compartir → Agregar a pantalla de inicio.</li>
+      </ul>
+    </details>
   </section>
 
   <section class="panel tools-section" data-tools-section="plan" data-billing-plan>

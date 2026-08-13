@@ -17,9 +17,13 @@ const pwaManifest = {
   theme_color: '#226c5f',
   background_color: '#f6f7f3',
   display: 'standalone',
+  display_override: ['standalone', 'minimal-ui'],
   lang: 'es',
   start_url: '/',
-  orientation: 'portrait-primary',
+  scope: '/',
+  id: '/',
+  orientation: 'any',
+  categories: ['education', 'productivity'],
   icons: [
     {
       src: 'pwa-icon.svg',

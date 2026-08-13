@@ -12,7 +12,7 @@ const { spaMode = false } = Astro.props;
   <div class="header-content">
     <p class="eyebrow">Control diario</p>
     <h1>Asistencia</h1>
-    <p>Pasá lista y revisá el historial del curso elegido arriba.</p>
+    <p class="copy-collapse-mobile">Pasá lista e historial del curso actual.</p>
   </div>
   <div class="actions-group">
     {spaMode ? (
@@ -42,7 +42,7 @@ const { spaMode = false } = Astro.props;
       <small class="field-error" data-attendance-subject-error hidden></small>
     </div>
   </div>
-  <p class="muted filter-context-note">Los filtros siguen el Curso actual del encabezado.</p>
+  <p class="muted filter-context-note copy-collapse-mobile">Sigue el Curso actual.</p>
 
   <section class="summary-strip" data-attendance-summary></section>
 
@@ -50,7 +50,8 @@ const { spaMode = false } = Astro.props;
 
   <div class="attendance-save-bar" data-attendance-save-bar>
     <p class="attendance-save-hint" data-attendance-save-hint>
-      Tenés cambios sin guardar. Revisá el listado y confirmá cuando termines.
+      <span class="copy-long">Tenés cambios sin guardar. Revisá el listado y confirmá cuando termines.</span>
+      <span class="copy-short">Cambios sin guardar.</span>
     </p>
     <button class="btn btn-primary" type="button" data-attendance-save disabled>
       Guardar asistencias
@@ -103,6 +104,7 @@ const { spaMode = false } = Astro.props;
     </label>
     <button type="button" class="btn btn-secondary" data-attendance-matrix-export>Exportar planilla CSV</button>
   </div>
+  <p class="muted attendance-matrix-scroll-hint" aria-hidden="true">Deslizá horizontalmente para ver todos los días →</p>
   <div class="table-container attendance-matrix-wrap" data-attendance-matrix></div>
 </section>
 

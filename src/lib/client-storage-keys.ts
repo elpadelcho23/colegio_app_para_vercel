@@ -36,3 +36,8 @@ export function productTourKey(userId: string) {
   return `aula_clara_product_tour:${userId}`;
 }
 
+/** localStorage: guías temáticas completadas (`{ excel: 'done', ... }`). */
+export function productGuidesKey(userId: string) {
+  return `aula_clara_product_guides:${userId}`;
+}
+

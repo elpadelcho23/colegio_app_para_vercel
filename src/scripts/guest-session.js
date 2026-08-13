@@ -1,6 +1,7 @@
 import {
   CLIENT_DATA_STORAGE,
   onboardingDismissedKey,
+  productGuidesKey,
   productTourKey,
 } from '../lib/client-storage-keys.ts';
 import { clearOfflineDatabase } from './offline-db.ts';
@@ -69,6 +70,7 @@ export async function clearGuestClientData(userId) {
     });
     localStorage.removeItem(onboardingDismissedKey(userId));
     localStorage.removeItem(productTourKey(userId));
+    localStorage.removeItem(productGuidesKey(userId));
   }
 
   try {

@@ -99,25 +99,9 @@ const DEFAULTS = {
     { id: 'programacion', nombre: 'Programacion', activo: true },
     { id: 'literatura', nombre: 'Literatura', activo: true },
   ],
-  [KEYS.students]: [
-    { id: 'al-1', nombre: 'Martina Ruiz', dni: '44111222', cursoId: 'curso-6-1-manana', tutor: 'Laura Ruiz', subjectIds: ['programacion', 'matematica'], activo: true },
-    { id: 'al-2', nombre: 'Tomas Pereyra', dni: '45222333', cursoId: 'curso-6-1-manana', tutor: 'Ruben Pereyra', subjectIds: ['programacion', 'matematica'], activo: true },
-    { id: 'al-3', nombre: 'Sofia Molina', dni: '46333444', cursoId: 'curso-5-2-tarde', tutor: 'Ana Molina', subjectIds: ['literatura'], activo: true },
-  ],
-  [KEYS.attendance]: [
-    { id: 'asis-1', studentId: 'al-2', subjectId: 'programacion', fecha: '2026-03-10', estado: 'ausente', updatedAt: new Date().toISOString() },
-    { id: 'asis-2', studentId: 'al-2', subjectId: 'programacion', fecha: '2026-03-12', estado: 'ausente', updatedAt: new Date().toISOString() },
-    { id: 'asis-3', studentId: 'al-2', subjectId: 'programacion', fecha: '2026-03-14', estado: 'presente', updatedAt: new Date().toISOString() },
-    { id: 'asis-4', studentId: 'al-2', subjectId: 'programacion', fecha: '2026-03-17', estado: 'ausente', updatedAt: new Date().toISOString() },
-    { id: 'asis-5', studentId: 'al-1', subjectId: 'programacion', fecha: '2026-03-10', estado: 'presente', updatedAt: new Date().toISOString() },
-    { id: 'asis-6', studentId: 'al-1', subjectId: 'programacion', fecha: '2026-03-12', estado: 'presente', updatedAt: new Date().toISOString() },
-    { id: 'asis-7', studentId: 'al-1', subjectId: 'programacion', fecha: '2026-03-14', estado: 'presente', updatedAt: new Date().toISOString() },
-    { id: 'asis-8', studentId: 'al-1', subjectId: 'programacion', fecha: '2026-03-17', estado: 'presente', updatedAt: new Date().toISOString() },
-  ],
-  [KEYS.grades]: [
-    { id: 'nota-1', studentId: 'al-1', subjectId: 'programacion', titulo: 'TP HTML', tipoEvaluacion: 'TP', valor: 8, peso: 60, fecha: today(), fechaEntrega: '', updatedAt: new Date().toISOString() },
-    { id: 'nota-2', studentId: 'al-2', subjectId: 'programacion', titulo: 'Integrador', tipoEvaluacion: 'Integrador', valor: 5, peso: 100, fecha: today(), fechaEntrega: '', updatedAt: new Date().toISOString() },
-  ],
+  [KEYS.students]: [],
+  [KEYS.attendance]: [],
+  [KEYS.grades]: [],
   [KEYS.teacherContext]: [],
 };
 
@@ -690,6 +674,7 @@ function openTeachingContextPicker() {
   const root = document.querySelector('[data-global-teaching-context]');
   const form = root?.querySelector('[data-gtc-form]');
   if (!root || !form) return;
+  closeMenu();
   form.classList.remove('is-hidden');
   form.hidden = false;
   refreshGlobalTeachingContextUi({ keepOpen: true });
@@ -778,7 +763,13 @@ function refreshGlobalTeachingContextUi({ keepOpen = false } = {}) {
     subjectSelect.value = ctx.materiaId || '';
   }
 
-  if (!keepOpen && form) {
+  // Durante el tutorial (gtc--tour-open) el form debe seguir visible: si se cierra,
+  // el spotlight fijo queda “flotando” donde estaba el form (sobre el menú).
+  const tourKeepsOpen = root.classList.contains('gtc--tour-open');
+  if ((keepOpen || tourKeepsOpen) && form) {
+    form.classList.remove('is-hidden');
+    form.hidden = false;
+  } else if (form) {
     form.classList.add('is-hidden');
     form.hidden = true;
   }
@@ -1070,10 +1061,15 @@ function renderDashboard(root) {
   }).length;
 
   renderMetrics(root, [
-    { value: students.length, label: 'Alumnos' },
-    { value: courses.length, label: 'Cursos' },
-    { value: avg === null ? '-' : avg.toFixed(1), label: 'Promedio' },
-    { value: present === null ? '-' : `${present.toFixed(0)}%`, label: 'Asistencia' },
+    { value: students.length, label: 'Alumnos', view: 'registro', hint: 'Abrir' },
+    { value: courses.length, label: 'Cursos', view: 'cursos', hint: 'Abrir' },
+    { value: avg === null ? '-' : avg.toFixed(1), label: 'Promedio', view: 'notas', hint: 'Abrir' },
+    {
+      value: present === null ? '-' : `${present.toFixed(0)}%`,
+      label: 'Asistencia',
+      view: 'asistencia',
+      hint: 'Abrir',
+    },
   ]);
 
   const alerts = document.querySelector('[data-alerts]');
@@ -1246,7 +1242,18 @@ function initStudents() {
       input.checked = input.value === value;
     });
     modePanels.forEach((panel) => {
-      panel.classList.toggle('is-hidden', panel.getAttribute('data-student-mode-panel') !== value);
+      const panelMode = panel.getAttribute('data-student-mode-panel');
+      // Excel queda siempre visible (prioridad). Manual vive abajo en un <details>.
+      if (panelMode === 'excel') {
+        panel.classList.remove('is-hidden');
+        return;
+      }
+      if (panelMode === 'manual') {
+        panel.classList.remove('is-hidden');
+        if (panel instanceof HTMLDetailsElement) {
+          panel.open = value === 'manual';
+        }
+      }
     });
   };
 
@@ -1358,12 +1365,12 @@ function initStudents() {
     button.addEventListener('click', () => {
       const mode = button.getAttribute('data-student-mode-trigger') || 'excel';
       activateStudentMode(mode);
-      const excelPanel = root.querySelector('[data-student-mode-panel="excel"]');
-      excelPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const target = root.querySelector(`[data-student-mode-panel="${mode === 'manual' ? 'manual' : 'excel'}"]`);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 
-  activateStudentMode('manual');
+  activateStudentMode('excel');
 
   const addSubjectFromInput = async () => {
     const subjectPayload = await upsertSubjectByName(newSubjectInput?.value);
@@ -1619,8 +1626,8 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
 function renderStudents(list) {
   const students = studentsInCiclo();
   if (!students.length) {
-    replaceContent(list, emptyState('No hay alumnos en este ciclo', `Registrá alumnos del ciclo ${activeCicloLectivo()}.`, {
-      ctaLabel: 'Cargar alumno',
+    replaceContent(list, emptyState('No hay alumnos en este ciclo', `Importá desde Excel (recomendado) o cargá uno a uno. Ciclo ${activeCicloLectivo()}.`, {
+      ctaLabel: 'Importar con Excel',
       spaNav: 'registro',
     }));
     return;
@@ -1853,8 +1860,8 @@ function initAttendance() {
     ]);
 
     if (!students.length) {
-      replaceContent(list, emptyState('No hay alumnos para estos filtros', 'Cargá alumnos o cambiá el curso de arriba.', {
-        ctaLabel: 'Ir a Alumnos',
+      replaceContent(list, emptyState('No hay alumnos para estos filtros', 'Importá alumnos con Excel (recomendado) o cargá uno a uno abajo en Alumnos.', {
+        ctaLabel: 'Importar con Excel',
         spaNav: 'registro',
       }));
       updateAttendanceSaveUi();
@@ -2256,8 +2263,8 @@ function initGrades() {
     if (!students.length || !meta?.subjectId) {
       replaceContent(
         bulkList,
-        emptyState('Sin alumnos', 'Cargá alumnos del curso de arriba.', {
-          ctaLabel: 'Ir a Alumnos',
+        emptyState('Sin alumnos', 'Importá alumnos con Excel (recomendado) o cargá uno a uno en Alumnos.', {
+          ctaLabel: 'Importar con Excel',
           spaNav: 'registro',
         }),
       );
@@ -2694,8 +2701,8 @@ function renderGrades(table, subjectId = '', courseId = '') {
     table,
     ['Alumno', 'Promedio', 'Asistencia', 'Calificaciones', 'Estado'],
     rows,
-    emptyState('Sin alumnos', 'Cargá alumnos del curso de arriba.', {
-      ctaLabel: 'Ir a Alumnos',
+    emptyState('Sin alumnos', 'Importá alumnos con Excel (recomendado) o cargá uno a uno en Alumnos.', {
+      ctaLabel: 'Importar con Excel',
       spaNav: 'registro',
     }),
   );
@@ -5743,18 +5750,16 @@ async function bootstrap() {
 
   initResponsiveTables();
   initDashboard();
+  const productTour = initProductTour({
+    getUserId: () => currentUser?.id || null,
+  });
   initOnboarding({
     getUserId: () => currentUser?.id || null,
     hasCourse: () => visibleCourses().length > 0,
-    hasSubject: () => activeSubjects().length > 0,
     hasStudents: () => studentsInCiclo().length > 0,
     hasTeachingContext: () => teachingContextIsReady(),
-    hasActivity: () => knownHasActivity || sessionStorage.getItem('aula_clara_has_activity') === '1',
-    openTeachingContextPicker,
     onPanelRefresh,
-  });
-  initProductTour({
-    getUserId: () => currentUser?.id || null,
+    startTour: () => productTour?.startTour?.(),
   });
   initGuestSession({
     userId: currentUser?.id || null,

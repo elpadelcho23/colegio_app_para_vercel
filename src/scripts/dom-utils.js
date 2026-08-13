@@ -72,11 +72,26 @@ export function emptyState(title, message = '', options = {}) {
   return el('div', { className: 'empty' }, ...children);
 }
 
-export function metric(value, label) {
-  return el('div', { className: 'metric' },
+export function metric(value, label, options = {}) {
+  const { view = '', hint = 'Abrir' } = options;
+  const children = [
     el('strong', {}, value),
     el('span', {}, label),
-  );
+  ];
+
+  if (view) {
+    children.push(el('small', { className: 'metric-hint' }, hint));
+    return el('button', {
+      type: 'button',
+      className: 'metric metric--link',
+      dataset: { spaNav: view },
+      attrs: {
+        'aria-label': `${label}: ${value}. Ir a la sección`,
+      },
+    }, ...children);
+  }
+
+  return el('div', { className: 'metric' }, ...children);
 }
 
 export function panelMetric(label, value) {
@@ -87,7 +102,10 @@ export function panelMetric(label, value) {
 }
 
 export function renderMetrics(container, items) {
-  replaceContent(container, ...items.map(({ value, label }) => metric(value, label)));
+  replaceContent(
+    container,
+    ...items.map(({ value, label, view, hint }) => metric(value, label, { view, hint })),
+  );
 }
 
 export function renderPanelMetrics(container, items) {

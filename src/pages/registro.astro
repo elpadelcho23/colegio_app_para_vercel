@@ -8,12 +8,12 @@ import ExcelImportWorkspace from '../components/ExcelImportWorkspace.astro';
     <header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
-        <h1>Registro simple</h1>
-        <p>Cargá alumnos uno a uno o subí una hoja Excel con una plantilla personalizada.</p>
+        <h1>Cargar alumnos</h1>
+        <p>Lo más rápido: importá desde Excel. Escuela, curso, materias y listado entran juntos.</p>
       </div>
       <div class="actions-group">
         <button type="button" class="btn btn-primary btn-block" data-student-mode-trigger="excel">
-          Importar desde Excel
+          Ir a Excel
         </button>
         <a class="btn btn-secondary btn-block" href="/cursos">Organizar cursos</a>
       </div>
@@ -21,28 +21,25 @@ import ExcelImportWorkspace from '../components/ExcelImportWorkspace.astro';
 
     <section class="panel student-workspace">
       <div class="section-title">
-        <h2>Registrar alumnos</h2>
-        <p>Elegí cómo querés cargar el legajo. Podés guardar la estructura de tu Excel como plantilla reutilizable.</p>
+        <h2>Importar desde Excel</h2>
+        <p>Recomendado. Mapeá columnas y guardá plantillas reutilizables.</p>
       </div>
 
-      <div class="activity-mode-picker full-width" role="tablist" aria-label="Modo de registro">
-        <label class="template-card activity-mode-card">
-          <input type="radio" name="studentMode" value="manual" checked data-student-mode-input />
-          <span>
-            <strong>Cargar uno a uno</strong>
-            <small>Completá nombre, curso, materias y contacto en el formulario.</small>
-          </span>
-        </label>
-        <label class="template-card activity-mode-card">
-          <input type="radio" name="studentMode" value="excel" data-student-mode-input />
-          <span>
-            <strong>Cargar desde hoja Excel</strong>
-            <small>Usá tu planilla: mapeá columnas y guardá plantillas para la próxima vez.</small>
-          </span>
-        </label>
+      <div class="student-mode-panel full-width" data-student-mode-panel="excel">
+        <ExcelImportWorkspace
+          importType="alumnos"
+          title="Cargar alumnos desde Excel"
+          description="Subí el archivo y confirmá las columnas."
+        />
       </div>
 
-      <div class="student-mode-panel full-width" data-student-mode-panel="manual">
+      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual">
+        <summary class="panel-collapsible-summary">
+          <span class="section-title">
+            <h2>Cargar uno a uno</h2>
+            <p>Opcional. Si preferís cargar a mano, abrí este formulario.</p>
+          </span>
+        </summary>
         <form class="form-grid" data-student-form>
           <div class="input-group full-width">
             <label><span>Nombre completo</span><input name="nombre" autocomplete="name" required /></label>
@@ -75,11 +72,7 @@ import ExcelImportWorkspace from '../components/ExcelImportWorkspace.astro';
 
           <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
         </form>
-      </div>
-
-      <div class="student-mode-panel full-width is-hidden" data-student-mode-panel="excel">
-        <ExcelImportWorkspace importType="alumnos" />
-      </div>
+      </details>
     </section>
 
     <section class="responsive-grid">
