@@ -19,6 +19,7 @@ import { fillSelectOptions } from './dom-utils.js';
  *  getStudents: (escuela?: string, cursoId?: string, subjectId?: string) => any[],
  *  getStudentAverage: (studentId: string, subjectId?: string) => number | null,
  *  getStudentAttendance: (studentId: string, subjectId?: string) => number | null,
+ *  getTeachingContext?: () => { escuela?: string, cursoId?: string, materiaId?: string },
  *  courseLabel?: (course: any) => string,
  *  getUserId?: () => string,
  *  onRefresh?: (fn: () => void) => void,
@@ -48,8 +49,23 @@ export function initInformesComunicados(deps) {
 
   let dirty = false;
   let lastGenerated = '';
+  /** Si el docente cambió a mano, no pisamos su selección en refrescos de datos. */
+  let manualOverride = false;
+  let lastTeachingKey = '';
 
   const userId = () => deps.getUserId?.() || '';
+
+  const teachingSnapshot = () => {
+    const ctx = deps.getTeachingContext?.() || {};
+    return {
+      school: ctx.escuela || '',
+      course: ctx.cursoId || '',
+      subject: ctx.materiaId || '',
+    };
+  };
+
+  const teachingKey = (snap = teachingSnapshot()) =>
+    `${snap.school}|${snap.course}|${snap.subject}`;
 
   const courseLabel = (course) => {
     if (deps.courseLabel) return deps.courseLabel(course);
@@ -103,10 +119,50 @@ export function initInformesComunicados(deps) {
       'id',
       (item) => item.nombre || 'Sin nombre',
     );
-    if (selected) studentSelect.value = selected;
+    if (selected && students.some((item) => item.id === selected)) {
+      studentSelect.value = selected;
+    }
     if (studentSelect) {
       studentSelect.disabled = !subjectSelect?.value || students.length === 0;
     }
+  };
+
+  const applyCascade = ({ school = '', course = '', subject = '', student = '' } = {}) => {
+    fillSchools(school);
+    fillCourses(course);
+    fillSubjects(subject);
+    fillStudents(student);
+  };
+
+  /**
+   * Precarga Escuela/Curso/Materia desde Curso actual y refresca alumnos.
+   * @param {{ force?: boolean }} [options]
+   */
+  const applyFromTeachingContext = ({ force = false } = {}) => {
+    const snap = teachingSnapshot();
+    const key = teachingKey(snap);
+    const hasContext = Boolean(snap.school || snap.course || snap.subject);
+
+    if (!hasContext) {
+      lastTeachingKey = key;
+      return false;
+    }
+
+    if (!force && manualOverride && key === lastTeachingKey) {
+      return false;
+    }
+
+    const previousStudent = studentSelect?.value || '';
+    applyCascade({
+      school: snap.school,
+      course: snap.course,
+      subject: snap.subject,
+      student: previousStudent,
+    });
+    lastTeachingKey = key;
+    manualOverride = false;
+    refreshMetrics();
+    return true;
   };
 
   const formatMetric = (value, suffix = '') => {
@@ -178,6 +234,7 @@ export function initInformesComunicados(deps) {
     dirty = false;
   };
 
+  /** Refresco de datos: conserva selección actual; si está vacío, usa Curso actual. */
   const refreshAll = () => {
     const selected = {
       school: schoolSelect?.value || '',
@@ -186,10 +243,13 @@ export function initInformesComunicados(deps) {
       student: studentSelect?.value || '',
       motivo: motivoSelect?.value || '',
     };
-    fillSchools(selected.school);
-    fillCourses(selected.course);
-    fillSubjects(selected.subject);
-    fillStudents(selected.student);
+    const empty = !selected.school && !selected.course && !selected.subject;
+    if (empty || (!manualOverride && teachingKey() !== lastTeachingKey)) {
+      applyFromTeachingContext({ force: true });
+      fillMotivos(selected.motivo);
+      return;
+    }
+    applyCascade(selected);
     fillMotivos(selected.motivo);
     refreshMetrics();
   };
@@ -198,18 +258,30 @@ export function initInformesComunicados(deps) {
     variablesHint.textContent = `Variables disponibles: ${COMUNICADO_VARIABLES.join(' · ')}`;
   }
 
+  const markManualOverride = () => {
+    manualOverride = true;
+    lastTeachingKey = teachingKey({
+      school: schoolSelect?.value || '',
+      course: courseSelect?.value || '',
+      subject: subjectSelect?.value || '',
+    });
+  };
+
   schoolSelect?.addEventListener('change', () => {
+    markManualOverride();
     fillCourses();
     fillSubjects();
     fillStudents();
     refreshMetrics();
   });
   courseSelect?.addEventListener('change', () => {
+    markManualOverride();
     fillSubjects();
     fillStudents();
     refreshMetrics();
   });
   subjectSelect?.addEventListener('change', () => {
+    markManualOverride();
     fillStudents();
     refreshMetrics();
   });
@@ -302,7 +374,6 @@ export function initInformesComunicados(deps) {
       return;
     }
     try {
-      // Guardamos con variables: si el texto ya está resuelto, el docente puede pegar plantilla con {tags}.
       const saved = saveCustomComunicadoTemplate({ label, body }, userId());
       fillMotivos(saved.id);
       if (templateNameInput) templateNameInput.value = '';
@@ -321,8 +392,29 @@ export function initInformesComunicados(deps) {
     showAppToast('Plantilla eliminada.', 'ok');
   });
 
-  refreshAll();
+  fillMotivos();
+  applyFromTeachingContext({ force: true });
+  if (!schoolSelect?.value && !courseSelect?.value) {
+    // Sin Curso actual: deja la cascada vacía pero con opciones cargadas.
+    applyCascade({});
+    refreshMetrics();
+  }
+
   deps.onRefresh?.(refreshAll);
+
+  window.addEventListener('aula-clara:teaching-context-changed', () => {
+    applyFromTeachingContext({ force: true });
+  });
+
+  root.addEventListener('aula-clara:informes-sync-context', () => {
+    applyFromTeachingContext({ force: true });
+  });
+}
+
+/** Reaplica Curso actual al abrir la pestaña Informes. */
+export function syncInformesComunicadosFromContext() {
+  const root = document.querySelector('[data-herramientas] [data-informes-comunicados]');
+  root?.dispatchEvent(new CustomEvent('aula-clara:informes-sync-context'));
 }
 
 function escapeHtml(value) {

@@ -1,6 +1,6 @@
 import { registerSpaViewRefresh, showSpaView } from './spa-router.ts';
 import { initExcelImportWorkspaces } from './excel-import-ui.js';
-import { initInformesComunicados } from './informes-comunicados-ui.js';
+import { initInformesComunicados, syncInformesComunicadosFromContext } from './informes-comunicados-ui.js';
 import { showAppToast } from './app-feedback.js';
 
 const HUB_TABS = new Set(['importar', 'cuenta', 'informes']);
@@ -125,6 +125,9 @@ function activateToolsHubTab(root, tabId, { syncUrl = true } = {}) {
     panel.classList.toggle('is-hidden', !active);
     panel.hidden = !active;
   });
+  if (hub === 'informes') {
+    syncInformesComunicadosFromContext();
+  }
   if (syncUrl) {
     const tipo = hub === 'importar'
       ? (root.querySelector('.tools-tab.is-active')?.getAttribute('data-tools-tab') || 'alumnos')

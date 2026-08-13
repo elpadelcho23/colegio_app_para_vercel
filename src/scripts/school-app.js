@@ -5814,6 +5814,7 @@ async function bootstrap() {
       getStudentAverage: (studentId, subjectId = '') => average(gradesForStudent(studentId, subjectId)),
       getStudentAttendance: (studentId, subjectId = '') => attendanceRate(studentId, subjectId),
       courseLabel,
+      getTeachingContext: () => getTeachingContext(),
       getUserId: () => currentUser?.id || '',
       onRefresh: onPanelRefresh,
     },
