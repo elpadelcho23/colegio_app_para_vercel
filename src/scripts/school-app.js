@@ -5808,7 +5808,7 @@ async function bootstrap() {
     informes: {
       getSchools: () => schoolNamesForSelect(),
       getCourses: (escuela = '') => visibleCourses(escuela),
-      getSubjects: (course) => courseSubjectsForDisplay(course),
+      getSubjects: (course) => (course ? courseSubjectsForDisplay(course) : activeSubjects()),
       getStudents: (escuela = '', cursoId = '', subjectId = '') =>
         studentsInCiclo(escuela, cursoId).filter((student) => studentHasSubject(student, subjectId)),
       getStudentAverage: (studentId, subjectId = '') => average(gradesForStudent(studentId, subjectId)),
