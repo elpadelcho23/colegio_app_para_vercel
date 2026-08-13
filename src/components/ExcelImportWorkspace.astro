@@ -18,17 +18,17 @@ interface Props {
 const defaultCopy = {
   alumnos: {
     title: 'Cargar alumnos desde Excel',
-    description: 'Creá una plantilla con los nombres de columnas de tu colegio y reutilizala en cada carga.',
+    description: 'Subí el archivo y confirmá las columnas.',
     submitLabel: 'Importar alumnos',
   },
   asistencias: {
     title: 'Cargar asistencias desde Excel',
-    description: 'Definí cómo se lee tu planilla de presentismo una sola vez.',
+    description: 'Subí la planilla y confirmá las columnas.',
     submitLabel: 'Importar asistencias',
   },
   notas: {
     title: 'Cargar notas desde Excel',
-    description: 'Mapeá las columnas de tu planilla de calificaciones y guardá la plantilla.',
+    description: 'Subí la planilla y confirmá las columnas.',
     submitLabel: 'Importar notas',
   },
 } as const;
@@ -42,15 +42,17 @@ const {
 
 const maxFileMb = Math.round(EXCEL_IMPORT_LIMITS.maxFileBytes / (1024 * 1024));
 
+const studentExample = STUDENT_EXCEL_EXAMPLE_ROWS[0];
+
 const attendanceColumns = [
-  { label: 'Fecha', required: true },
-  { label: 'Colegio', required: true },
-  { label: 'Curso', required: true },
-  { label: 'Turno', required: true },
-  { label: 'Materia', required: true },
-  { label: 'Alumno', required: true },
-  { label: 'DNI', required: false },
-  { label: 'Estado', required: true },
+  { label: 'Fecha', required: true, hint: 'AAAA-MM-DD o fecha de Excel', example: '2026-03-12' },
+  { label: 'Colegio', required: true, hint: 'Nombre del colegio', example: 'Escuela Técnica 1' },
+  { label: 'Curso', required: true, hint: 'División', example: '6to 1ra' },
+  { label: 'Turno', required: true, hint: 'Mañana, Tarde o Noche', example: 'Mañana' },
+  { label: 'Materia', required: true, hint: 'Se crea si no existe', example: 'Literatura' },
+  { label: 'Alumno', required: true, hint: 'Nombre y apellido', example: 'Martina Ruiz' },
+  { label: 'DNI', required: false, hint: 'Mejora el match', example: '44111222' },
+  { label: 'Estado', required: true, hint: 'Presente, Ausente, P, A, Falta', example: 'Presente' },
 ];
 
 const attendanceNotes = [
@@ -61,15 +63,15 @@ const attendanceNotes = [
 ];
 
 const gradeColumns = [
-  { label: 'Fecha', required: true },
-  { label: 'Colegio', required: true },
-  { label: 'Curso', required: true },
-  { label: 'Turno', required: true },
-  { label: 'Materia', required: true },
-  { label: 'Alumno', required: true },
-  { label: 'DNI', required: false },
-  { label: 'Evaluacion', required: true },
-  { label: 'Calificacion', required: true },
+  { label: 'Fecha', required: true, hint: 'AAAA-MM-DD o fecha de Excel', example: '2026-03-12' },
+  { label: 'Colegio', required: true, hint: 'Nombre del colegio', example: 'Escuela Técnica 1' },
+  { label: 'Curso', required: true, hint: 'División', example: '6to 1ra' },
+  { label: 'Turno', required: true, hint: 'Mañana, Tarde o Noche', example: 'Mañana' },
+  { label: 'Materia', required: true, hint: 'Se crea si no existe', example: 'Literatura' },
+  { label: 'Alumno', required: true, hint: 'Nombre y apellido', example: 'Martina Ruiz' },
+  { label: 'DNI', required: false, hint: 'Mejora el match', example: '44111222' },
+  { label: 'Evaluacion', required: true, hint: 'Nombre de la prueba', example: 'Parcial 1' },
+  { label: 'Calificacion', required: true, hint: '1–10 o texto (S/C, Ausente…)', example: '8' },
 ];
 
 const gradeNotes = [
@@ -77,6 +79,54 @@ const gradeNotes = [
   'Calificación: 1–10 o texto (S/C, Ausente…).',
   'DNI opcional mejora el match. La materia se crea si no existe.',
   'Columnas opcionales: Importancia, Entrega, Motivo, Tipo, Período.',
+];
+
+const attendanceExampleRows = [
+  {
+    Fecha: '2026-03-12',
+    Colegio: 'Escuela Técnica 1',
+    Curso: '6to 1ra',
+    Turno: 'Mañana',
+    Materia: 'Literatura',
+    Alumno: 'Martina Ruiz',
+    DNI: '44111222',
+    Estado: 'Presente',
+  },
+  {
+    Fecha: '2026-03-12',
+    Colegio: 'Escuela Técnica 1',
+    Curso: '6to 1ra',
+    Turno: 'Mañana',
+    Materia: 'Literatura',
+    Alumno: 'Tomás Pereyra',
+    DNI: '45222333',
+    Estado: 'Ausente',
+  },
+];
+
+const gradeExampleRows = [
+  {
+    Fecha: '2026-03-12',
+    Colegio: 'Escuela Técnica 1',
+    Curso: '6to 1ra',
+    Turno: 'Mañana',
+    Materia: 'Literatura',
+    Alumno: 'Martina Ruiz',
+    DNI: '44111222',
+    Evaluacion: 'Parcial 1',
+    Calificacion: '8',
+  },
+  {
+    Fecha: '2026-03-12',
+    Colegio: 'Escuela Técnica 1',
+    Curso: '6to 1ra',
+    Turno: 'Mañana',
+    Materia: 'Literatura',
+    Alumno: 'Tomás Pereyra',
+    DNI: '45222333',
+    Evaluacion: 'Parcial 1',
+    Calificacion: '7',
+  },
 ];
 ---
 
@@ -104,18 +154,23 @@ const gradeNotes = [
 
   <div class="excel-toast is-hidden" data-excel-toast role="status" aria-live="polite"></div>
 
+  <div class="excel-workspace-extras">
   <details class="excel-template-library" data-excel-template-library>
     <summary>
-      <strong>Plantillas guardadas</strong>
+      <strong>Plantillas</strong>
       <span class="muted"> (opcional)</span>
     </summary>
     <div class="excel-template-library-head">
-      <p class="muted">Reutilizá un mapeo de columnas de otra carga.</p>
+      <p class="muted">Usá un mapeo guardado.</p>
       <div class="excel-template-library-actions">
         <button type="button" class="btn btn-secondary btn-sm" data-excel-template-new>
           + Nueva plantilla
         </button>
-        <a class="btn btn-ghost btn-sm" href={`/api/import/template?type=${importType}`}>Descargar ejemplo</a>
+        <a
+          class="btn btn-ghost btn-sm"
+          href={`/api/import/template?type=${importType}`}
+          data-excel-download-example
+        >Descargar ejemplo</a>
       </div>
     </div>
     <div class="excel-template-cards" data-excel-template-cards role="listbox" aria-label="Plantillas guardadas">
@@ -125,53 +180,34 @@ const gradeNotes = [
     </div>
   </details>
 
-  <section class="excel-template-builder is-hidden panel" data-excel-template-builder>
-    <div class="section-title">
-      <h4>Crear o editar plantilla</h4>
-      <p>Escribí el nombre exacto de cada columna como aparece en tu Excel (fila de encabezados).</p>
-    </div>
-    <div class="form-grid excel-template-builder-form">
-      <label class="full-width">
-        <span>Nombre de la plantilla</span>
-        <input type="text" data-excel-builder-name placeholder="Ej. Planilla colegio X - alumnos" />
-      </label>
-      <label>
-        <span>Fila de encabezados</span>
-        <input type="number" min="1" value="1" data-excel-builder-header-row />
-      </label>
-      <div class="excel-builder-fields full-width" data-excel-builder-fields></div>
-      <div class="button-row full-width">
-        <button type="button" class="btn btn-primary" data-excel-builder-save>Guardar plantilla</button>
-        <button type="button" class="btn btn-ghost" data-excel-builder-cancel>Cancelar</button>
-      </div>
-    </div>
-  </section>
-
   {importType === 'alumnos' ? (
-    <details class="excel-reference full-width">
-      <summary>Ver estructura de referencia (opcional)</summary>
+    <details class="excel-reference">
+      <summary>
+        <strong>Estructura</strong>
+        <span class="muted"> (opcional)</span>
+      </summary>
       <div class="section-title">
         <p>Hoja <strong>{STUDENT_EXCEL_SHEET}</strong> · podés usar otra estructura con plantilla personalizada.</p>
       </div>
-
       <div class="excel-reference-fields" aria-label="Columnas de referencia">
-        {STUDENT_EXCEL_COLUMNS.map((column) => (
-          <article class="excel-ref-field">
-            <div class="excel-ref-field-head">
-              <strong>{column.label}</strong>
-              {column.required
-                ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
-                : <span class="excel-ref-tag excel-ref-tag-optional">opcional</span>}
-            </div>
-            <p class="excel-ref-field-hint">{column.hint}</p>
-            <p class="excel-ref-field-example">
-              Ej: {STUDENT_EXCEL_EXAMPLE_ROWS[0][column.label as keyof typeof STUDENT_EXCEL_EXAMPLE_ROWS[0]] || '—'}
-            </p>
-          </article>
-        ))}
+        {STUDENT_EXCEL_COLUMNS.map((column) => {
+          const example = studentExample[column.label as keyof typeof studentExample];
+          const hintLooksLikeExample = column.hint.toLowerCase().startsWith('ej:');
+          return (
+            <article class="excel-ref-field">
+              <div class="excel-ref-field-head">
+                <strong>{column.label}</strong>
+                <span class={column.required ? 'excel-ref-tag excel-ref-tag-required' : 'excel-ref-tag excel-ref-tag-optional'}>
+                  {column.required ? 'obligatorio' : 'opcional'}
+                </span>
+              </div>
+              {!hintLooksLikeExample && <p class="excel-ref-field-hint">{column.hint}</p>}
+              {example ? <p class="excel-ref-field-example">Ej: {example}</p> : hintLooksLikeExample && <p class="excel-ref-field-example">{column.hint}</p>}
+            </article>
+          );
+        })}
       </div>
-
-      <div class="table-container excel-reference-table" role="region" aria-label="Ejemplo de hoja Excel de alumnos">
+      <div class="table-container excel-reference-table" role="region" tabindex="0" aria-label="Ejemplo de hoja Excel de alumnos">
         <p class="excel-reference-scroll-hint" aria-hidden="true">Deslizá → para ver todas las columnas</p>
         <table>
           <thead>
@@ -197,6 +233,7 @@ const gradeNotes = [
           </tbody>
         </table>
       </div>
+      <p class="excel-table-scroll-hint muted">Deslizá hacia los costados para ver la tabla completa.</p>
       <ul class="import-requirements excel-reference-notes">
         {STUDENT_EXCEL_NOTES.slice(0, 4).map((note) => (
           <li>{note}</li>
@@ -204,23 +241,26 @@ const gradeNotes = [
       </ul>
     </details>
   ) : importType === 'asistencias' ? (
-    <details class="excel-reference full-width">
-      <summary>Ver columnas sugeridas (opcional)</summary>
-
-      <div class="excel-reference-fields" aria-label="Columnas sugeridas">
+    <details class="excel-reference">
+      <summary>
+        <strong>Columnas</strong>
+        <span class="muted"> (opcional)</span>
+      </summary>
+      <div class="excel-reference-fields" aria-label="Columnas de referencia">
         {attendanceColumns.map((column) => (
           <article class="excel-ref-field">
             <div class="excel-ref-field-head">
               <strong>{column.label}</strong>
-              {column.required
-                ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
-                : <span class="excel-ref-tag excel-ref-tag-optional">opcional</span>}
+              <span class={column.required ? 'excel-ref-tag excel-ref-tag-required' : 'excel-ref-tag excel-ref-tag-optional'}>
+                {column.required ? 'obligatorio' : 'opcional'}
+              </span>
             </div>
+            <p class="excel-ref-field-hint">{column.hint}</p>
+            <p class="excel-ref-field-example">Ej: {column.example}</p>
           </article>
         ))}
       </div>
-
-      <div class="table-container excel-reference-table">
+      <div class="table-container excel-reference-table" role="region" tabindex="0" aria-label="Ejemplo de hoja Excel de asistencias">
         <p class="excel-reference-scroll-hint" aria-hidden="true">Deslizá → para ver todas las columnas</p>
         <table>
           <thead>
@@ -235,8 +275,18 @@ const gradeNotes = [
               ))}
             </tr>
           </thead>
+          <tbody>
+            {attendanceExampleRows.map((row) => (
+              <tr>
+                {attendanceColumns.map((column) => (
+                  <td>{row[column.label as keyof typeof row] || '—'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
+      <p class="excel-table-scroll-hint muted">Deslizá hacia los costados para ver la tabla completa.</p>
       <ul class="import-requirements excel-reference-notes">
         {attendanceNotes.map((note) => (
           <li>{note}</li>
@@ -244,23 +294,26 @@ const gradeNotes = [
       </ul>
     </details>
   ) : (
-    <details class="excel-reference full-width">
-      <summary>Ver columnas sugeridas (opcional)</summary>
-
-      <div class="excel-reference-fields" aria-label="Columnas sugeridas">
+    <details class="excel-reference">
+      <summary>
+        <strong>Columnas</strong>
+        <span class="muted"> (opcional)</span>
+      </summary>
+      <div class="excel-reference-fields" aria-label="Columnas de referencia">
         {gradeColumns.map((column) => (
           <article class="excel-ref-field">
             <div class="excel-ref-field-head">
               <strong>{column.label}</strong>
-              {column.required
-                ? <span class="excel-ref-tag excel-ref-tag-required">obligatorio</span>
-                : <span class="excel-ref-tag excel-ref-tag-optional">opcional</span>}
+              <span class={column.required ? 'excel-ref-tag excel-ref-tag-required' : 'excel-ref-tag excel-ref-tag-optional'}>
+                {column.required ? 'obligatorio' : 'opcional'}
+              </span>
             </div>
+            <p class="excel-ref-field-hint">{column.hint}</p>
+            <p class="excel-ref-field-example">Ej: {column.example}</p>
           </article>
         ))}
       </div>
-
-      <div class="table-container excel-reference-table">
+      <div class="table-container excel-reference-table" role="region" tabindex="0" aria-label="Ejemplo de hoja Excel de notas">
         <p class="excel-reference-scroll-hint" aria-hidden="true">Deslizá → para ver todas las columnas</p>
         <table>
           <thead>
@@ -275,8 +328,18 @@ const gradeNotes = [
               ))}
             </tr>
           </thead>
+          <tbody>
+            {gradeExampleRows.map((row) => (
+              <tr>
+                {gradeColumns.map((column) => (
+                  <td>{row[column.label as keyof typeof row] || '—'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
+      <p class="excel-table-scroll-hint muted">Deslizá hacia los costados para ver la tabla completa.</p>
       <ul class="import-requirements excel-reference-notes">
         {gradeNotes.map((note) => (
           <li>{note}</li>
@@ -284,6 +347,29 @@ const gradeNotes = [
       </ul>
     </details>
   )}
+  </div>
+
+  <section class="excel-template-builder is-hidden panel" data-excel-template-builder>
+    <div class="section-title">
+      <h4>Crear o editar plantilla</h4>
+      <p>Escribí el nombre de cada columna como en tu Excel.</p>
+    </div>
+    <div class="form-grid excel-template-builder-form">
+      <label class="full-width">
+        <span>Nombre de la plantilla</span>
+        <input type="text" data-excel-builder-name placeholder="Ej. Planilla colegio X - alumnos" />
+      </label>
+      <label>
+        <span>Fila de encabezados</span>
+        <input type="number" min="1" value="1" data-excel-builder-header-row />
+      </label>
+      <div class="excel-builder-fields full-width" data-excel-builder-fields></div>
+      <div class="button-row full-width">
+        <button type="button" class="btn btn-primary" data-excel-builder-save>Guardar plantilla</button>
+        <button type="button" class="btn btn-ghost" data-excel-builder-cancel>Cancelar</button>
+      </div>
+    </div>
+  </section>
 
   <form class="excel-workspace-form form-grid" data-excel-workspace-form>
     <div class="excel-dropzone full-width" data-excel-dropzone>
@@ -308,7 +394,7 @@ const gradeNotes = [
       <div class="excel-mapping-head">
         <div class="section-title">
           <h4>Confirmá columnas</h4>
-          <p>Para cada columna de tu Excel, elegí el tipo de dato (Nombre, Curso, Materia, etc.).</p>
+          <p>Elegí qué es cada columna (Nombre, Curso, etc.).</p>
         </div>
         <div class="excel-mapping-progress" data-excel-mapping-progress aria-live="polite">
           <span data-excel-mapping-progress-text>0 de 0 obligatorios</span>

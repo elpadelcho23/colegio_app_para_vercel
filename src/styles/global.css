@@ -3881,15 +3881,32 @@ label.checkbox-row {
 
 .excel-reference-table {
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   border: 1px solid #c8d8d2;
   border-radius: 0.65rem;
   background: #fff;
+  scrollbar-width: thin;
+  scrollbar-color: #6f8f86 #e8f0ec;
 }
 
-.excel-reference-scroll-hint {
+.excel-reference-table::-webkit-scrollbar {
+  height: 10px;
+}
+
+.excel-reference-table::-webkit-scrollbar-track {
+  background: #e8f0ec;
+  border-radius: 0 0 0.65rem 0.65rem;
+}
+
+.excel-reference-table::-webkit-scrollbar-thumb {
+  background: #6f8f86;
+  border-radius: 999px;
+}
+
+.excel-reference-scroll-hint,
+.excel-table-scroll-hint {
   display: none;
   margin: 0;
   padding: 0.45rem 0.65rem 0;
@@ -3919,6 +3936,7 @@ label.checkbox-row {
   border-top: 1px solid #e3ebe7;
   border-right: 1px solid #eef3f0;
   vertical-align: top;
+  white-space: nowrap;
 }
 
 .excel-reference-table tbody tr:nth-child(even) td {
@@ -3967,11 +3985,21 @@ label.checkbox-row {
   }
 
   .excel-reference-fields {
-    display: grid;
+    display: none;
   }
 
   .excel-reference-table {
-    display: none;
+    display: block;
+    max-width: 100%;
+  }
+
+  .excel-reference-scroll-hint,
+  .excel-table-scroll-hint {
+    display: block;
+  }
+
+  .excel-reference-table table {
+    min-width: 760px;
   }
 
   .excel-reference-notes {
@@ -4094,6 +4122,58 @@ label.checkbox-row {
 .excel-workspace {
   display: grid;
   gap: 1.15rem;
+}
+
+.excel-workspace-extras {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  align-items: start;
+}
+
+.excel-workspace-extras > details {
+  min-width: 0;
+}
+
+.excel-workspace-extras > details[open] {
+  grid-column: 1 / -1;
+}
+
+.excel-workspace-extras > details > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 44px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.84rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.excel-workspace-extras > details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.excel-workspace-extras > details > summary::before {
+  content: '▸';
+  flex-shrink: 0;
+  color: var(--muted, #5f6b66);
+}
+
+.excel-workspace-extras > details[open] > summary::before {
+  content: '▾';
+}
+
+.excel-workspace-extras > .excel-template-library:not([open]),
+.excel-workspace-extras > .excel-reference:not([open]) {
+  padding: 0;
+  gap: 0;
+}
+
+.excel-workspace-extras > details > summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .excel-workspace-steps {
@@ -4421,11 +4501,14 @@ label.checkbox-row {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   max-width: 100%;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #6f8f86 #e8f0ec;
 }
 
 .excel-preview-table table {
   width: max-content;
-  min-width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
   font-size: 0.85rem;
 }
@@ -4533,6 +4616,17 @@ label.checkbox-row {
   font-size: 0.78rem;
   color: var(--muted, #5f6b66);
   line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .excel-workspace-extras > .excel-template-library[open],
+  .excel-workspace-extras > .excel-reference[open] {
+    padding: 0.7rem 0.75rem;
+  }
+
+  .excel-workspace-extras > details > summary .muted {
+    display: none;
+  }
 }
 
 .excel-workspace-form {
