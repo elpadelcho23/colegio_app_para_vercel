@@ -1,5 +1,6 @@
 import { registerSpaViewRefresh, showSpaView } from './spa-router.ts';
 import { initExcelImportWorkspaces } from './excel-import-ui.js';
+import { initInformesComunicados } from './informes-comunicados-ui.js';
 import { showAppToast } from './app-feedback.js';
 
 const HUB_TABS = new Set(['importar', 'cuenta', 'informes']);
@@ -34,7 +35,7 @@ function syncToolsUrl(hubTab, importType = '', { replace = true } = {}) {
   else history.pushState(state, '', url);
 }
 
-export function initToolsView({ onImported, getCicloLectivo } = {}) {
+export function initToolsView({ onImported, getCicloLectivo, informes } = {}) {
   const root = document.querySelector('[data-herramientas]');
   if (!root) return;
 
@@ -45,6 +46,7 @@ export function initToolsView({ onImported, getCicloLectivo } = {}) {
     onImported: (importType, result) => onImported?.(importType, result),
     getCicloLectivo,
   });
+  if (informes) initInformesComunicados(informes);
 
   applyToolsQueryFromLocation(root);
 

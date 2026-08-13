@@ -1305,6 +1305,52 @@ h3 {
   background: color-mix(in srgb, var(--surface-muted) 70%, transparent);
 }
 
+.informe-context-grid {
+  margin-bottom: var(--space-4);
+}
+
+.informe-metrics {
+  margin: 0 0 var(--space-4);
+}
+
+.informe-metrics.is-hidden,
+.informe-metrics[hidden] {
+  display: none;
+}
+
+.metric-grid--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.informe-editor {
+  width: 100%;
+  min-height: 16rem;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: inherit;
+}
+
+.informe-variables {
+  margin: 0.35rem 0 var(--space-3);
+  font-size: 0.88rem;
+}
+
+.informe-actions {
+  margin-bottom: var(--space-4);
+}
+
+.informe-save-template {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
 .tools-hub-tab {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);

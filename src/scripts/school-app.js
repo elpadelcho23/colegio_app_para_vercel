@@ -5805,6 +5805,18 @@ async function bootstrap() {
   });
   initToolsView({
     getCicloLectivo: () => activeCicloLectivo(),
+    informes: {
+      getSchools: () => schoolNamesForSelect(),
+      getCourses: (escuela = '') => visibleCourses(escuela),
+      getSubjects: (course) => courseSubjectsForDisplay(course),
+      getStudents: (escuela = '', cursoId = '', subjectId = '') =>
+        studentsInCiclo(escuela, cursoId).filter((student) => studentHasSubject(student, subjectId)),
+      getStudentAverage: (studentId, subjectId = '') => average(gradesForStudent(studentId, subjectId)),
+      getStudentAttendance: (studentId, subjectId = '') => attendanceRate(studentId, subjectId),
+      courseLabel,
+      getUserId: () => currentUser?.id || '',
+      onRefresh: onPanelRefresh,
+    },
     onImported: async (importType, result) => {
       if (importType === 'alumnos') {
         const importedCiclo = Number(result?.cicloLectivo);

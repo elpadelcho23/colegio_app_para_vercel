@@ -266,22 +266,91 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
   data-tools-section="informes"
   hidden
 >
-  <section class="panel tools-section tools-placeholder" data-tools-informes-placeholder>
+  <section class="panel tools-section" data-informes-comunicados>
     <div class="section-title">
       <h2>Informes / Comunicados</h2>
-      <p>Espacio preparado para reportes del curso y mensajes a familias.</p>
-    </div>
-    <div class="empty tools-placeholder-card">
-      <h3>Próximamente</h3>
       <p>
-        Acá vas a poder generar informes de asistencia y calificaciones,
-        y armar comunicados para compartir con el equipo o las familias.
+        Elegí alumno y motivo. Se arma un texto profesional con promedio y asistencia
+        para retocar, copiar o imprimir.
       </p>
-      <p class="muted">Mientras tanto, usá Asistencia, Notas y el Panel para el seguimiento diario.</p>
-      <div class="button-row">
-        <button type="button" class="btn btn-secondary" data-spa-nav="asistencia">Ir a Asistencia</button>
-        <button type="button" class="btn btn-secondary" data-spa-nav="notas">Ir a Notas</button>
-        <button type="button" class="btn btn-ghost" data-spa-nav="panel">Volver al Panel</button>
+    </div>
+
+    <div class="filters-grid informe-context-grid">
+      <label>
+        <span>Escuela</span>
+        <select data-informe-school aria-label="Escuela del comunicado"></select>
+      </label>
+      <label>
+        <span>Curso</span>
+        <select data-informe-course aria-label="Curso del comunicado" disabled></select>
+      </label>
+      <label>
+        <span>Materia</span>
+        <select data-informe-subject aria-label="Materia del comunicado" disabled></select>
+      </label>
+      <label>
+        <span>Alumno</span>
+        <select data-informe-student aria-label="Alumno del comunicado" disabled></select>
+      </label>
+    </div>
+
+    <div class="informe-metrics is-hidden" data-informe-metrics hidden>
+      <div class="metric-grid metric-grid--compact">
+        <article class="metric">
+          <strong data-informe-promedio>—</strong>
+          <span>Promedio en la materia</span>
+        </article>
+        <article class="metric">
+          <strong data-informe-asistencia>—</strong>
+          <span>Asistencia en la materia</span>
+        </article>
+      </div>
+    </div>
+
+    <label class="full-width">
+      <span>Motivo / plantilla</span>
+      <select data-informe-motivo aria-label="Motivo del comunicado"></select>
+    </label>
+
+    <div class="button-row">
+      <button type="button" class="btn btn-primary" data-informe-generate>Generar texto</button>
+      <button type="button" class="btn btn-ghost" data-informe-delete-template hidden disabled>
+        Eliminar plantilla
+      </button>
+    </div>
+
+    <label class="full-width">
+      <span>Texto del comunicado</span>
+      <textarea
+        data-informe-editor
+        class="informe-editor"
+        rows="14"
+        placeholder="Seleccioná alumno y motivo para generar el texto. Después podés editarlo."
+        aria-label="Texto editable del comunicado"
+      ></textarea>
+    </label>
+    <p class="muted informe-variables" data-informe-variables></p>
+
+    <div class="button-row informe-actions">
+      <button type="button" class="btn btn-primary" data-informe-copy>Copiar al portapapeles</button>
+      <button type="button" class="btn btn-secondary" data-informe-print>Imprimir / Guardar PDF</button>
+    </div>
+
+    <div class="informe-save-template">
+      <div class="section-title">
+        <h3>Guardar plantilla personalizada</h3>
+        <p class="copy-collapse-mobile">
+          Guardá el texto actual (con variables como {'{alumno}'} si las dejás) para reutilizarlo después.
+        </p>
+      </div>
+      <div class="inline-form">
+        <input
+          type="text"
+          data-informe-template-name
+          placeholder="Nombre de la plantilla"
+          aria-label="Nombre de la plantilla personalizada"
+        />
+        <button type="button" class="btn btn-secondary" data-informe-save-template>Guardar plantilla</button>
       </div>
     </div>
   </section>
