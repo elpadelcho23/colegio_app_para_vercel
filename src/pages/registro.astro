@@ -1,6 +1,5 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import ExcelImportWorkspace from '../components/ExcelImportWorkspace.astro';
 ---
 
 <Layout title="Registro de alumnos">
@@ -9,35 +8,34 @@ import ExcelImportWorkspace from '../components/ExcelImportWorkspace.astro';
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
         <h1>Cargar alumnos</h1>
-        <p>Lo más rápido: importá desde Excel. Escuela, curso, materias y listado entran juntos.</p>
+        <p>Listado del curso. La importación masiva está en Herramientas.</p>
       </div>
       <div class="actions-group">
-        <button type="button" class="btn btn-primary btn-block" data-student-mode-trigger="excel">
-          Ir a Excel
-        </button>
+        <a class="btn btn-primary btn-block" href="/herramientas?tab=importar&tipo=alumnos">
+          Importar desde Excel
+        </a>
         <a class="btn btn-secondary btn-block" href="/cursos">Organizar cursos</a>
       </div>
     </header>
 
-    <section class="panel student-workspace">
+    <section class="panel student-import-cta">
       <div class="section-title">
         <h2>Importar desde Excel</h2>
-        <p>Recomendado. Mapeá columnas y guardá plantillas reutilizables.</p>
+        <p>
+          La carga en lote de alumnos, asistencias y notas está centralizada en Herramientas.
+        </p>
       </div>
+      <a class="btn btn-primary" href="/herramientas?tab=importar&tipo=alumnos">
+        Ir a Importar Datos → Alumnos
+      </a>
+    </section>
 
-      <div class="student-mode-panel full-width" data-student-mode-panel="excel">
-        <ExcelImportWorkspace
-          importType="alumnos"
-          title="Cargar alumnos desde Excel"
-          description="Subí el archivo y confirmá las columnas."
-        />
-      </div>
-
-      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual">
+    <section class="panel student-workspace">
+      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual" open>
         <summary class="panel-collapsible-summary">
           <span class="section-title">
             <h2>Cargar uno a uno</h2>
-            <p>Opcional. Si preferís cargar a mano, abrí este formulario.</p>
+            <p>Opcional. Si preferís cargar a mano, usá este formulario.</p>
           </span>
         </summary>
         <form class="form-grid" data-student-form>
@@ -79,26 +77,10 @@ import ExcelImportWorkspace from '../components/ExcelImportWorkspace.astro';
       <section class="panel">
         <div class="section-title">
           <h2>Alumnos cargados</h2>
-          <p>Listado con curso, materias y promedio actualizado. Estos alumnos aparecen en asistencia y calificaciones.</p>
+          <p>Listado con curso, materias y promedio actualizado.</p>
         </div>
         <div class="list" data-student-list></div>
       </section>
-    </section>
-
-    <section class="panel export-panel" data-excel-export="alumnos">
-      <div class="section-title">
-        <h2>Exportar alumnos a Excel</h2>
-        <p>Descargá el listado con escuela, curso, DNI, tutor y materias.</p>
-      </div>
-      <div class="filters-grid">
-        <select data-export-school aria-label="Escuela">
-          <option value="">Todas las escuelas</option>
-        </select>
-        <select data-export-course aria-label="Curso">
-          <option value="">Todos los cursos</option>
-        </select>
-      </div>
-      <button class="btn btn-secondary" type="button" data-export-submit>Exportar alumnos</button>
     </section>
   </main>
 </Layout>

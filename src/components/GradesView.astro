@@ -142,21 +142,6 @@ const { spaMode = false } = Astro.props;
     </div>
   </section>
 
-  <section class="responsive-grid is-balanced">
-    <div class="stack">
-      <section class="panel">
-        <div class="section-title">
-          <h2>Materias</h2>
-        </div>
-        <form class="inline-form" data-inline-subject-form>
-          <input name="nombre" placeholder="Nueva materia" aria-label="Nueva materia" />
-          <button class="btn btn-secondary" type="submit">+</button>
-        </form>
-        <div class="notes-list" data-inline-subject-list></div>
-      </section>
-    </div>
-  </section>
-
   <section class="panel">
     <div class="section-title">
       <h2>Estado académico</h2>
@@ -200,10 +185,10 @@ const { spaMode = false } = Astro.props;
 
 <p class="tools-nav-link-wrap">
   {spaMode ? (
-    <button type="button" class="tools-nav-link" data-tools-focus="excel" data-tools-tab="notas">
-      ¿Tenés planilla Excel? Importá o exportá en Excel y cuenta →
+    <button type="button" class="tools-nav-link" data-tools-focus="importar" data-tools-tab="notas">
+      ¿Tenés planilla Excel? Importá o exportá en Herramientas → Importar Datos
     </button>
   ) : (
-    <a class="tools-nav-link" href="/herramientas">¿Tenés planilla Excel? Importá o exportá en Excel y cuenta →</a>
+    <a class="tools-nav-link" href="/herramientas?tab=importar&tipo=notas">¿Tenés planilla Excel? Importá o exportá en Herramientas → Importar Datos</a>
   )}
 </p>

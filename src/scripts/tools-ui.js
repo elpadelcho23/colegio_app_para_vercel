@@ -2,6 +2,38 @@ import { registerSpaViewRefresh, showSpaView } from './spa-router.ts';
 import { initExcelImportWorkspaces } from './excel-import-ui.js';
 import { showAppToast } from './app-feedback.js';
 
+const HUB_TABS = new Set(['importar', 'cuenta', 'informes']);
+const IMPORT_TYPES = new Set(['alumnos', 'asistencias', 'notas']);
+
+function normalizeHubTab(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'excel' || raw === 'import' || raw === 'importar-datos') return 'importar';
+  if (HUB_TABS.has(raw)) return raw;
+  return 'importar';
+}
+
+function normalizeImportType(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (IMPORT_TYPES.has(raw)) return raw;
+  return '';
+}
+
+function buildToolsSearch(hubTab, importType = '') {
+  const params = new URLSearchParams();
+  params.set('tab', normalizeHubTab(hubTab));
+  const tipo = normalizeImportType(importType);
+  if (params.get('tab') === 'importar' && tipo) params.set('tipo', tipo);
+  return params.toString();
+}
+
+function syncToolsUrl(hubTab, importType = '', { replace = true } = {}) {
+  const search = buildToolsSearch(hubTab, importType);
+  const url = `/herramientas?${search}`;
+  const state = { spaView: 'herramientas' };
+  if (replace) history.replaceState(state, '', url);
+  else history.pushState(state, '', url);
+}
+
 export function initToolsView({ onImported, getCicloLectivo } = {}) {
   const root = document.querySelector('[data-herramientas]');
   if (!root) return;
@@ -13,10 +45,23 @@ export function initToolsView({ onImported, getCicloLectivo } = {}) {
     onImported: (importType, result) => onImported?.(importType, result),
     getCicloLectivo,
   });
+
+  applyToolsQueryFromLocation(root);
+
   registerSpaViewRefresh('herramientas', () => {
-    const tab = root.querySelector('.tools-tab.is-active')?.getAttribute('data-tools-tab');
-    if (tab) activateToolsTab(root, tab);
+    applyToolsQueryFromLocation(root);
   });
+}
+
+export function applyToolsQueryFromLocation(root = document.querySelector('[data-herramientas]')) {
+  if (!root) return;
+  const params = new URLSearchParams(window.location.search);
+  const hub = normalizeHubTab(params.get('tab') || 'importar');
+  const tipo = normalizeImportType(params.get('tipo') || '') || 'alumnos';
+  activateToolsHubTab(root, hub, { syncUrl: false });
+  if (hub === 'importar') activateToolsTab(root, tipo, { syncUrl: false });
+  // Normaliza la URL visible (tab=importar por defecto).
+  syncToolsUrl(hub, hub === 'importar' ? tipo : '');
 }
 
 export function scrollToToolsSection(section) {
@@ -24,6 +69,10 @@ export function scrollToToolsSection(section) {
   target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/**
+ * @param {string} section - importar|excel|cuenta|sync|install|plan|kit|informes|...
+ * @param {string} [tab] - alumnos|asistencias|notas
+ */
 export function navigateToToolsSection(section, tab) {
   if (section === 'ai' || section === 'entregas' || section === 'corregir' || section === 'contenido') {
     showSpaView('actividades');
@@ -32,43 +81,54 @@ export function navigateToToolsSection(section, tab) {
     }));
     return;
   }
-  showSpaView('herramientas');
+
+  const hub = sectionToHub(section);
+  const tipo = normalizeImportType(tab) || (hub === 'importar' ? 'alumnos' : '');
+  const search = buildToolsSearch(hub, tipo);
+  showSpaView('herramientas', { search });
+
   const root = document.querySelector('[data-herramientas]');
-  if (
-    section === 'sync'
-    || section === 'plan'
-    || section === 'kit'
-    || section === 'cuenta'
-    || section === 'install'
-  ) {
-    activateToolsHubTab(root, 'cuenta');
-  } else {
-    activateToolsHubTab(root, 'excel');
+  activateToolsHubTab(root, hub, { syncUrl: false });
+  if (hub === 'importar') activateToolsTab(root, tipo || 'alumnos', { syncUrl: false });
+  window.requestAnimationFrame(() => scrollToToolsSection(section === 'excel' ? 'excel' : section));
+}
+
+function sectionToHub(section) {
+  const value = String(section || '').toLowerCase();
+  if (value === 'sync' || value === 'plan' || value === 'kit' || value === 'cuenta' || value === 'install') {
+    return 'cuenta';
   }
-  if (tab && root) activateToolsTab(root, tab);
-  window.requestAnimationFrame(() => scrollToToolsSection(section));
+  if (value === 'informes' || value === 'comunicados') return 'informes';
+  return 'importar';
 }
 
 function initToolsHubTabs(root) {
   root.querySelectorAll('[data-tools-hub-tab]').forEach((tab) => {
     tab.addEventListener('click', () => {
-      activateToolsHubTab(root, tab.getAttribute('data-tools-hub-tab') || 'excel');
+      activateToolsHubTab(root, tab.getAttribute('data-tools-hub-tab') || 'importar');
     });
   });
 }
 
-function activateToolsHubTab(root, tabId) {
+function activateToolsHubTab(root, tabId, { syncUrl = true } = {}) {
   if (!root) return;
+  const hub = normalizeHubTab(tabId);
   root.querySelectorAll('[data-tools-hub-tab]').forEach((tab) => {
-    const active = tab.getAttribute('data-tools-hub-tab') === tabId;
+    const active = tab.getAttribute('data-tools-hub-tab') === hub;
     tab.classList.toggle('is-active', active);
     tab.setAttribute('aria-selected', active ? 'true' : 'false');
   });
   root.querySelectorAll('[data-tools-hub-panel]').forEach((panel) => {
-    const active = panel.getAttribute('data-tools-hub-panel') === tabId;
+    const active = panel.getAttribute('data-tools-hub-panel') === hub;
     panel.classList.toggle('is-hidden', !active);
     panel.hidden = !active;
   });
+  if (syncUrl) {
+    const tipo = hub === 'importar'
+      ? (root.querySelector('.tools-tab.is-active')?.getAttribute('data-tools-tab') || 'alumnos')
+      : '';
+    syncToolsUrl(hub, tipo);
+  }
 }
 
 function initToolsTabs(root) {
@@ -81,19 +141,23 @@ function initToolsTabs(root) {
   });
 }
 
-function activateToolsTab(root, tabId) {
+function activateToolsTab(root, tabId, { syncUrl = true } = {}) {
+  if (!root) return;
+  const tipo = normalizeImportType(tabId) || 'alumnos';
   root.querySelectorAll('[data-tools-tab]').forEach((tab) => {
-    const active = tab.getAttribute('data-tools-tab') === tabId;
+    const active = tab.getAttribute('data-tools-tab') === tipo;
     tab.classList.toggle('is-active', active);
     tab.setAttribute('aria-selected', active ? 'true' : 'false');
   });
 
   root.querySelectorAll('[data-tools-panel]').forEach((panel) => {
-    const active = panel.getAttribute('data-tools-panel') === tabId;
+    const active = panel.getAttribute('data-tools-panel') === tipo;
     panel.classList.toggle('is-hidden', !active);
     if (active) panel.removeAttribute('hidden');
     else panel.setAttribute('hidden', '');
   });
+
+  if (syncUrl) syncToolsUrl('importar', tipo);
 }
 
 export function initSimpleExcelImport(root, onImported) {

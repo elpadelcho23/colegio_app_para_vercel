@@ -110,10 +110,10 @@ const { spaMode = false } = Astro.props;
 
 <p class="tools-nav-link-wrap">
   {spaMode ? (
-    <button type="button" class="tools-nav-link" data-tools-focus="excel" data-tools-tab="asistencias">
-      ¿Tenés planilla Excel? Importá o exportá en Excel y cuenta →
+    <button type="button" class="tools-nav-link" data-tools-focus="importar" data-tools-tab="asistencias">
+      ¿Tenés planilla Excel? Importá o exportá en Herramientas → Importar Datos
     </button>
   ) : (
-    <a class="tools-nav-link" href="/herramientas">¿Tenés planilla Excel? Importá o exportá en Excel y cuenta →</a>
+    <a class="tools-nav-link" href="/herramientas?tab=importar&tipo=asistencias">¿Tenés planilla Excel? Importá o exportá en Herramientas → Importar Datos</a>
   )}
 </p>

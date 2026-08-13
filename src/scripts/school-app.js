@@ -1063,6 +1063,7 @@ function renderDashboard(root) {
   renderMetrics(root, [
     { value: students.length, label: 'Alumnos', view: 'registro', hint: 'Abrir' },
     { value: courses.length, label: 'Cursos', view: 'cursos', hint: 'Abrir' },
+    { value: activeSubjects().length, label: 'Materias', view: 'cursos', hint: 'Abrir' },
     { value: avg === null ? '-' : avg.toFixed(1), label: 'Promedio', view: 'notas', hint: 'Abrir' },
     {
       value: present === null ? '-' : `${present.toFixed(0)}%`,
@@ -1237,21 +1238,22 @@ function initStudents() {
   const modePanels = root.querySelectorAll('[data-student-mode-panel]');
 
   const setStudentMode = (mode) => {
-    const value = mode === 'excel' ? 'excel' : 'manual';
+    // La importación Excel vive en Herramientas; en Alumnos solo queda el alta manual.
+    const hasExcelPanel = Boolean(root.querySelector('[data-student-mode-panel="excel"]'));
+    const value = mode === 'excel' && hasExcelPanel ? 'excel' : 'manual';
     modeInputs.forEach((input) => {
       input.checked = input.value === value;
     });
     modePanels.forEach((panel) => {
       const panelMode = panel.getAttribute('data-student-mode-panel');
-      // Excel queda siempre visible (prioridad). Manual vive abajo en un <details>.
       if (panelMode === 'excel') {
-        panel.classList.remove('is-hidden');
+        panel.classList.toggle('is-hidden', value !== 'excel');
         return;
       }
       if (panelMode === 'manual') {
-        panel.classList.remove('is-hidden');
+        panel.classList.toggle('is-hidden', value !== 'manual');
         if (panel instanceof HTMLDetailsElement) {
-          panel.open = value === 'manual';
+          panel.open = value === 'manual' || !hasExcelPanel;
         }
       }
     });
@@ -1363,14 +1365,14 @@ function initStudents() {
 
   root.querySelectorAll('[data-student-mode-trigger]').forEach((button) => {
     button.addEventListener('click', () => {
-      const mode = button.getAttribute('data-student-mode-trigger') || 'excel';
+      const mode = button.getAttribute('data-student-mode-trigger') || 'manual';
       activateStudentMode(mode);
       const target = root.querySelector(`[data-student-mode-panel="${mode === 'manual' ? 'manual' : 'excel'}"]`);
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 
-  activateStudentMode('excel');
+  activateStudentMode('manual');
 
   const addSubjectFromInput = async () => {
     const subjectPayload = await upsertSubjectByName(newSubjectInput?.value);

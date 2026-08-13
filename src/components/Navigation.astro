@@ -10,15 +10,13 @@ const spaLinks = [
   { view: 'asistencia', href: '/asistencia', label: 'Asistencia' },
   { view: 'notas', href: '/notas', label: 'Calificaciones' },
   { view: 'actividades', href: '/actividades', label: 'Actividades' },
+  { view: 'herramientas', href: '/herramientas?tab=importar', label: 'Herramientas' },
 ] as const;
 
-const staticLinks = [
-  ...(user?.rol === 'admin' ? [{ href: '/admin/usuarios', label: 'Admin' }] : []),
-];
-
 const isActive = (href: string) => {
-  if (href === '/') return currentPath === '/';
-  return currentPath.startsWith(href);
+  const path = href.split('?')[0];
+  if (path === '/') return currentPath === '/';
+  return currentPath.startsWith(path);
 };
 ---
 
@@ -119,15 +117,6 @@ const isActive = (href: string) => {
               {link.label}
             </button>
           ))}
-          <p class="nav-section-label nav-section-label--secondary">Avanzado</p>
-          <button
-            type="button"
-            class="nav-tab nav-tab--secondary"
-            data-spa-nav="herramientas"
-            role="menuitem"
-          >
-            Excel y cuenta
-          </button>
         </>
       ) : (
         <>
@@ -141,27 +130,8 @@ const isActive = (href: string) => {
               {link.label}
             </a>
           ))}
-          <p class="nav-section-label nav-section-label--secondary">Avanzado</p>
-          <a
-            href="/herramientas"
-            class:list={[{ active: isActive('/herramientas') }]}
-            aria-current={isActive('/herramientas') ? 'page' : undefined}
-            role="menuitem"
-          >
-            Excel y cuenta
-          </a>
         </>
       )}
-      {staticLinks.map((link) => (
-        <a
-          href={link.href}
-          class:list={[{ active: isActive(link.href) }]}
-          aria-current={isActive(link.href) ? 'page' : undefined}
-          role="menuitem"
-        >
-          {link.label}
-        </a>
-      ))}
       {user ? (
         <form method="post" action="/api/auth/logout" class="nav-form" data-logout-form>
           <button type="submit">{isGuest ? 'Salir y borrar datos' : 'Salir'}</button>
@@ -210,7 +180,7 @@ const isActive = (href: string) => {
               Actividades
             </button>
             <button type="button" class="help-menu-item" role="menuitem" data-tour-start="herramientas">
-              Cuenta e instalar
+              Herramientas
             </button>
           </div>
 

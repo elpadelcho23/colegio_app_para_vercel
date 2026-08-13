@@ -11,7 +11,7 @@ import SchoolCyclePanel from '../components/SchoolCyclePanel.astro';
         <h1>Cursos y divisiones</h1>
         <p>Base de trabajo para inscripciones, asistencia y reportes.</p>
       </div>
-      <a class="btn btn-primary btn-block" href="/registro">Importar alumnos (Excel)</a>
+      <a class="btn btn-primary btn-block" href="/herramientas?tab=importar&tipo=alumnos">Importar alumnos (Excel)</a>
     </header>
 
     <SchoolCyclePanel />
@@ -59,10 +59,22 @@ import SchoolCyclePanel from '../components/SchoolCyclePanel.astro';
       <section class="panel">
         <div class="section-title">
           <h2>Cursos activos</h2>
-          <p>Resumen de alumnos y materias por división.</p>
+          <p>Divisiones del ciclo lectivo seleccionado, con alumnos y materias vinculadas.</p>
         </div>
         <div class="list" data-course-list></div>
       </section>
+    </section>
+
+    <section class="panel" data-subjects>
+      <div class="section-title">
+        <h2>Materias</h2>
+        <p>Gestioná las materias del docente. Se usan en Curso actual, Notas y Asistencia.</p>
+      </div>
+      <form class="inline-form" data-subject-form>
+        <input name="nombre" placeholder="Nueva materia" aria-label="Nueva materia" required />
+        <button class="btn btn-secondary" type="submit">Crear materia</button>
+      </form>
+      <div class="list" data-subject-list></div>
     </section>
 
     <section class="panel import-panel" data-excel-import="cursos">

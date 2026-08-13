@@ -36,7 +36,7 @@ function updateNavState(view: SpaViewId) {
   });
 }
 
-export function showSpaView(view: SpaViewId, options: { replace?: boolean; skipHistory?: boolean } = {}) {
+export function showSpaView(view: SpaViewId, options: { replace?: boolean; skipHistory?: boolean; search?: string } = {}) {
   if (!SPA_VIEWS.includes(view)) view = 'panel';
 
   document.querySelectorAll('[data-spa-view]').forEach((section) => {
@@ -51,7 +51,15 @@ export function showSpaView(view: SpaViewId, options: { replace?: boolean; skipH
   updateNavState(view);
   updateDocumentTitle(view);
 
-  const path = VIEW_TO_PATH[view];
+  let path = VIEW_TO_PATH[view];
+  if (typeof options.search === 'string') {
+    const query = options.search.replace(/^\?/, '');
+    if (query) path += `?${query}`;
+  } else if (view === 'herramientas' && typeof window !== 'undefined') {
+    const current = window.location.pathname === '/herramientas' ? window.location.search.replace(/^\?/, '') : '';
+    if (current) path += `?${current}`;
+  }
+
   if (!options.skipHistory) {
     const state = { spaView: view };
     if (options.replace) history.replaceState(state, '', path);
@@ -79,6 +87,10 @@ export function initSpaRouter(initialView: SpaViewId) {
       refreshHandlers.get(view)?.();
       return;
     }
+    if (view === 'herramientas') {
+      showSpaView(view, { search: 'tab=importar' });
+      return;
+    }
     showSpaView(view);
   });
 
@@ -87,6 +99,10 @@ export function initSpaRouter(initialView: SpaViewId) {
     showSpaView(view, { skipHistory: true });
   });
 
-  showSpaView(initialView, { replace: true, skipHistory: true });
-  history.replaceState({ spaView: initialView }, '', VIEW_TO_PATH[initialView]);
+  const initialSearch = initialView === 'herramientas'
+    ? (window.location.search.replace(/^\?/, '') || 'tab=importar')
+    : undefined;
+  showSpaView(initialView, { replace: true, skipHistory: true, search: initialSearch });
+  const bootPath = initialSearch ? `${VIEW_TO_PATH[initialView]}?${initialSearch}` : VIEW_TO_PATH[initialView];
+  history.replaceState({ spaView: initialView }, '', bootPath);
 }

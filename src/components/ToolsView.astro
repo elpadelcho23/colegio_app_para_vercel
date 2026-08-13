@@ -4,9 +4,9 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
 
 <header class="page-header">
   <div class="header-content">
-    <p class="eyebrow">Avanzado</p>
-    <h1>Excel y cuenta</h1>
-    <p class="copy-collapse-mobile">Planillas, sincronización y plan.</p>
+    <p class="eyebrow">Operaciones</p>
+    <h1>Herramientas</h1>
+    <p class="copy-collapse-mobile">Importaciones en lote, cuenta e informes.</p>
   </div>
 </header>
 
@@ -15,13 +15,13 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     type="button"
     class="tools-hub-tab is-active"
     role="tab"
-    data-tools-hub-tab="excel"
+    data-tools-hub-tab="importar"
     aria-selected="true"
-    aria-controls="tools-hub-excel"
-    id="tools-hub-tab-excel"
+    aria-controls="tools-hub-importar"
+    id="tools-hub-tab-importar"
   >
-    <span class="copy-long">Importar Excel</span>
-    <span class="copy-short">Excel</span>
+    <span class="copy-long">Importar Datos</span>
+    <span class="copy-short">Importar</span>
   </button>
   <button
     type="button"
@@ -32,22 +32,38 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     aria-controls="tools-hub-cuenta"
     id="tools-hub-tab-cuenta"
   >
-    <span class="copy-long">Cuenta / instalar</span>
+    <span class="copy-long">Cuenta / Instalar</span>
     <span class="copy-short">Cuenta</span>
+  </button>
+  <button
+    type="button"
+    class="tools-hub-tab"
+    role="tab"
+    data-tools-hub-tab="informes"
+    aria-selected="false"
+    aria-controls="tools-hub-informes"
+    id="tools-hub-tab-informes"
+  >
+    <span class="copy-long">Informes / Comunicados</span>
+    <span class="copy-short">Informes</span>
   </button>
 </div>
 
 <section
   class="tools-hub-panel"
-  id="tools-hub-excel"
+  id="tools-hub-importar"
   role="tabpanel"
-  aria-labelledby="tools-hub-tab-excel"
-  data-tools-hub-panel="excel"
+  aria-labelledby="tools-hub-tab-importar"
+  data-tools-hub-panel="importar"
   data-tools-section="excel"
 >
   <div class="section-title">
-    <h2>Importar Excel</h2>
-    <p>Subí el archivo y confirmá las columnas. También está en Alumnos (recomendado).</p>
+    <h2>Importar datos en lote</h2>
+    <p>
+      Acá centralizás la carga masiva desde Excel:
+      <strong>Alumnos</strong>, <strong>Asistencias</strong> y <strong>Notas</strong>.
+      Elegí el tipo, subí la planilla y confirmá las columnas.
+    </p>
   </div>
 
   <div class="tools-tabs" role="tablist" aria-label="Tipo de importación Excel">
@@ -237,6 +253,36 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
         <pre class="curriculum-preview" data-curriculum-preview>Elegí una materia.</pre>
         <button type="button" class="btn btn-primary" data-recovery-ai-goto data-spa-nav="actividades" data-activity-flow-open="contenido">Generar recuperación con IA</button>
       </article>
+    </div>
+  </section>
+</section>
+
+<section
+  class="tools-hub-panel is-hidden"
+  id="tools-hub-informes"
+  role="tabpanel"
+  aria-labelledby="tools-hub-tab-informes"
+  data-tools-hub-panel="informes"
+  data-tools-section="informes"
+  hidden
+>
+  <section class="panel tools-section tools-placeholder" data-tools-informes-placeholder>
+    <div class="section-title">
+      <h2>Informes / Comunicados</h2>
+      <p>Espacio preparado para reportes del curso y mensajes a familias.</p>
+    </div>
+    <div class="empty tools-placeholder-card">
+      <h3>Próximamente</h3>
+      <p>
+        Acá vas a poder generar informes de asistencia y calificaciones,
+        y armar comunicados para compartir con el equipo o las familias.
+      </p>
+      <p class="muted">Mientras tanto, usá Asistencia, Notas y el Panel para el seguimiento diario.</p>
+      <div class="button-row">
+        <button type="button" class="btn btn-secondary" data-spa-nav="asistencia">Ir a Asistencia</button>
+        <button type="button" class="btn btn-secondary" data-spa-nav="notas">Ir a Notas</button>
+        <button type="button" class="btn btn-ghost" data-spa-nav="panel">Volver al Panel</button>
+      </div>
     </div>
   </section>
 </section>

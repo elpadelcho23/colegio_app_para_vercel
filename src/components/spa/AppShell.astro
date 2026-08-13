@@ -1,7 +1,6 @@
 ﻿---
 import AttendanceView from '../AttendanceView.astro';
 import ActivityAiPanel from '../ActivityAiPanel.astro';
-import ExcelImportWorkspace from '../ExcelImportWorkspace.astro';
 import GradesView from '../GradesView.astro';
 import SchoolCyclePanel from '../SchoolCyclePanel.astro';
 import ToolsView from '../ToolsView.astro';
@@ -62,9 +61,9 @@ const { initialView = 'panel' } = Astro.props;
       <div class="hero-actions hero-actions--triple">
         <button type="button" data-spa-nav="asistencia" class="btn btn-primary hero-cta">Asistencia</button>
         <button type="button" data-spa-nav="actividades" class="btn btn-secondary hero-cta">Actividades</button>
-        <button type="button" data-spa-nav="herramientas" class="btn btn-secondary hero-cta">
-          <span class="copy-long">Importar alumnos</span>
-          <span class="copy-short">Excel</span>
+        <button type="button" class="btn btn-secondary hero-cta" data-tools-focus="importar" data-tools-tab="alumnos">
+          <span class="copy-long">Importar desde Excel</span>
+          <span class="copy-short">Importar</span>
         </button>
       </div>
     </section>
@@ -132,33 +131,37 @@ const { initialView = 'panel' } = Astro.props;
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
         <h1>Cargar alumnos</h1>
-        <p class="copy-collapse-mobile">Importá desde Excel: escuela, curso, materias y listado.</p>
+        <p class="copy-collapse-mobile">Listado del curso. La importación masiva está en Herramientas.</p>
       </div>
-      <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block">
-        <span class="copy-long">Organizar cursos</span>
-        <span class="copy-short">Cursos</span>
-      </button>
+      <div class="actions-group">
+        <button type="button" class="btn btn-primary btn-block" data-tools-focus="importar" data-tools-tab="alumnos">
+          Importar desde Excel
+        </button>
+        <button type="button" data-spa-nav="cursos" class="btn btn-secondary btn-block">
+          <span class="copy-long">Organizar cursos</span>
+          <span class="copy-short">Cursos</span>
+        </button>
+      </div>
     </header>
 
-    <section class="panel student-workspace">
+    <section class="panel student-import-cta">
       <div class="section-title">
         <h2>Importar desde Excel</h2>
-        <p class="copy-collapse-mobile">Subí la planilla, mapeá columnas y guardá.</p>
+        <p class="copy-collapse-mobile">
+          La carga en lote de alumnos, asistencias y notas está centralizada en Herramientas.
+        </p>
       </div>
+      <button type="button" class="btn btn-primary" data-tools-focus="importar" data-tools-tab="alumnos">
+        Ir a Importar Datos → Alumnos
+      </button>
+    </section>
 
-      <div class="student-mode-panel full-width" data-student-mode-panel="excel">
-        <ExcelImportWorkspace
-          importType="alumnos"
-          title="Cargar alumnos desde Excel"
-          description="Subí el archivo y confirmá las columnas."
-        />
-      </div>
-
-      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual">
+    <section class="panel student-workspace">
+      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual" open>
         <summary class="panel-collapsible-summary">
           <span class="section-title">
             <h2>Cargar uno a uno</h2>
-            <p class="copy-collapse-mobile">Formulario manual, opcional.</p>
+            <p class="copy-collapse-mobile">Formulario manual para altas puntuales.</p>
           </span>
         </summary>
         <form class="form-grid" data-student-form>
@@ -273,7 +276,7 @@ const { initialView = 'panel' } = Astro.props;
         <h1>Cursos y divisiones</h1>
         <p class="copy-collapse-mobile">Escuela, curso, materias y horarios del ciclo.</p>
       </div>
-      <button type="button" data-spa-nav="registro" class="btn btn-primary btn-block">
+      <button type="button" class="btn btn-primary btn-block" data-tools-focus="importar" data-tools-tab="alumnos">
         <span class="copy-long">Importar alumnos (Excel)</span>
         <span class="copy-short">Importar Excel</span>
       </button>
@@ -331,6 +334,18 @@ const { initialView = 'panel' } = Astro.props;
         </div>
         <div class="list" data-course-list></div>
       </section>
+    </section>
+
+    <section class="panel" data-subjects>
+      <div class="section-title">
+        <h2>Materias</h2>
+        <p>Gestioná las materias del docente. Se usan en Curso actual, Notas y Asistencia.</p>
+      </div>
+      <form class="inline-form" data-subject-form>
+        <input name="nombre" placeholder="Nueva materia" aria-label="Nueva materia" required />
+        <button class="btn btn-secondary" type="submit">Crear materia</button>
+      </form>
+      <div class="list" data-subject-list></div>
     </section>
 
     <section class="panel import-panel" data-excel-import="cursos">
@@ -684,7 +699,7 @@ const { initialView = 'panel' } = Astro.props;
     </dialog>
   </section>
 
-  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="herramientas" data-spa-title="Excel y cuenta" data-herramientas>
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="herramientas" data-spa-title="Herramientas" data-herramientas>
     <ToolsView />
   </section>
 </div>
