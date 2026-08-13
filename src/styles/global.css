@@ -973,12 +973,112 @@ h3 {
     font-size: 0.98rem;
   }
 
+  .metric-grid {
+    gap: 0.5rem;
+  }
+
   .metric {
-    padding: 0.85rem 0.9rem;
+    padding: 0.65rem 0.7rem;
   }
 
   .metric strong {
-    font-size: 1.4rem;
+    font-size: 1.28rem;
+  }
+
+  .metric span {
+    font-size: 0.78rem;
+  }
+
+  .hero-actions--triple {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .hero-actions--triple .hero-cta:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .panel-day-summary {
+    padding: 0.75rem;
+  }
+
+  .summary-actions .btn {
+    width: 100%;
+  }
+
+  .page-stack,
+  .page-container {
+    gap: 0.75rem;
+  }
+
+  .page-stack > .hero-card + .panel,
+  .page-stack > .panel + .panel,
+  .page-stack > .panel + details.panel,
+  .page-stack > details.panel + .panel {
+    margin-top: 0;
+  }
+
+  .activity-mode-picker,
+  .activity-template-picker {
+    gap: 0.45rem;
+  }
+
+  .activity-mode-picker > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .activity-mode-card small,
+  .template-card small {
+    display: none;
+  }
+
+  .template-card,
+  .activity-mode-card {
+    min-height: 44px;
+    padding: 0.5rem 0.6rem;
+    gap: 0.35rem;
+  }
+
+  .activity-mode-card strong {
+    font-size: 0.86rem;
+  }
+
+  .student-row,
+  .course-row,
+  .event-card,
+  .ai-limits-card,
+  .kit-card.panel {
+    padding: 0.6rem 0.7rem;
+    gap: 0.4rem;
+  }
+
+  .list,
+  .stack {
+    gap: 0.5rem;
+  }
+
+  .attendance-options {
+    grid-template-columns: repeat(2, minmax(4.4rem, 1fr));
+    min-width: 9.2rem;
+    gap: 0.35rem;
+  }
+
+  .attendance-options button {
+    min-height: 40px;
+    padding: 0.35rem 0.4rem;
+    font-size: 0.78rem;
+  }
+
+  .student-row .btn,
+  .course-row .btn,
+  .seguimiento-row .btn {
+    min-height: 40px;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.8rem;
+  }
+
+  .excel-template-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .product-tour-card {
@@ -1238,8 +1338,12 @@ h3 {
 }
 
 .hero-actions--triple {
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
+}
+
+.hero-actions--triple .hero-cta:last-child {
+  grid-column: 1 / -1;
 }
 
 .hero-actions--triple .hero-cta {
@@ -1251,6 +1355,10 @@ h3 {
 @media (min-width: 640px) {
   .hero-actions--triple {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hero-actions--triple .hero-cta:last-child {
+    grid-column: auto;
   }
 }
 
@@ -2191,12 +2299,21 @@ a.tools-nav-link {
 .metric-grid,
 .summary-strip {
   display: grid;
-  grid-template-columns: 1fr;
   gap: var(--space-3);
 }
 
+.metric-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.summary-strip {
+  grid-template-columns: 1fr;
+}
+
 .metric {
+  min-width: 0;
   padding: var(--space-4);
+  background: var(--surface);
 }
 
 .metric strong {
@@ -2255,10 +2372,6 @@ body[data-active-spa-view='asistencia'] .metric--link[data-spa-nav='asistencia']
 }
 
 @media (min-width: 560px) {
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .summary-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -2423,10 +2536,15 @@ body[data-active-spa-view='asistencia'] .metric--link[data-spa-nav='asistencia']
 .student-row,
 .course-row {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-4);
+}
+
+.student-row > .notes-list,
+.student-row > .actions-group {
+  grid-column: 1 / -1;
 }
 
 .student-row small,
@@ -3058,7 +3176,7 @@ td small {
 
 .activity-template-picker {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
@@ -3343,7 +3461,7 @@ label.checkbox-row {
 
 .activity-mode-picker {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
@@ -3380,14 +3498,18 @@ label.checkbox-row {
 }
 
 @media (min-width: 560px) {
-  .activity-mode-picker {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .activity-mode-picker > :last-child:nth-child(odd) {
+    grid-column: auto;
   }
 }
 
 @media (min-width: 1024px) {
   .activity-mode-picker {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .activity-mode-picker > :last-child:nth-child(odd) {
+    grid-column: auto;
   }
 }
 
@@ -3553,7 +3675,7 @@ label.checkbox-row {
 .ai-limits-grid {
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
 .ai-limits-card {
@@ -4537,11 +4659,14 @@ label.checkbox-row {
   }
 
   .excel-mapping-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(7rem, 1.1fr);
+    gap: 0.4rem;
+    padding: 0.5rem 0.6rem;
   }
 
+  .excel-mapping-row-label small,
   .excel-mapping-status {
-    justify-self: start;
+    display: none;
   }
 }
 
@@ -4575,7 +4700,7 @@ label.checkbox-row {
 .excel-template-cards {
   display: grid;
   gap: 0.55rem;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
 
 .excel-template-empty {
