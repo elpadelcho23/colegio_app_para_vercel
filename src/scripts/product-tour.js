@@ -1,4 +1,5 @@
 import { productGuidesKey, productTourKey } from '../lib/client-storage-keys.ts';
+import { showAppToast } from './app-feedback.js';
 import { showSpaView } from './spa-router.ts';
 import { navigateToToolsSection } from './tools-ui.js';
 import { closeMenu, openMenu } from './ui-nav.js';
@@ -10,81 +11,191 @@ import { closeMenu, openMenu } from './ui-nav.js';
  * - Acciones reales cuando se puede; softRequire si el aula aún no tiene datos.
  */
 
-const BASIC_TOUR = {
-  id: 'basico',
-  title: 'Tutorial inicial',
-  steps: [
-    {
-      id: 'mapa',
-      view: 'panel',
-      title: 'El orden del día',
-      body: 'Primero elegís el Curso actual. Después cargás alumnos y pasás lista o notas.',
-      bodyShort: 'Curso → alumnos → lista o notas.',
-      why: 'Con este mapa no te perdés en el menú.',
-      actionHint: 'Tocá Empezar',
-      target: '[data-panel-hero], [data-onboarding]',
-      require: 'next',
-      nextLabel: 'Empezar',
-    },
-    {
-      id: 'curso-actual',
-      view: 'panel',
-      title: 'Elegí el curso de hoy',
-      body: 'En Curso actual elegí escuela, curso y materia. Después tocá “Usar este curso”.',
-      bodyShort: 'Curso + materia → Usar este curso.',
-      why: 'Asistencia, notas y actividades usan siempre esta elección.',
-      actionHint: 'Confirmá con “Usar este curso”',
-      target: '[data-global-teaching-context]',
-      openGtc: true,
-      softChrome: true,
-      require: 'teaching-context',
-      autoAdvance: true,
-    },
-    {
-      id: 'excel',
-      view: 'registro',
-      title: 'Cargá alumnos',
-      body: 'Tocá “Importar desde Excel” para ir a Herramientas e importar el listado. Si ya tenés alumnos, podés Seguir.',
-      bodyShort: 'Importar desde Excel, o Seguí si ya hay alumnos.',
-      why: 'Sin alumnos no podés pasar lista ni cargar notas.',
-      actionHint: 'Tocá Importar desde Excel',
-      target: '[data-spa-view="registro"] [data-tools-focus="importar"], [data-spa-view="registro"] .student-import-cta',
-      require: 'click',
-      requireClick: '[data-spa-view="registro"] [data-tools-focus="importar"], [data-spa-view="registro"] .student-import-cta .btn',
-      softRequire: true,
-      autoAdvance: true,
-    },
-    {
-      id: 'asistencia',
-      view: 'asistencia',
-      title: 'Pasá lista',
-      body: 'Marcá Presente o Ausente. Si todavía no hay alumnos, Seguí y volvé cuando los cargues.',
-      bodyShort: 'Presente/Ausente, o Seguí si no hay alumnos.',
-      why: 'Es el uso diario más común.',
-      actionHint: 'Tocá Presente o Ausente',
-      target: '[data-spa-view="asistencia"] [data-attendance-list], [data-spa-view="asistencia"] [data-attendance-take-view]',
-      require: 'click',
-      requireClick:
-        '[data-spa-view="asistencia"] [data-attendance-list] button, [data-spa-view="asistencia"] [data-attendance-take-view] button, [data-spa-view="asistencia"] [data-attendance-take-view]',
-      softRequire: true,
-      autoAdvance: true,
-    },
-    {
-      id: 'mas-guias',
-      view: 'panel',
-      title: 'Más ayuda cuando haga falta',
-      body: 'En “?” quedan guías cortas: curso, Excel, lista, notas, cursos y actividades.',
-      bodyShort: 'En “?” hay más guías cortas.',
-      why: 'Aprendés el resto cuando lo necesitás, no todo de golpe.',
-      actionHint: 'Tocá Listo',
-      target: '[data-help-menu], [data-menu-toggle]',
-      openMenuOnMobile: true,
-      openHelpOnMobile: true,
-      require: 'next',
-      nextLabel: 'Listo',
-    },
+const HELP_STEP = {
+  id: 'mas-guias',
+  view: 'panel',
+  title: 'Más ayuda en “?”',
+  body: 'Abrimos el menú de ayuda. Ahí quedan guías cortas (Excel, lista, notas, cursos) para cuando las necesites.',
+  bodyShort: 'En “?” hay más guías cortas.',
+  why: 'El resto se aprende cuando hace falta, no todo de golpe.',
+  actionHint: 'Tocá Listo',
+  target: '[data-help-menu]',
+  preferTarget: '[data-tour-guides], [data-help-menu]',
+  openHelp: true,
+  previewGuides: true,
+  require: 'next',
+  nextLabel: 'Listo',
+  card: 'top',
+};
+
+const CURSO_STEP = {
+  id: 'curso-actual',
+  view: 'panel',
+  title: 'Elegí el curso de hoy',
+  body: 'En Curso actual elegí escuela, curso y materia. Después tocá “Usar este curso”.',
+  bodyShort: 'Curso + materia → Usar este curso.',
+  why: 'Asistencia y notas usan siempre esta elección.',
+  actionHint: 'Confirmá con “Usar este curso”',
+  target: '[data-global-teaching-context]',
+  openGtc: true,
+  softChrome: true,
+  require: 'teaching-context',
+  allowSkipIf: 'teaching-context',
+  skipLabel: 'Ya está elegido',
+  autoAdvance: true,
+};
+
+const LISTA_STEP = {
+  id: 'asistencia',
+  view: 'asistencia',
+  title: 'Pasá lista',
+  body: 'Marcá Presente o Ausente en un alumno. Si todavía no hay lista, usá “Todavía no hay alumnos”.',
+  bodyShort: 'Tocá Presente o Ausente.',
+  why: 'Es el uso diario más común.',
+  actionHint: 'Tocá Presente o Ausente',
+  target: '[data-spa-view="asistencia"] [data-attendance-list]',
+  require: 'click',
+  requireClick: '[data-spa-view="asistencia"] [data-attendance-list] button',
+  allowSkipIf: 'no-students',
+  skipLabel: 'Todavía no hay alumnos',
+  autoAdvance: true,
+  card: 'top',
+};
+
+const EXCEL_STEPS = [
+  {
+    id: 'excel-subir',
+    view: 'herramientas',
+    title: 'Subí el listado',
+    body: 'En Importar → Alumnos, tocá la zona blanca y elegí el Excel (.xlsx). Si ya tenés alumnos, usá “Ya tengo alumnos”.',
+    bodyShort: 'Subí el Excel o “Ya tengo alumnos”.',
+    why: 'Un archivo arma escuela, curso y alumnos juntos.',
+    actionHint: 'Elegí un archivo Excel',
+    target: '[data-spa-view="herramientas"] [data-tools-panel="alumnos"] [data-excel-dropzone]',
+    openToolsHub: 'importar',
+    require: 'excel-file',
+    allowSkipIf: 'students',
+    skipLabel: 'Ya tengo alumnos',
+    autoAdvance: true,
+    card: 'top',
+  },
+  {
+    id: 'excel-columnas',
+    view: 'herramientas',
+    title: 'Confirmá las columnas',
+    body: 'Revisá que Nombre, Curso, Escuela y Turno coincidan. Si tu planilla es distinta, mapeá a mano.',
+    bodyShort: 'Revisá el mapeo de columnas.',
+    why: 'Si una columna está mal, los alumnos no entran.',
+    actionHint: 'Cuando el mapeo aparezca, tocá Siguiente',
+    target: '[data-spa-view="herramientas"] [data-tools-panel="alumnos"] [data-excel-mapping-panel]',
+    preferTarget: '[data-spa-view="herramientas"] [data-tools-panel="alumnos"] [data-excel-dropzone]',
+    openToolsHub: 'importar',
+    require: 'excel-mapping',
+    allowSkipIf: 'students',
+    skipLabel: 'Ya tengo alumnos',
+    autoAdvance: true,
+    card: 'top',
+  },
+  {
+    id: 'excel-importar',
+    view: 'herramientas',
+    title: 'Importá los alumnos',
+    body: 'Tocá “Importar alumnos”. Eso crea escuela, curso, materias y el listado.',
+    bodyShort: 'Tocá Importar alumnos.',
+    why: 'Sin este paso el archivo no entra al aula.',
+    actionHint: 'Tocá Importar alumnos',
+    target: '[data-spa-view="herramientas"] [data-tools-panel="alumnos"] [data-excel-submit]',
+    openToolsHub: 'importar',
+    require: 'excel-imported',
+    requireClick: '[data-spa-view="herramientas"] [data-tools-panel="alumnos"] [data-excel-submit]',
+    allowSkipIf: 'students',
+    skipLabel: 'Ya tengo alumnos',
+    autoAdvance: true,
+    card: 'top',
+  },
+  CURSO_STEP,
+  LISTA_STEP,
+  HELP_STEP,
+];
+
+const MANUAL_STEPS = [
+  {
+    id: 'manual-escuela',
+    view: 'cursos',
+    title: 'Añadí tu escuela',
+    body: 'Escribí el nombre y tocá “Añadir escuela”. Si ya existe, usá “Ya tengo escuela”.',
+    bodyShort: 'Añadí la escuela.',
+    why: 'Los cursos cuelgan de una escuela.',
+    actionHint: 'Tocá Añadir escuela',
+    target: '[data-spa-view="cursos"] [data-add-school]',
+    preferTarget: '[data-spa-view="cursos"] [data-new-school]',
+    require: 'click',
+    requireClick: '[data-spa-view="cursos"] [data-add-school]',
+    allowSkipIf: 'courses',
+    skipLabel: 'Ya tengo escuela',
+    autoAdvance: true,
+  },
+  {
+    id: 'manual-curso',
+    view: 'cursos',
+    title: 'Creá un curso',
+    body: 'Completá escuela, nombre (ej. 6to 1ra) y turno. Tocá “Crear curso”.',
+    bodyShort: 'Creá el curso.',
+    why: 'Sin curso no hay lista ni notas.',
+    actionHint: 'Tocá Crear curso',
+    target: '[data-spa-view="cursos"] [data-course-form] button[type="submit"]',
+    preferTarget: '[data-spa-view="cursos"] [data-course-form]',
+    require: 'click',
+    requireClick: '[data-spa-view="cursos"] [data-course-form] button[type="submit"]',
+    allowSkipIf: 'courses',
+    skipLabel: 'Ya tengo curso',
+    autoAdvance: true,
+  },
+  {
+    id: 'manual-alumno',
+    view: 'registro',
+    title: 'Guardá un alumno',
+    body: 'Completá nombre, escuela, curso y una materia. Tocá “Guardar alumno”.',
+    bodyShort: 'Guardá un alumno.',
+    why: 'Con un alumno ya podés probar la lista.',
+    actionHint: 'Tocá Guardar alumno',
+    target: '[data-spa-view="registro"] [data-student-form] button[type="submit"]',
+    preferTarget: '[data-spa-view="registro"] [data-student-form]',
+    require: 'click',
+    requireClick: '[data-spa-view="registro"] [data-student-form] button[type="submit"]',
+    allowSkipIf: 'students',
+    skipLabel: 'Ya tengo alumnos',
+    autoAdvance: true,
+  },
+  CURSO_STEP,
+  LISTA_STEP,
+  HELP_STEP,
+];
+
+const PATH_CHOICE_STEP = {
+  id: 'camino',
+  view: 'panel',
+  title: '¿Cómo armás el aula?',
+  body: 'Excel carga escuela, curso y alumnos de una vez. A mano es de a uno: escuela → curso → alumno.',
+  bodyShort: 'Elegí Excel o a mano.',
+  why: 'El primer paso concreto es elegir el camino. Si salís, podés retomar acá.',
+  actionHint: 'Elegí Excel o A mano',
+  target: '[data-onboarding], [data-panel-hero]',
+  require: 'choice',
+  choices: [
+    { id: 'excel', label: 'Excel (recomendado)', hint: 'Más rápido' },
+    { id: 'manual', label: 'A mano', hint: 'Uno por uno' },
   ],
 };
+
+function buildBasicTour(path) {
+  const steps = path === 'manual' ? [PATH_CHOICE_STEP, ...MANUAL_STEPS] : path === 'excel'
+    ? [PATH_CHOICE_STEP, ...EXCEL_STEPS]
+    : [PATH_CHOICE_STEP];
+  return { id: 'basico', title: 'Tutorial inicial', path: path || '', steps };
+}
+
+const BASIC_TOUR = buildBasicTour('excel');
 
 const TOPIC_GUIDES = {
   curso: {
@@ -582,14 +693,57 @@ const TOPIC_GUIDES = {
   },
 };
 
-function getTourStatus(userId) {
+function getTourRaw(userId) {
   if (!userId) return '';
   return localStorage.getItem(productTourKey(userId)) || '';
 }
 
+function parseTourRecord(userId) {
+  const raw = getTourRaw(userId);
+  if (!raw) return { status: '' };
+  if (raw === 'done' || raw === 'skipped') return { status: raw };
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch {
+    /* ignore */
+  }
+  return { status: raw };
+}
+
+function getTourStatus(userId) {
+  return parseTourRecord(userId).status || '';
+}
+
+function isBasicUnlocked(userId) {
+  const status = getTourStatus(userId);
+  return status === 'done' || status === 'skipped';
+}
+
 function setTourStatus(userId, value) {
   if (!userId) return;
-  localStorage.setItem(productTourKey(userId), value);
+  if (value && typeof value === 'object') {
+    localStorage.setItem(productTourKey(userId), JSON.stringify(value));
+    return;
+  }
+  localStorage.setItem(productTourKey(userId), String(value || ''));
+}
+
+function readStorageList(key) {
+  try {
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function classroomFlag(flag) {
+  if (flag === 'students') return readStorageList('aula_clara_students').length > 0;
+  if (flag === 'no-students') return readStorageList('aula_clara_students').length === 0;
+  if (flag === 'courses') return readStorageList('aula_clara_courses').length > 0;
+  if (flag === 'teaching-context') return teachingContextReady();
+  return false;
 }
 
 function readGuides(userId) {
@@ -711,7 +865,7 @@ export function initProductTour({ getUserId }) {
   let autoAdvanceTimer = 0;
 
   const refreshHelpMenu = () => {
-    const basicDone = Boolean(getTourStatus(getUserId()));
+    const basicDone = isBasicUnlocked(getUserId());
     document.querySelectorAll('[data-tour-guides]').forEach((block) => {
       block.hidden = !basicDone;
       block.classList.toggle('is-hidden', !basicDone);
@@ -741,6 +895,47 @@ export function initProductTour({ getUserId }) {
   };
 
   const isMenuStep = (step) => Boolean(step?.openMenuOnMobile && isMobileViewport());
+
+  const persistBasicProgress = (index) => {
+    if (activeTour?.id !== 'basico') return;
+    setTourStatus(getUserId(), {
+      status: 'in_progress',
+      path: activeTour.path || '',
+      stepIndex: index,
+    });
+  };
+
+  const finishTour = (status) => {
+    running = false;
+    stopActionWatch();
+    stopLayoutWatch();
+    const tourId = activeTour?.id || 'basico';
+    if (tourId === 'basico') {
+      if (status === 'paused') {
+        persistBasicProgress(stepIndex);
+      } else {
+        setTourStatus(getUserId(), status);
+      }
+    } else if (status === 'done') {
+      markGuideDone(getUserId(), tourId);
+    }
+
+    overlay.clearSpotlight();
+    overlay.close();
+    progress.hide();
+    closeMenu();
+    closeGtcTourState();
+    document.querySelector('[data-help-menu]')?.removeAttribute('open');
+    document.body.classList.remove(
+      'product-tour-active',
+      'product-tour-menu-step',
+      'product-tour-soft-chrome',
+    );
+    activeTour = null;
+    refreshHelpMenu();
+    window.dispatchEvent(new CustomEvent('aula-clara:local-data-changed'));
+    window.dispatchEvent(new CustomEvent('aula-clara:onboarding-visibility'));
+  };
 
   const applySpotlight = (step, { scroll = false } = {}) => {
     if (!step) return;
@@ -839,31 +1034,6 @@ export function initProductTour({ getUserId }) {
     };
   };
 
-  const finishTour = (status) => {
-    running = false;
-    stopActionWatch();
-    stopLayoutWatch();
-    const tourId = activeTour?.id || 'basico';
-    if (tourId === 'basico') setTourStatus(getUserId(), status);
-    else if (status === 'done') markGuideDone(getUserId(), tourId);
-
-    overlay.clearSpotlight();
-    overlay.close();
-    progress.hide();
-    closeMenu();
-    closeGtcTourState();
-    showSpaView('panel');
-    document.querySelector('[data-help-menu]')?.removeAttribute('open');
-    document.body.classList.remove(
-      'product-tour-active',
-      'product-tour-menu-step',
-      'product-tour-soft-chrome',
-    );
-    activeTour = null;
-    refreshHelpMenu();
-    window.dispatchEvent(new CustomEvent('aula-clara:local-data-changed'));
-  };
-
   const completeStepAction = () => {
     if (!running || stepCompleted) return;
     stepCompleted = true;
@@ -901,17 +1071,51 @@ export function initProductTour({ getUserId }) {
       return;
     }
 
-    // softRequire: se puede Seguir sin completar (aula vacía, barra Guardar oculta, etc.).
-    overlay.setNextEnabled(Boolean(step.softRequire));
+    const skipAllowed = Boolean(step.allowSkipIf && classroomFlag(step.allowSkipIf));
+    overlay.setNextEnabled(skipAllowed);
+    if (skipAllowed) {
+      const nextBtn = document.querySelector('[data-tour-next]');
+      if (nextBtn instanceof HTMLButtonElement) {
+        nextBtn.textContent = step.skipLabel || 'Ya está';
+      }
+    }
+
+    const cleanups = [];
+
+    if (step.require === 'choice') {
+      overlay.setChoices(step.choices || []);
+      overlay.setNextEnabled(false);
+      actionCleanup = () => overlay.setChoices([]);
+      return;
+    }
 
     if (step.require === 'teaching-context') {
       const onContext = (event) => {
         if (teachingContextReady(event.detail)) completeStepAction();
       };
       window.addEventListener('aula-clara:teaching-context-changed', onContext);
-      // Si ya está listo, pedimos confirmación igual (submit); no auto-completar.
-      actionCleanup = () => window.removeEventListener('aula-clara:teaching-context-changed', onContext);
-      return;
+      cleanups.push(() => window.removeEventListener('aula-clara:teaching-context-changed', onContext));
+    }
+
+    if (step.require === 'excel-file') {
+      const onFile = () => completeStepAction();
+      window.addEventListener('aula-clara:excel-file-selected', onFile);
+      cleanups.push(() => window.removeEventListener('aula-clara:excel-file-selected', onFile));
+    }
+
+    if (step.require === 'excel-mapping') {
+      const onMap = () => completeStepAction();
+      window.addEventListener('aula-clara:excel-mapping-ready', onMap);
+      if (isVisible(document.querySelector('[data-spa-view="herramientas"] [data-excel-mapping-panel]'))) {
+        completeStepAction();
+      }
+      cleanups.push(() => window.removeEventListener('aula-clara:excel-mapping-ready', onMap));
+    }
+
+    if (step.require === 'excel-imported') {
+      const onImported = () => completeStepAction();
+      window.addEventListener('aula-clara:excel-imported', onImported);
+      cleanups.push(() => window.removeEventListener('aula-clara:excel-imported', onImported));
     }
 
     if (step.require === 'click') {
@@ -928,11 +1132,15 @@ export function initProductTour({ getUserId }) {
       };
       document.addEventListener('click', onClick, true);
       document.addEventListener('change', onChange, true);
-      actionCleanup = () => {
+      cleanups.push(() => {
         document.removeEventListener('click', onClick, true);
         document.removeEventListener('change', onChange, true);
-      };
+      });
     }
+
+    actionCleanup = () => {
+      cleanups.forEach((fn) => fn());
+    };
   };
 
   const showStep = async (index) => {
@@ -964,6 +1172,9 @@ export function initProductTour({ getUserId }) {
       current: index,
       total: activeTour.steps.length,
     });
+
+    persistBasicProgress(index);
+    overlay.setCardPlacement(step.card === 'top' ? 'top' : 'bottom');
 
     if (step.openGtc) {
       openGtcForTour();
@@ -997,14 +1208,22 @@ export function initProductTour({ getUserId }) {
       await wait(40);
     }
 
+    if (step.previewGuides) {
+      document.querySelectorAll('[data-tour-guides]').forEach((block) => {
+        block.hidden = false;
+        block.classList.remove('is-hidden');
+      });
+    }
+
     if (menuStep) {
       openMenu();
       await waitForPaint();
-      if (step.openHelpOnMobile) {
-        document.querySelector('[data-help-menu]')?.setAttribute('open', '');
-        await waitForPaint();
-      }
-    } else {
+    }
+
+    if (step.openHelp || step.openHelpOnMobile) {
+      document.querySelector('[data-help-menu]')?.setAttribute('open', '');
+      await waitForPaint();
+    } else if (!menuStep) {
       document.querySelector('[data-help-menu]')?.removeAttribute('open');
     }
 
@@ -1029,15 +1248,13 @@ export function initProductTour({ getUserId }) {
 
     watchLayoutForSpotlight(step);
     watchStepAction(step);
-    // Por si el scroll/smooth o el flex del shell terminan después del primer paint.
     scheduleSpotlightSync({ delay: 180 });
 
-    const needsAction = step.require && step.require !== 'next';
-    const soft = Boolean(step.softRequire);
+    const needsAction = step.require && step.require !== 'next' && step.require !== 'choice';
+    const skipAllowed = Boolean(step.allowSkipIf && classroomFlag(step.allowSkipIf));
     let nextLabel = step.nextLabel;
     if (!nextLabel) {
-      if (index === 0) nextLabel = 'Empezar';
-      else if (needsAction && soft && !stepCompleted) nextLabel = 'Seguir';
+      if (skipAllowed && !stepCompleted) nextLabel = step.skipLabel || 'Ya está';
       else nextLabel = 'Siguiente';
     }
 
@@ -1047,33 +1264,53 @@ export function initProductTour({ getUserId }) {
       why: step.why || '',
       actionHint: step.actionHint || (needsAction ? 'Completá la acción marcada' : ''),
       stepLabel: `Paso ${index + 1} de ${activeTour.steps.length}`,
+      choices: step.require === 'choice' ? step.choices : [],
+      onChoice: (choiceId) => {
+        if (choiceId !== 'excel' && choiceId !== 'manual') return;
+        activeTour = buildBasicTour(choiceId);
+        persistBasicProgress(1);
+        void showStep(1);
+      },
       onNext: () => {
         window.clearTimeout(autoAdvanceTimer);
-        if (!stepCompleted && needsAction && !soft) {
+        if (!stepCompleted && needsAction && !skipAllowed) {
           overlay.nudge(step.actionHint || 'Completá el paso marcado para seguir.');
           return;
         }
         void showStep(index + 1);
       },
-      onSkip: () => finishTour('skipped'),
+      onSkip: () => finishTour('paused'),
       isLast: index === activeTour.steps.length - 1,
       nextLabel,
-      nextEnabled: stepCompleted || soft || !needsAction,
+      nextEnabled: stepCompleted || skipAllowed || !needsAction,
     });
   };
 
   const startTourById = (tourId = 'basico') => {
     if (running) return;
-    const tour = tourId === 'basico' ? BASIC_TOUR : TOPIC_GUIDES[tourId];
-    if (!tour) return;
-    if (tour.unlockAfterBasic && !getTourStatus(getUserId())) {
-      window.alert('Primero completá o salí del tutorial inicial. Después se desbloquean las guías.');
+    if (tourId !== 'basico') {
+      const tour = TOPIC_GUIDES[tourId];
+      if (!tour) return;
+      if (tour.unlockAfterBasic && !isBasicUnlocked(getUserId())) {
+        showAppToast('Primero terminá o omití el tutorial inicial. Después se desbloquean las guías.', 'warning');
+        return;
+      }
+      activeTour = tour;
+      document.querySelector('[data-help-menu]')?.removeAttribute('open');
+      closeMenu();
+      void showStep(0);
       return;
     }
-    activeTour = tour;
+
+    const record = parseTourRecord(getUserId());
+    const path = record.path === 'manual' || record.path === 'excel' ? record.path : '';
+    activeTour = buildBasicTour(path || '');
     document.querySelector('[data-help-menu]')?.removeAttribute('open');
     closeMenu();
-    void showStep(0);
+    const resumeAt = record.status === 'in_progress' && Number.isInteger(record.stepIndex)
+      ? Math.max(0, record.stepIndex)
+      : 0;
+    void showStep(Math.min(resumeAt, activeTour.steps.length - 1));
   };
 
   document.querySelectorAll('[data-product-tour-start], [data-setup-tutorial-start], [data-tour-start]').forEach((btn) => {
@@ -1086,6 +1323,12 @@ export function initProductTour({ getUserId }) {
   });
 
   window.addEventListener('aula-clara:local-data-changed', refreshHelpMenu);
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && running) {
+      event.preventDefault();
+      finishTour('paused');
+    }
+  });
   refreshHelpMenu();
 
   return {
@@ -1183,6 +1426,7 @@ function ensureTourOverlay() {
         <p data-tour-body></p>
         <p class="product-tour-why is-hidden" data-tour-why hidden></p>
         <p class="product-tour-nudge is-hidden" data-tour-nudge hidden></p>
+        <div class="product-tour-choices is-hidden" data-tour-choices hidden></div>
         <div class="product-tour-actions">
           <button type="button" class="btn btn-ghost" data-tour-skip>Salir</button>
           <button type="button" class="btn btn-primary" data-tour-next>Siguiente</button>
@@ -1210,20 +1454,60 @@ function ensureTourOverlay() {
     body?.after(why);
   }
 
+  if (card && !card.querySelector('[data-tour-choices]')) {
+    const actions = card.querySelector('.product-tour-actions');
+    const choices = document.createElement('div');
+    choices.className = 'product-tour-choices is-hidden';
+    choices.setAttribute('data-tour-choices', '');
+    choices.hidden = true;
+    actions?.before(choices);
+  }
+
   const titleEl = root.querySelector('[data-tour-title]');
   const bodyEl = root.querySelector('[data-tour-body]');
   const stepEl = root.querySelector('[data-tour-step]');
   const actionEl = root.querySelector('[data-tour-action]');
   const whyEl = root.querySelector('[data-tour-why]');
   const nudgeEl = root.querySelector('[data-tour-nudge]');
+  const choicesEl = root.querySelector('[data-tour-choices]');
   const nextBtn = root.querySelector('[data-tour-next]');
   const skipBtn = root.querySelector('[data-tour-skip]');
   const spotlight = root.querySelector('[data-tour-spotlight]');
   const backdrop = root.querySelector('[data-tour-backdrop]');
   let onNext = null;
   let onSkip = null;
+  let onChoice = null;
   let spotlightTarget = null;
   let nudgeTimer = null;
+
+  const setChoices = (choices = []) => {
+    if (!(choicesEl instanceof HTMLElement)) return;
+    choicesEl.innerHTML = '';
+    if (!choices.length) {
+      choicesEl.classList.add('is-hidden');
+      choicesEl.setAttribute('hidden', '');
+      if (nextBtn) nextBtn.hidden = false;
+      return;
+    }
+    choices.forEach((choice) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `btn ${choice.id === 'excel' ? 'btn-primary' : 'btn-secondary'}`;
+      btn.setAttribute('data-tour-choice', choice.id);
+      btn.innerHTML = choice.hint
+        ? `<strong>${choice.label}</strong><span>${choice.hint}</span>`
+        : choice.label;
+      btn.addEventListener('click', () => onChoice?.(choice.id));
+      choicesEl.appendChild(btn);
+    });
+    choicesEl.classList.remove('is-hidden');
+    choicesEl.removeAttribute('hidden');
+    if (nextBtn) nextBtn.hidden = true;
+  };
+
+  const setCardPlacement = (placement) => {
+    root.classList.toggle('product-tour-overlay--top', placement === 'top');
+  };
 
   const setMetaLine = (node, text) => {
     if (!(node instanceof HTMLElement)) return;
@@ -1331,20 +1615,27 @@ function ensureTourOverlay() {
       why = '',
       actionHint = '',
       stepLabel,
+      choices = [],
       onNext: next,
       onSkip: skip,
+      onChoice: choose,
       isLast,
       nextLabel,
       nextEnabled = true,
     }) {
       onNext = next;
       onSkip = skip;
+      onChoice = choose;
       if (titleEl) titleEl.textContent = title;
       if (bodyEl) bodyEl.textContent = body;
       if (stepEl) stepEl.textContent = stepLabel;
       setMetaLine(actionEl, actionHint ? `Acción: ${actionHint}` : '');
       setMetaLine(whyEl, why ? `Por qué: ${why}` : '');
-      if (nextBtn) nextBtn.textContent = isLast ? (nextLabel || 'Listo') : (nextLabel || 'Siguiente');
+      setChoices(choices);
+      if (nextBtn) {
+        nextBtn.hidden = Boolean(choices?.length);
+        nextBtn.textContent = isLast ? (nextLabel || 'Listo') : (nextLabel || 'Siguiente');
+      }
       setNextEnabled(nextEnabled);
       if (nudgeEl) {
         nudgeEl.classList.add('is-hidden');
@@ -1356,9 +1647,12 @@ function ensureTourOverlay() {
     close() {
       onNext = null;
       onSkip = null;
+      onChoice = null;
       clearSpotlight();
+      setChoices([]);
       setMenuMode(false);
       setSoftChrome(false);
+      setCardPlacement('bottom');
       root.classList.add('is-hidden');
       root.setAttribute('hidden', '');
     },
@@ -1367,6 +1661,8 @@ function ensureTourOverlay() {
     rememberTarget,
     setMenuMode,
     setSoftChrome,
+    setCardPlacement,
+    setChoices,
     setNextEnabled,
     nudge,
   };

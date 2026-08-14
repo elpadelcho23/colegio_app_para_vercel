@@ -21,10 +21,23 @@ export function initOnboarding({
   const startBtn = root.querySelector('[data-setup-tutorial-start]');
   const dismiss = root.querySelector('[data-onboarding-dismiss]');
 
-  function getTourStatus() {
+  function getTourRecord() {
     const userId = getUserId();
-    if (!userId) return 'done';
-    return localStorage.getItem(productTourKey(userId)) || '';
+    if (!userId) return { status: 'done' };
+    const raw = localStorage.getItem(productTourKey(userId)) || '';
+    if (!raw) return { status: '' };
+    if (raw === 'done' || raw === 'skipped') return { status: raw };
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {
+      /* ignore */
+    }
+    return { status: raw };
+  }
+
+  function getTourStatus() {
+    return getTourRecord().status || '';
   }
 
   function isDismissed() {
@@ -84,10 +97,10 @@ export function initOnboarding({
       return;
     }
 
-    const tourDone = Boolean(getTourStatus());
+    const status = getTourStatus();
     const ready = isReadyEnough();
 
-    if (tourDone || ready) {
+    if (status === 'done' || ready) {
       hideNode(root);
       showNode(hero);
       hideNode(resume);
@@ -95,7 +108,7 @@ export function initOnboarding({
       return;
     }
 
-    if (isDismissed()) {
+    if (status === 'skipped' || isDismissed()) {
       hideNode(root);
       showNode(hero);
       showNode(resume);
@@ -107,25 +120,34 @@ export function initOnboarding({
     hideNode(hero);
     hideNode(resume);
     setTutorialHighlight(true);
+    if (startBtn && status === 'in_progress') {
+      const long = startBtn.querySelector('.copy-long');
+      const short = startBtn.querySelector('.copy-short');
+      if (long) long.textContent = 'Seguir el tutorial';
+      if (short) short.textContent = 'Seguir tutorial';
+    }
   }
 
   startBtn?.addEventListener('click', (event) => {
     event.preventDefault();
-    setDismissed(true);
-    render();
-    window.dispatchEvent(new CustomEvent('aula-clara:onboarding-visibility'));
     if (typeof startTour === 'function') startTour();
     else document.querySelector('[data-product-tour-start]')?.click();
   });
 
   dismiss?.addEventListener('click', () => {
     setDismissed(true);
+    const userId = getUserId();
+    if (userId) localStorage.setItem(productTourKey(userId), 'skipped');
     render();
     window.dispatchEvent(new CustomEvent('aula-clara:onboarding-visibility'));
   });
 
   resume?.addEventListener('click', () => {
     setDismissed(false);
+    const userId = getUserId();
+    if (userId && getTourStatus() === 'skipped') {
+      localStorage.removeItem(productTourKey(userId));
+    }
     render();
     window.dispatchEvent(new CustomEvent('aula-clara:onboarding-visibility'));
   });
@@ -134,6 +156,7 @@ export function initOnboarding({
   registerSpaViewRefresh('panel', render);
   window.addEventListener('aula-clara:local-data-changed', render);
   window.addEventListener('aula-clara:teaching-context-changed', render);
+  window.addEventListener('aula-clara:onboarding-visibility', render);
 
   render();
 }

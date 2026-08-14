@@ -1702,7 +1702,8 @@ h3 {
 
 /* En Asistencia/Notas la tarjeta va arriba: abajo la tapa la barra Guardar / el panel. */
 body.product-tour-active[data-active-spa-view='asistencia'] .product-tour-overlay,
-body.product-tour-active[data-active-spa-view='notas'] .product-tour-overlay {
+body.product-tour-active[data-active-spa-view='notas'] .product-tour-overlay,
+.product-tour-overlay--top {
   place-items: start center;
   align-content: start;
   padding-top: calc(3.35rem + env(safe-area-inset-top, 0px));
@@ -1858,11 +1859,30 @@ body.product-tour-soft-chrome .tour-target-active {
   line-height: 1.4;
 }
 
-.product-tour-nudge {
-  margin: 0;
-  color: #7a5a00;
-  font-size: 0.86rem;
-  font-weight: 700;
+.product-tour-choices {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.product-tour-choices.is-hidden,
+.product-tour-choices[hidden] {
+  display: none;
+}
+
+.product-tour-choices .btn {
+  display: grid;
+  justify-items: start;
+  gap: 0.15rem;
+  text-align: left;
+  height: auto;
+  min-height: 44px;
+  padding: 0.7rem 0.85rem;
+}
+
+.product-tour-choices .btn span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.85;
 }
 
 .product-tour-nudge.is-hidden,

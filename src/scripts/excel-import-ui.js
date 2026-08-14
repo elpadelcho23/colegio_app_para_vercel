@@ -129,6 +129,7 @@ function validateExcelFile(input, feedbackEl, maxFileMb) {
     feedbackEl.classList.add('is-ok');
     feedbackEl.textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
   }
+  window.dispatchEvent(new CustomEvent('aula-clara:excel-file-selected', { detail: { name: file.name } }));
   return { ok: true, file };
 }
 
@@ -613,6 +614,9 @@ function initExcelImportWorkspace(workspace, options = {}) {
     updateMappingProgress();
     renderTemplateCards();
     setWorkspaceStep(workspace, 'mapping');
+    window.dispatchEvent(
+      new CustomEvent('aula-clara:excel-mapping-ready', { detail: { importType } }),
+    );
   };
 
   const hideMappingPanel = () => {
@@ -1047,6 +1051,9 @@ function initExcelImportWorkspace(workspace, options = {}) {
       }
       setWorkspaceStep(workspace, 'template');
       options.onImported?.(importType, result);
+      window.dispatchEvent(
+        new CustomEvent('aula-clara:excel-imported', { detail: { importType, result } }),
+      );
     } catch (error) {
       console.error('[aula-clara] excel import failed', error);
       renderImportResult(resultEl, { error: 'Error de red al importar.' }, true);
