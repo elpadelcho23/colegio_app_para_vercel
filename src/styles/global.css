@@ -979,14 +979,21 @@ h3 {
 
   .metric {
     padding: 0.65rem 0.7rem;
+    grid-template-columns: minmax(0, 1fr) 1.2rem;
   }
 
   .metric strong {
     font-size: 1.28rem;
   }
 
-  .metric span {
+  .metric-label,
+  .metric span:not(.metric-icon) {
     font-size: 0.78rem;
+  }
+
+  .metric-icon {
+    width: 1.15rem;
+    height: 1.15rem;
   }
 
   .hero-actions--triple {
@@ -2339,20 +2346,38 @@ a.tools-nav-link {
 }
 
 .metric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.55rem;
+  column-gap: 0.45rem;
+  row-gap: 0.2rem;
+  align-items: start;
   min-width: 0;
   padding: var(--space-4);
   background: var(--surface);
 }
 
 .metric strong {
+  grid-column: 1;
   display: block;
   font-size: 1.65rem;
   line-height: 1;
 }
 
-.metric span {
+.metric-label,
+.metric span:not(.metric-icon) {
+  grid-column: 1;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.metric-icon {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 1.4rem;
+  height: 1.4rem;
+  justify-self: end;
+  color: var(--brand);
+  opacity: 0.92;
 }
 
 .metric--link {
@@ -2385,6 +2410,7 @@ a.tools-nav-link {
 }
 
 .metric-hint {
+  grid-column: 1 / -1;
   color: var(--brand-strong);
   font-size: 0.78rem;
   font-weight: 800;
@@ -2570,6 +2596,32 @@ body[data-active-spa-view='asistencia'] .metric--link[data-spa-nav='asistencia']
   padding: var(--space-4);
 }
 
+.student-row-info,
+.student-row > div:first-child,
+.course-row > div:first-child {
+  min-width: 0;
+}
+
+.student-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  margin-bottom: 0.15rem;
+}
+
+.student-row-head strong {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.student-row-meta,
+.student-row-info small,
+.student-row > div:first-child small {
+  overflow-wrap: anywhere;
+}
+
 .student-row > .notes-list,
 .student-row > .actions-group {
   grid-column: 1 / -1;
@@ -2583,20 +2635,37 @@ td small {
   color: var(--muted);
 }
 
-.student-row > div:first-child,
-.course-row > div:first-child {
-  min-width: 0;
-}
-
-.student-row > div:first-child small:nth-of-type(3) {
-  display: none;
-}
-
 .row-actions {
   justify-content: flex-start;
 }
 
-@media (min-width: 700px) {
+@media (max-width: 767px) {
+  .student-row,
+  .course-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .student-row .row-actions,
+  .course-row .row-actions,
+  .seguimiento-row .row-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .student-row .row-actions > .btn,
+  .course-row .row-actions > .btn,
+  .seguimiento-row .row-actions > .btn {
+    width: 100%;
+  }
+
+  .student-row .row-actions > .btn-danger {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 768px) {
   .student-row,
   .course-row {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -2611,6 +2680,110 @@ td small {
   display: grid;
   grid-template-columns: repeat(2, minmax(112px, 1fr));
   gap: var(--space-2);
+}
+
+.attendance-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.roll-call {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-4);
+  min-height: min(68vh, 560px);
+  padding: var(--space-5) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: center;
+}
+
+.roll-call-progress {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.roll-call-bar {
+  width: min(100%, 28rem);
+  height: 6px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.roll-call-bar span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transition: width 0.2s ease;
+}
+
+.roll-call-name {
+  margin: 0;
+  max-width: 22ch;
+  font-size: clamp(2rem, 8vw, 3.6rem);
+  font-weight: 850;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.roll-call-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.roll-call-actions {
+  width: min(100%, 28rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.roll-call-actions button {
+  min-height: 72px;
+  font-size: 1.2rem;
+}
+
+.roll-call-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: min(100%, 28rem);
+}
+
+.roll-call-nav .btn {
+  flex: 1 1 8rem;
+}
+
+@media (min-width: 900px) {
+  .roll-call {
+    min-height: 580px;
+    padding: var(--space-6, 2rem);
+  }
+
+  .roll-call-actions button {
+    min-height: 88px;
+    font-size: 1.35rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .roll-call {
+    min-height: calc(100dvh - 16rem);
+    padding: var(--space-4) var(--space-3);
+  }
+
+  .roll-call-actions button {
+    min-height: 64px;
+    font-size: 1.08rem;
+  }
 }
 
 .attendance-options button {
@@ -3764,8 +3937,7 @@ label.checkbox-row {
   .filters > *,
   .button-row > *,
   .hero-actions > *,
-  .actions-group > *,
-  .row-actions > .btn {
+  .actions-group > * {
     width: 100%;
   }
 

@@ -1655,14 +1655,15 @@ function renderStudents(list) {
     const avg = average(gradesForStudent(student.id));
     const subjects = subjectsForStudent(student).map((subject) => subject.nombre).join(', ') || 'Sin materias';
     return el('article', { className: 'student-row' },
-      el('div', {},
-        el('strong', {}, student.nombre),
-        el('small', {}, `${course?.escuela || 'Sin escuela'} · ${course?.nombre || 'Sin curso'} - ${course?.turno || ''} · ${subjects}`),
+      el('div', { className: 'student-row-info' },
+        el('div', { className: 'student-row-head' },
+          el('strong', {}, student.nombre),
+          tag(`Promedio ${avg === null ? '-' : avg.toFixed(1)}`, `tag ${avg !== null && avg < 6 ? 'danger' : 'ok'}`),
+        ),
+        el('small', { className: 'student-row-meta' }, `${course?.escuela || 'Sin escuela'} · ${course?.nombre || 'Sin curso'} ${course?.turno || ''} · ${subjects}`),
         el('small', {}, student.tutor ? `Contacto: ${student.tutor}` : 'Sin contacto cargado'),
-        el('small', {}, `DNI ${student.dni || '-'} · ${course?.nombre || 'Sin curso'} · ${course?.turno || ''}`),
       ),
       el('div', { className: 'row-actions' },
-        tag(`Promedio ${avg === null ? '-' : avg.toFixed(1)}`, `tag ${avg !== null && avg < 6 ? 'danger' : 'ok'}`),
         el('button', { className: 'btn btn-ghost', dataset: { openStudentProfile: student.id } }, 'Ver perfil'),
         el('button', { className: 'btn btn-ghost', dataset: { editStudent: student.id } }, 'Editar'),
         el('button', { className: 'btn btn-danger', dataset: { deleteStudent: student.id } }, 'Eliminar'),
@@ -1681,10 +1682,14 @@ function initAttendance() {
   const courseSelect = root.querySelector('[data-filter-course]');
   const subjectSelect = root.querySelector('[data-filter-subject]');
   const dateInput = root.querySelector('[data-attendance-date]');
+  const takeView = root.querySelector('[data-attendance-take-view]');
   const list = root.querySelector('[data-attendance-list]');
+  const rollHost = root.querySelector('[data-attendance-roll]');
   const saveBar = root.querySelector('[data-attendance-save-bar]');
   const saveHint = root.querySelector('[data-attendance-save-hint]');
   const saveButton = root.querySelector('[data-attendance-save]');
+  let attendanceMode = 'list';
+  let rollCallIndex = 0;
   const historySchool = root.querySelector('[data-history-filter-school]');
   const historyCourse = root.querySelector('[data-history-filter-course]');
   const historySubject = root.querySelector('[data-history-filter-subject]');
@@ -1725,6 +1730,7 @@ function initAttendance() {
   const updateAttendanceSaveUi = () => {
     const pending = hasUnsavedAttendance();
     list?.classList.toggle('attendance-list--pending', pending);
+    rollHost?.classList.toggle('attendance-list--pending', pending && attendanceMode === 'roll');
     saveBar?.classList.toggle('is-pending', pending);
     saveHint?.classList.toggle('is-hidden', !pending);
     if (saveButton) {
@@ -1800,6 +1806,7 @@ function initAttendance() {
       }
       clearDraftForContext(lastAttendanceContext.date, lastAttendanceContext.subjectId);
       lastAttendanceContext = attendanceContext();
+      rollCallIndex = 0;
       if (control === courseSelect || control === subjectSelect) {
         const course = courseById(courseSelect.value);
         setTeachingContext({
@@ -1825,35 +1832,89 @@ function initAttendance() {
 
   [courseSelect, subjectSelect, dateInput].forEach(handleAttendanceFilterChange);
 
-  list.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-attendance-state]');
-    if (!button) return;
-    const { date, subjectId } = attendanceContext();
+  const currentAttendanceStudents = () => studentsInCiclo('', courseSelect.value)
+    .filter((student) => studentHasSubject(student, subjectSelect.value))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  const ensureSubjectForMark = () => {
+    const { subjectId } = attendanceContext();
     const subjectError = root.querySelector('[data-attendance-subject-error]');
-    if (!subjectId) {
-      clearFieldErrors(root.querySelector('[data-attendance-take-view]') || root);
-      setFieldError(subjectSelect, 'Elegí una materia antes de marcar asistencia.');
+    if (subjectId) {
       if (subjectError) {
-        subjectError.hidden = false;
-        subjectError.textContent = 'Elegí una materia.';
+        subjectError.hidden = true;
+        subjectError.textContent = '';
       }
-      showAppToast('Elegí una materia antes de marcar asistencia.', 'warning');
-      subjectSelect?.focus();
-      return;
+      subjectSelect?.classList.remove('is-invalid');
+      return true;
     }
+    clearFieldErrors(takeView || root);
+    setFieldError(subjectSelect, 'Elegí una materia antes de marcar asistencia.');
     if (subjectError) {
-      subjectError.hidden = true;
-      subjectError.textContent = '';
+      subjectError.hidden = false;
+      subjectError.textContent = 'Elegí una materia.';
     }
-    subjectSelect?.classList.remove('is-invalid');
-    const key = attendanceDraftKey(button.dataset.studentId, subjectId, date);
-    const nextState = button.dataset.attendanceState;
-    if (nextState === savedAttendanceState(button.dataset.studentId, date, subjectId)) {
+    showAppToast('Elegí una materia antes de marcar asistencia.', 'warning');
+    subjectSelect?.focus();
+    return false;
+  };
+
+  const applyAttendanceMark = (studentId, nextState, { advance = false } = {}) => {
+    if (!ensureSubjectForMark()) return;
+    const { date, subjectId } = attendanceContext();
+    const key = attendanceDraftKey(studentId, subjectId, date);
+    if (nextState === savedAttendanceState(studentId, date, subjectId)) {
       draftAttendance.delete(key);
     } else {
       draftAttendance.set(key, nextState);
     }
+    if (advance) {
+      const students = currentAttendanceStudents();
+      if (rollCallIndex < students.length - 1) rollCallIndex += 1;
+      else rollCallIndex = students.length;
+    }
     renderAttendance();
+  };
+
+  const setAttendanceMode = (mode) => {
+    attendanceMode = mode === 'roll' ? 'roll' : 'list';
+    root.querySelectorAll('[data-attendance-mode]').forEach((button) => {
+      const on = button.dataset.attendanceMode === attendanceMode;
+      button.classList.toggle('is-active', on);
+      button.setAttribute('aria-selected', String(on));
+    });
+    if (attendanceMode === 'roll') {
+      const students = currentAttendanceStudents();
+      const firstOpen = students.findIndex((student) => {
+        const state = displayedAttendanceState(student.id, attendanceContext().date, attendanceContext().subjectId);
+        return !state;
+      });
+      rollCallIndex = firstOpen >= 0 ? firstOpen : 0;
+    }
+    renderAttendance();
+  };
+
+  root.querySelector('[data-attendance-mode-tabs]')?.addEventListener('click', (event) => {
+    const tab = event.target.closest('[data-attendance-mode]');
+    if (!tab) return;
+    setAttendanceMode(tab.dataset.attendanceMode);
+  });
+
+  takeView?.addEventListener('click', (event) => {
+    const nav = event.target.closest('[data-roll-nav]');
+    if (nav) {
+      const students = currentAttendanceStudents();
+      if (nav.dataset.rollNav === 'prev') rollCallIndex = Math.max(0, rollCallIndex - 1);
+      if (nav.dataset.rollNav === 'next') rollCallIndex = Math.min(students.length, rollCallIndex + 1);
+      if (nav.dataset.rollNav === 'start') rollCallIndex = 0;
+      if (nav.dataset.rollNav === 'list') setAttendanceMode('list');
+      else renderAttendance();
+      return;
+    }
+    const button = event.target.closest('[data-attendance-state]');
+    if (!button) return;
+    applyAttendanceMark(button.dataset.studentId, button.dataset.attendanceState, {
+      advance: attendanceMode === 'roll',
+    });
   });
 
   saveButton?.addEventListener('click', async () => {
@@ -1875,13 +1936,77 @@ function initAttendance() {
     }
   });
 
+  function renderRollCall(students, date, subjectId) {
+    if (!rollHost) return;
+    if (!students.length) {
+      replaceContent(rollHost, emptyState('No hay alumnos para estos filtros', 'Importá alumnos con Excel o cargá uno a uno en Alumnos.', {
+        ctaLabel: 'Importar con Excel',
+        spaNav: 'registro',
+      }));
+      return;
+    }
+
+    if (rollCallIndex > students.length) rollCallIndex = students.length;
+    if (rollCallIndex < 0) rollCallIndex = 0;
+
+    const marked = students.filter((student) => displayedAttendanceState(student.id, date, subjectId)).length;
+    const course = courseById(courseSelect.value);
+    const subjectName = subjectById(subjectId)?.nombre || 'Materia';
+
+    if (rollCallIndex >= students.length) {
+      replaceContent(rollHost,
+        el('p', { className: 'roll-call-progress' }, `${marked}/${students.length} marcados`),
+        el('p', { className: 'roll-call-name' }, 'Lista completa'),
+        el('p', { className: 'roll-call-meta' }, 'Podés volver a corregir o guardar abajo.'),
+        el('div', { className: 'roll-call-nav' },
+          el('button', { type: 'button', className: 'btn btn-ghost', dataset: { rollNav: 'start' } }, 'Revisar'),
+          el('button', { type: 'button', className: 'btn btn-secondary', dataset: { rollNav: 'list' } }, 'Ver listado'),
+        ),
+      );
+      return;
+    }
+
+    const student = students[rollCallIndex];
+    const current = displayedAttendanceState(student.id, date, subjectId);
+    const pct = students.length ? Math.round((rollCallIndex / students.length) * 100) : 0;
+    const barFill = el('span');
+    barFill.style.width = `${pct}%`;
+    replaceContent(rollHost,
+      el('p', { className: 'roll-call-progress' }, `${rollCallIndex + 1} / ${students.length}`),
+      el('div', { className: 'roll-call-bar', attrs: { 'aria-hidden': 'true' } }, barFill),
+      el('p', { className: 'roll-call-name' }, student.nombre),
+      el('p', { className: 'roll-call-meta' }, `${course?.nombre || ''} · ${subjectName}${current ? ` · ${current === 'presente' ? 'Presente' : 'Ausente'}` : ''}`),
+      el('div', { className: 'roll-call-actions attendance-options' },
+        el('button', {
+          type: 'button',
+          dataset: { studentId: student.id, attendanceState: 'presente' },
+          className: current === 'presente' ? 'active-present' : '',
+        }, 'Presente'),
+        el('button', {
+          type: 'button',
+          dataset: { studentId: student.id, attendanceState: 'ausente' },
+          className: current === 'ausente' ? 'active-absent' : '',
+        }, 'Ausente'),
+      ),
+      el('div', { className: 'roll-call-nav' },
+        el('button', {
+          type: 'button',
+          className: 'btn btn-ghost',
+          dataset: { rollNav: 'prev' },
+          disabled: rollCallIndex === 0,
+        }, 'Anterior'),
+        el('button', {
+          type: 'button',
+          className: 'btn btn-ghost',
+          dataset: { rollNav: 'next' },
+        }, rollCallIndex === students.length - 1 ? 'Terminar' : 'Siguiente'),
+      ),
+    );
+  }
+
   function renderAttendance() {
-    const students = studentsInCiclo('', courseSelect.value).filter((student) =>
-      studentHasSubject(student, subjectSelect.value)
-    )
-      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    const students = currentAttendanceStudents();
     const { date, subjectId } = attendanceContext();
-    const records = read(KEYS.attendance);
     const present = students.filter((student) => displayedAttendanceState(student.id, date, subjectId) === 'presente').length;
     const absent = students.filter((student) => displayedAttendanceState(student.id, date, subjectId) === 'ausente').length;
 
@@ -1891,6 +2016,17 @@ function initAttendance() {
       { value: present, label: 'Presentes' },
       { value: absent, label: 'Ausentes' },
     ]);
+
+    const isRoll = attendanceMode === 'roll';
+    if (list) list.hidden = isRoll;
+    if (rollHost) rollHost.hidden = !isRoll;
+    summaryNode?.classList.toggle('is-hidden', isRoll);
+
+    if (isRoll) {
+      renderRollCall(students, date, subjectId);
+      updateAttendanceSaveUi();
+      return;
+    }
 
     if (!students.length) {
       replaceContent(list, emptyState('No hay alumnos para estos filtros', 'Importá alumnos con Excel (recomendado) o cargá uno a uno abajo en Alumnos.', {
@@ -1928,6 +2064,35 @@ function initAttendance() {
     }));
     updateAttendanceSaveUi();
   }
+
+  window.addEventListener('keydown', (event) => {
+    if (attendanceMode !== 'roll' || rollHost?.hidden) return;
+    if (root.classList.contains('spa-view--hidden')) return;
+    if (event.target.closest?.('input, select, textarea')) return;
+    const students = currentAttendanceStudents();
+    const student = students[rollCallIndex];
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      rollCallIndex = Math.max(0, rollCallIndex - 1);
+      renderAttendance();
+      return;
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      rollCallIndex = Math.min(students.length, rollCallIndex + 1);
+      renderAttendance();
+      return;
+    }
+    if (!student) return;
+    if (event.key === 'p' || event.key === 'P') {
+      event.preventDefault();
+      applyAttendanceMark(student.id, 'presente', { advance: true });
+    }
+    if (event.key === 'a' || event.key === 'A') {
+      event.preventDefault();
+      applyAttendanceMark(student.id, 'ausente', { advance: true });
+    }
+  });
 
   renderAttendance();
   renderHistory();

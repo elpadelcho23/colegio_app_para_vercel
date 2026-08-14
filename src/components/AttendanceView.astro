@@ -31,7 +31,7 @@ const { spaMode = false } = Astro.props;
 <section class="panel" data-attendance-take-view>
   <div class="section-title">
     <h2>Pasar lista</h2>
-    <p>Presente o ausente, y después Guardar.</p>
+    <p>En listado o de a uno. Después Guardar.</p>
   </div>
 
   <div class="filters-grid">
@@ -44,9 +44,15 @@ const { spaMode = false } = Astro.props;
   </div>
   <p class="muted filter-context-note copy-collapse-mobile">Sigue el Curso actual.</p>
 
+  <div class="attendance-mode-tabs" role="tablist" aria-label="Modo de pasar lista" data-attendance-mode-tabs>
+    <button type="button" class="history-tab is-active" role="tab" data-attendance-mode="list" aria-selected="true">Listado</button>
+    <button type="button" class="history-tab" role="tab" data-attendance-mode="roll" aria-selected="false">Dar lista</button>
+  </div>
+
   <section class="summary-strip" data-attendance-summary></section>
 
   <div class="list" data-attendance-list></div>
+  <div class="roll-call" data-attendance-roll hidden></div>
 
   <div class="attendance-save-bar" data-attendance-save-bar>
     <p class="attendance-save-hint" data-attendance-save-hint>

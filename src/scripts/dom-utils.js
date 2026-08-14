@@ -72,11 +72,75 @@ export function emptyState(title, message = '', options = {}) {
   return el('div', { className: 'empty' }, ...children);
 }
 
+function svgEl(tag, attrs = {}) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value)));
+  return node;
+}
+
+function metricIcon(label) {
+  const key = String(label || '').toLowerCase();
+  const svg = svgEl('svg', {
+    class: 'metric-icon',
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    'stroke-width': '2',
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'aria-hidden': 'true',
+  });
+
+  const add = (tag, attrs) => svg.appendChild(svgEl(tag, attrs));
+
+  if (key.includes('alumno')) {
+    add('path', { d: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2' });
+    add('circle', { cx: '9', cy: '7', r: '4' });
+    add('path', { d: 'M22 21v-2a4 4 0 0 0-3-3.87' });
+    add('path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' });
+  } else if (key.includes('curso')) {
+    add('path', { d: 'M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z' });
+    add('path', { d: 'M8 7h8' });
+    add('path', { d: 'M8 11h8' });
+  } else if (key.includes('materia')) {
+    add('path', { d: 'M12 7v14' });
+    add('path', { d: 'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z' });
+  } else if (key.includes('promedio') || key.includes('aprobad')) {
+    add('path', { d: 'M3 3v16a2 2 0 0 0 2 2h16' });
+    add('path', { d: 'm19 9-5 5-4-4-3 3' });
+  } else if (key.includes('asist') || key.includes('presente') || key.includes('acredita')) {
+    add('path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' });
+    add('path', { d: 'm9 11 3 3L22 4' });
+  } else if (key.includes('ausente')) {
+    add('circle', { cx: '12', cy: '12', r: '10' });
+    add('path', { d: 'm15 9-6 6' });
+    add('path', { d: 'm9 9 6 6' });
+  } else if (key.includes('calific') || key.includes('registro') || key.includes('evaluac')) {
+    add('path', { d: 'M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z' });
+    add('path', { d: 'M14 2v4a2 2 0 0 0 2 2h4' });
+    add('path', { d: 'M10 13h4' });
+    add('path', { d: 'M10 17h4' });
+  } else if (key.includes('período') || key.includes('periodo')) {
+    add('path', { d: 'M8 2v4' });
+    add('path', { d: 'M16 2v4' });
+    add('rect', { x: '3', y: '4', width: '18', height: '18', rx: '2' });
+    add('path', { d: 'M3 10h18' });
+  } else {
+    add('rect', { x: '3', y: '3', width: '7', height: '7', rx: '1' });
+    add('rect', { x: '14', y: '3', width: '7', height: '7', rx: '1' });
+    add('rect', { x: '3', y: '14', width: '7', height: '7', rx: '1' });
+    add('rect', { x: '14', y: '14', width: '7', height: '7', rx: '1' });
+  }
+
+  return svg;
+}
+
 export function metric(value, label, options = {}) {
   const { view = '', hint = 'Abrir' } = options;
   const children = [
     el('strong', {}, value),
-    el('span', {}, label),
+    el('span', { className: 'metric-label' }, label),
+    metricIcon(label),
   ];
 
   if (view) {
