@@ -59,13 +59,13 @@ const { spaMode = false } = Astro.props;
   </div>
 </section>
 
-<section class="panel" data-attendance-history-view>
+<section class="panel history-panel" data-attendance-history-view>
   <div class="section-title">
-    <h2>Registro e historial</h2>
-    <p>Detalle por fecha, promedios y planilla. Acredita con ≥75% por defecto.</p>
+    <h2>Historial</h2>
+    <p class="copy-collapse-mobile">Filtrá y mirá el día, los promedios o la planilla del mes.</p>
   </div>
 
-  <div class="filters-grid">
+  <div class="filters-grid history-filters">
     <select data-history-filter-school aria-label="Escuela">
       <option value="">Todas las escuelas</option>
     </select>
@@ -75,45 +75,55 @@ const { spaMode = false } = Astro.props;
     <select data-history-filter-subject aria-label="Materia">
       <option value="">Todas las materias</option>
     </select>
-    <input type="date" data-history-filter-from aria-label="Desde" />
-    <input type="date" data-history-filter-to aria-label="Hasta" />
+    <div class="history-date-range">
+      <input type="date" data-history-filter-from aria-label="Desde" />
+      <input type="date" data-history-filter-to aria-label="Hasta" />
+    </div>
   </div>
 
-  <section class="summary-strip" data-attendance-history-summary></section>
+  <p class="history-kpis" data-attendance-history-summary></p>
 
-  <div class="section-title">
-    <h3>Detalle por fecha</h3>
+  <div class="history-tabs" role="tablist" aria-label="Vistas del historial" data-history-tabs>
+    <button type="button" class="history-tab is-active" role="tab" data-history-tab="dia" aria-selected="true" aria-controls="history-panel-dia" id="history-tab-dia">Día</button>
+    <button type="button" class="history-tab" role="tab" data-history-tab="promedios" aria-selected="false" aria-controls="history-panel-promedios" id="history-tab-promedios">Promedios</button>
+    <button type="button" class="history-tab" role="tab" data-history-tab="planilla" aria-selected="false" aria-controls="history-panel-planilla" id="history-tab-planilla">Planilla</button>
   </div>
-  <div class="table-container" data-attendance-history-table></div>
 
-  <div class="section-title">
-    <h3>Promedio por alumno</h3>
-    <p>Porcentaje de asistencia y estado de acreditación según los filtros.</p>
+  <div class="history-tab-panel" id="history-panel-dia" role="tabpanel" aria-labelledby="history-tab-dia" data-history-panel="dia">
+    <div class="table-container" data-attendance-history-table></div>
   </div>
-  <div class="table-container" data-attendance-history-averages></div>
 
-  <div class="section-title">
-    <h3>Planilla del mes</h3>
-    <p>Vista alumno × día. Ajustá el umbral de acreditación si tu escuela usa otro porcentaje.</p>
+  <div class="history-tab-panel" id="history-panel-promedios" role="tabpanel" aria-labelledby="history-tab-promedios" data-history-panel="promedios" hidden>
+    <div class="table-container" data-attendance-history-averages></div>
   </div>
-  <div class="filters-grid" data-attendance-matrix-filters>
-    <input type="month" data-attendance-matrix-month aria-label="Mes" />
-    <label class="threshold-field">
-      <span>Umbral % para acreditar</span>
-      <input type="number" min="50" max="100" step="1" data-attendance-threshold aria-label="Umbral de asistencia" />
-    </label>
-    <button type="button" class="btn btn-secondary" data-attendance-matrix-export>Exportar planilla CSV</button>
+
+  <div class="history-tab-panel" id="history-panel-planilla" role="tabpanel" aria-labelledby="history-tab-planilla" data-history-panel="planilla" hidden>
+    <div class="filters-grid history-matrix-filters" data-attendance-matrix-filters>
+      <input type="month" data-attendance-matrix-month aria-label="Mes" />
+      <label class="threshold-field">
+        <span>Umbral %</span>
+        <input type="number" min="50" max="100" step="1" data-attendance-threshold aria-label="Umbral de asistencia" />
+      </label>
+      <button type="button" class="btn btn-secondary" data-attendance-matrix-export>
+        <span class="copy-long">Exportar CSV</span>
+        <span class="copy-short">CSV</span>
+      </button>
+    </div>
+    <p class="muted attendance-matrix-scroll-hint" aria-hidden="true">Deslizá para ver los días →</p>
+    <div class="table-container attendance-matrix-wrap" data-attendance-matrix></div>
   </div>
-  <p class="muted attendance-matrix-scroll-hint" aria-hidden="true">Deslizá horizontalmente para ver todos los días →</p>
-  <div class="table-container attendance-matrix-wrap" data-attendance-matrix></div>
 </section>
 
 <p class="tools-nav-link-wrap">
   {spaMode ? (
     <button type="button" class="tools-nav-link" data-tools-focus="importar" data-tools-tab="asistencias">
-      ¿Tenés planilla Excel? Importá o exportá en Herramientas → Importar Datos
+      <span class="copy-long">¿Tenés planilla Excel? Importá o exportá en Herramientas</span>
+      <span class="copy-short">Importar / exportar Excel</span>
     </button>
   ) : (
-    <a class="tools-nav-link" href="/herramientas?tab=importar&tipo=asistencias">¿Tenés planilla Excel? Importá o exportá en Herramientas → Importar Datos</a>
+    <a class="tools-nav-link" href="/herramientas?tab=importar&tipo=asistencias">
+      <span class="copy-long">¿Tenés planilla Excel? Importá o exportá en Herramientas</span>
+      <span class="copy-short">Importar / exportar Excel</span>
+    </a>
   )}
 </p>

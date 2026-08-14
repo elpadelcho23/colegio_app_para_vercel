@@ -3900,6 +3900,89 @@ label.checkbox-row {
   font-size: 0.85rem;
 }
 
+.history-date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.history-kpis {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.history-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.history-tab {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.history-tab.is-active {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  color: var(--brand-strong);
+  font-weight: 700;
+}
+
+.history-tab-panel[hidden] {
+  display: none !important;
+}
+
+.cell-stack {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.cell-stack small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+[data-attendance-history-view] .table-wrap table {
+  min-width: 0;
+  width: 100%;
+}
+
+.history-matrix-filters {
+  align-items: end;
+}
+
+@media (max-width: 767px) {
+  .history-kpis {
+    font-size: 0.8rem;
+  }
+
+  .history-tab {
+    min-height: 40px;
+    padding: 0.35rem 0.25rem;
+    font-size: 0.82rem;
+  }
+
+  [data-attendance-history-view] .table-wrap td:first-child {
+    grid-template-columns: 1fr;
+  }
+
+  [data-attendance-history-view] .table-wrap td:first-child::before {
+    display: none;
+  }
+}
+
 .kit-card {
   margin: 0;
 }

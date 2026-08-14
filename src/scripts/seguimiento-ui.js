@@ -248,7 +248,7 @@ export function initTeacherFeatures(deps) {
         || root.querySelector('[data-history-filter-subject]')?.value
         || '';
       if (!courseId || !subjectId) {
-        replaceContent(matrixHost, emptyState('Elegí curso y materia', 'La planilla mensural necesita curso y materia.'));
+        replaceContent(matrixHost, emptyState('Elegí curso y materia', 'Usá los filtros de arriba.'));
         return;
       }
       const [year, month] = monthInput.value.split('-').map(Number);

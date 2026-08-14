@@ -475,6 +475,22 @@ function attendanceAveragesByStudent(filters = {}) {
     });
 }
 
+function cellStack(title, meta) {
+  return el('div', { className: 'cell-stack' },
+    el('strong', {}, title),
+    meta ? el('small', {}, meta) : null,
+  );
+}
+
+function formatShortDate(iso) {
+  const [year, month, day] = String(iso || '').split('-');
+  return day && month ? `${day}/${month}${year ? `/${year.slice(-2)}` : ''}` : (iso || '-');
+}
+
+function attendanceRowMeta(parts) {
+  return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' · ');
+}
+
 function renderAttendanceHistory(root) {
   const summary = root.querySelector('[data-attendance-history-summary]');
   const table = root.querySelector('[data-attendance-history-table]');
@@ -493,47 +509,47 @@ function renderAttendanceHistory(root) {
   const studentAverages = attendanceAveragesByStudent(filters);
   const presentCount = records.filter((record) => record.estado === 'presente').length;
   const acreditados = studentAverages.filter((item) => item.acredita).length;
+  const threshold = attendancePassThreshold();
 
   if (summary) {
-    renderMetrics(summary, [
-      { value: records.length, label: 'Registros' },
-      { value: presentCount, label: 'Presentes' },
-      { value: studentAverages.length, label: 'Alumnos evaluados' },
-      { value: acreditados, label: `Acreditan (≥${attendancePassThreshold()}%)` },
-    ]);
+    summary.textContent = `${records.length} reg. · ${presentCount} presentes · ${acreditados}/${studentAverages.length || 0} acreditan (≥${threshold}%)`;
   }
 
   renderTable(
     table,
-    ['Colegio', 'Curso', 'Fecha', 'Materia', 'Alumno', 'Estado'],
+    ['Alumno', 'Fecha', 'Estado'],
     records.map((record) => [
-      record.escuela || '-',
-      `${record.cursoNombre} ${record.cursoTurno}`,
-      record.fecha,
-      record.materiaNombre || '-',
-      el('strong', {}, record.student.nombre),
+      cellStack(
+        record.student.nombre,
+        attendanceRowMeta([
+          filters.escuela ? '' : record.escuela,
+          `${record.cursoNombre} ${record.cursoTurno}`,
+          filters.materia ? '' : record.materiaNombre,
+        ]),
+      ),
+      formatShortDate(record.fecha),
       tag(record.estado === 'presente' ? 'Presente' : 'Ausente', `tag ${record.estado === 'presente' ? 'ok' : 'danger'}`),
     ]),
-    emptyState('Sin registros de asistencia', 'Tomá asistencia del curso de arriba.', {
-      ctaLabel: 'Tomar asistencia',
-      spaNav: 'asistencia',
-    }),
+    emptyState('Sin registros', 'Pasá lista arriba o cambiá los filtros.'),
   );
 
   if (averages) {
     renderTable(
       averages,
-      ['Alumno', 'Curso', 'Materia', 'Presentes', 'Total', '% Asistencia', 'Acreditación'],
+      ['Alumno', 'Asist.', '%', 'Estado'],
       studentAverages.map((item) => [
-        el('strong', {}, item.student.nombre),
-        `${item.course?.nombre || '-'} ${item.course?.turno || ''}`,
-        item.subject?.nombre || '-',
-        item.present,
-        item.total,
+        cellStack(
+          item.student.nombre,
+          attendanceRowMeta([
+            `${item.course?.nombre || ''} ${item.course?.turno || ''}`,
+            filters.materia ? '' : item.subject?.nombre,
+          ]),
+        ),
+        `${item.present}/${item.total}`,
         item.rate === null ? '-' : `${item.rate.toFixed(0)}%`,
-        tag(item.acredita ? 'Acredita' : 'No acredita', `tag ${item.acredita ? 'ok' : 'danger'}`),
+        tag(item.acredita ? 'Acredita' : 'No', `tag ${item.acredita ? 'ok' : 'danger'}`),
       ]),
-      emptyState('Sin promedios calculables', 'Seleccioná otro filtro o tomá asistencia para ver promedios.'),
+      emptyState('Sin promedios', 'Pasá lista o cambiá los filtros.'),
     );
   }
 }
@@ -1755,6 +1771,21 @@ function initAttendance() {
   const renderHistory = () => renderAttendanceHistory(root);
   [historySchool, historyCourse, historySubject, historyFrom, historyTo].forEach((control) => {
     control?.addEventListener('change', renderHistory);
+  });
+
+  const historyTabs = root.querySelector('[data-history-tabs]');
+  historyTabs?.addEventListener('click', (event) => {
+    const tab = event.target.closest('[data-history-tab]');
+    if (!tab || !historyTabs.contains(tab)) return;
+    const name = tab.dataset.historyTab;
+    root.querySelectorAll('[data-history-tab]').forEach((button) => {
+      const on = button === tab;
+      button.classList.toggle('is-active', on);
+      button.setAttribute('aria-selected', String(on));
+    });
+    root.querySelectorAll('[data-history-panel]').forEach((panel) => {
+      panel.hidden = panel.dataset.historyPanel !== name;
+    });
   });
 
   let lastAttendanceContext = attendanceContext();
