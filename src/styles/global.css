@@ -2269,6 +2269,14 @@ a.tools-nav-link {
   background: var(--brand-strong);
 }
 
+:root[data-theme="dark"] .btn-primary {
+  color: #101412;
+}
+
+:root[data-theme="dark"] .btn-primary:hover {
+  color: #101412;
+}
+
 .btn-secondary {
   color: var(--brand-strong);
   background: var(--surface-2);
@@ -3945,9 +3953,10 @@ label.checkbox-row {
   min-width: 0;
   max-width: 100%;
   padding: 1rem;
-  border: 1px solid var(--border, #d9e1dc);
+  border: 1px solid var(--line);
   border-radius: 0.85rem;
-  background: linear-gradient(180deg, #f8fbf9 0%, #ffffff 100%);
+  background: var(--surface);
+  color: var(--ink);
   overflow: hidden;
 }
 
@@ -3971,9 +3980,9 @@ label.checkbox-row {
 .excel-ref-field {
   min-width: 0;
   padding: 0.7rem 0.8rem;
-  border: 1px solid #d5e3dd;
+  border: 1px solid var(--line);
   border-radius: 0.65rem;
-  background: #fff;
+  background: var(--surface-muted);
 }
 
 .excel-ref-field-head {
@@ -4006,11 +4015,11 @@ label.checkbox-row {
   overflow-x: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  border: 1px solid #c8d8d2;
+  border: 1px solid var(--line);
   border-radius: 0.65rem;
-  background: #fff;
+  background: var(--surface);
   scrollbar-width: thin;
-  scrollbar-color: #6f8f86 #e8f0ec;
+  scrollbar-color: var(--brand) var(--surface-2);
 }
 
 .excel-reference-table::-webkit-scrollbar {
@@ -4018,12 +4027,12 @@ label.checkbox-row {
 }
 
 .excel-reference-table::-webkit-scrollbar-track {
-  background: #e8f0ec;
+  background: var(--surface-2);
   border-radius: 0 0 0.65rem 0.65rem;
 }
 
 .excel-reference-table::-webkit-scrollbar-thumb {
-  background: #6f8f86;
+  background: var(--brand);
   border-radius: 999px;
 }
 
@@ -4044,25 +4053,26 @@ label.checkbox-row {
 }
 
 .excel-reference-table thead th {
-  background: #226c5f;
-  color: #fff;
+  background: var(--brand);
+  color: var(--bg);
   font-weight: 600;
   text-align: left;
   padding: 0.65rem 0.75rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid color-mix(in srgb, var(--bg) 18%, transparent);
   white-space: nowrap;
 }
 
 .excel-reference-table tbody td {
   padding: 0.6rem 0.75rem;
-  border-top: 1px solid #e3ebe7;
-  border-right: 1px solid #eef3f0;
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
   vertical-align: top;
   white-space: nowrap;
+  color: var(--ink);
 }
 
 .excel-reference-table tbody tr:nth-child(even) td {
-  background: #f7faf8;
+  background: var(--surface-muted);
 }
 
 .excel-ref-tag {
@@ -4085,8 +4095,8 @@ label.checkbox-row {
 
 .excel-ref-tag-optional {
   margin-left: 0;
-  background: color-mix(in srgb, var(--brand, #226c5f) 14%, #fff);
-  color: var(--brand-strong, #1a564c);
+  background: color-mix(in srgb, var(--brand) 18%, var(--surface));
+  color: var(--brand-strong);
 }
 
 .excel-reference-notes {
@@ -4139,9 +4149,10 @@ label.checkbox-row {
 
 .excel-mapping {
   padding: 1rem;
-  border: 1px solid #c8d8d2;
+  border: 1px solid var(--line);
   border-radius: 0.85rem;
-  background: #f8fbf9;
+  background: var(--surface-muted);
+  color: var(--ink);
   display: grid;
   gap: 0.85rem;
 }
@@ -4270,6 +4281,7 @@ label.checkbox-row {
   font-size: 0.84rem;
   cursor: pointer;
   list-style: none;
+  color: var(--ink);
 }
 
 .excel-workspace-extras > details > summary::-webkit-details-marker {
@@ -4312,10 +4324,10 @@ label.checkbox-row {
   align-items: center;
   gap: 0.5rem;
   padding: 0.55rem 0.75rem;
-  border: 1px solid var(--border, #d9e1dc);
+  border: 1px solid var(--line);
   border-radius: 0.65rem;
-  background: #f4f8f6;
-  color: var(--muted, #5f6b66);
+  background: var(--surface-muted);
+  color: var(--muted);
   font-size: 0.88rem;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
@@ -4327,33 +4339,34 @@ label.checkbox-row {
   width: 1.45rem;
   height: 1.45rem;
   border-radius: 999px;
-  background: #dce8e3;
+  background: var(--surface-2);
+  color: var(--ink);
   font-size: 0.78rem;
   font-weight: 700;
   flex-shrink: 0;
 }
 
 .excel-workspace-step.is-active {
-  border-color: #226c5f;
-  background: #e8f5ef;
-  color: #1f5c45;
+  border-color: var(--brand);
+  background: var(--surface-emphasis);
+  color: var(--brand-strong);
   font-weight: 600;
 }
 
 .excel-workspace-step.is-active .excel-workspace-step-num {
-  background: #226c5f;
-  color: #fff;
+  background: var(--brand);
+  color: var(--bg);
 }
 
 .excel-workspace-step.is-done {
-  border-color: #b9ddc9;
-  background: #f0faf5;
-  color: #2a6b52;
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--line));
+  background: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  color: var(--ok);
 }
 
 .excel-workspace-step.is-done .excel-workspace-step-num {
-  background: #b9ddc9;
-  color: #1f5c45;
+  background: color-mix(in srgb, var(--ok) 35%, var(--surface));
+  color: var(--ok);
 }
 
 .excel-workspace-step-label {
@@ -4370,21 +4383,21 @@ label.checkbox-row {
 }
 
 .excel-toast.is-ok {
-  background: #e8f5ef;
-  color: #1f5c45;
-  border: 1px solid #b9ddc9;
+  background: color-mix(in srgb, var(--ok) 16%, var(--surface));
+  color: var(--ok);
+  border: 1px solid color-mix(in srgb, var(--ok) 40%, var(--line));
 }
 
 .excel-toast.is-warning {
-  background: #fff8e6;
-  color: #7a5a00;
-  border: 1px solid #ecd99a;
+  background: color-mix(in srgb, var(--warning) 16%, var(--surface));
+  color: var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--line));
 }
 
 .excel-toast.is-error {
-  background: #fdeeee;
-  color: #8b2f2f;
-  border: 1px solid #f0c2c2;
+  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line));
 }
 
 .excel-template-library-actions {
@@ -4401,8 +4414,8 @@ label.checkbox-row {
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 700;
-  background: #e3ebe7;
-  color: #2a6b52;
+  background: var(--surface-2);
+  color: var(--brand-strong);
   width: fit-content;
 }
 
@@ -4412,8 +4425,9 @@ label.checkbox-row {
 }
 
 .excel-template-builder {
-  border: 1px solid #c8d8d2;
-  background: #f8fbf9;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--ink);
 }
 
 .excel-builder-fields {
@@ -4428,21 +4442,25 @@ label.checkbox-row {
 
 .excel-dropzone {
   position: relative;
-  border: 2px dashed #b8cfc6;
+  border: 2px dashed var(--line);
   border-radius: 0.85rem;
-  background: linear-gradient(180deg, #f6fbf8 0%, #fff 100%);
+  background: var(--surface-muted);
+  color: var(--ink);
   transition: border-color 0.15s, background 0.15s;
 }
 
 .excel-dropzone.is-dragover {
-  border-color: var(--brand, #226c5f);
-  background: #eef8f3;
+  border-color: var(--brand);
+  background: var(--surface-emphasis);
 }
 
 .excel-dropzone-input {
   position: absolute;
   inset: 0;
   opacity: 0;
+  background: transparent;
+  color: transparent;
+  color-scheme: inherit;
   cursor: pointer;
   width: 100%;
   height: 100%;
@@ -4458,12 +4476,12 @@ label.checkbox-row {
 
 .excel-dropzone-body strong {
   font-size: 1rem;
-  color: var(--text, #1a2e28);
+  color: var(--ink);
 }
 
 .excel-dropzone-body span {
   font-size: 0.88rem;
-  color: var(--muted, #5f6b66);
+  color: var(--muted);
 }
 
 .excel-mapping-head {
@@ -4483,7 +4501,7 @@ label.checkbox-row {
 .excel-mapping-progress-bar {
   height: 0.45rem;
   border-radius: 999px;
-  background: #e3ebe7;
+  background: var(--surface-2);
   overflow: hidden;
 }
 
@@ -4491,7 +4509,7 @@ label.checkbox-row {
   display: block;
   height: 100%;
   width: 0%;
-  background: #226c5f;
+  background: var(--brand);
   border-radius: 999px;
   transition: width 0.2s ease;
 }
@@ -4517,10 +4535,10 @@ label.checkbox-row {
   display: inline-block;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: #fff;
-  border: 1px solid #c8d8d2;
+  background: var(--surface);
+  border: 1px solid var(--line);
   font-size: 0.78rem;
-  color: #2a4a40;
+  color: var(--ink);
 }
 
 .excel-mapping-table {
@@ -4547,19 +4565,19 @@ label.checkbox-row {
 
 .excel-mapping-row {
   padding: 0.65rem 0.75rem;
-  border: 1px solid #dce8e3;
+  border: 1px solid var(--line);
   border-radius: 0.65rem;
-  background: #fff;
+  background: var(--surface);
 }
 
 .excel-mapping-row.is-mapped {
-  border-color: #b9ddc9;
-  background: #f4fbf7;
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
+  background: color-mix(in srgb, var(--ok) 12%, var(--surface));
 }
 
 .excel-mapping-row.is-missing {
-  border-color: #ecd99a;
-  background: #fffdf5;
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--line));
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
 }
 
 .excel-mapping-row-label {
@@ -4584,18 +4602,18 @@ label.checkbox-row {
 }
 
 .excel-mapping-row.is-mapped .excel-mapping-status {
-  color: #1f5c45;
+  color: var(--ok);
 }
 
 .excel-mapping-row.is-missing .excel-mapping-status {
-  color: #7a5a00;
+  color: var(--warning);
 }
 
 .excel-save-template-cta {
   padding: 0.85rem 1rem;
   border-radius: 0.75rem;
-  background: #eef8f3;
-  border: 1px solid #b9ddc9;
+  background: var(--surface-emphasis);
+  border: 1px solid color-mix(in srgb, var(--brand) 40%, var(--line));
   display: grid;
   gap: 0.65rem;
 }
@@ -4603,7 +4621,7 @@ label.checkbox-row {
 .excel-save-template-cta p {
   margin: 0;
   font-size: 0.92rem;
-  color: #1f5c45;
+  color: var(--brand-strong);
   font-weight: 600;
 }
 
@@ -4613,10 +4631,11 @@ label.checkbox-row {
 }
 
 .excel-preview-panel {
-  border: 1px solid #dce8e3;
+  border: 1px solid var(--line);
   border-radius: 0.75rem;
   padding: 0.85rem 1rem;
-  background: #fafcfb;
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .excel-preview-table {
@@ -4625,7 +4644,7 @@ label.checkbox-row {
   max-width: 100%;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
-  scrollbar-color: #6f8f86 #e8f0ec;
+  scrollbar-color: var(--brand) var(--surface-2);
 }
 
 .excel-preview-table table {
@@ -4638,8 +4657,9 @@ label.checkbox-row {
 .excel-preview-table th,
 .excel-preview-table td {
   padding: 0.45rem 0.55rem;
-  border-bottom: 1px solid #e3ebe7;
+  border-bottom: 1px solid var(--line);
   text-align: left;
+  color: var(--ink);
 }
 
 @media (min-width: 720px) {
@@ -4672,9 +4692,10 @@ label.checkbox-row {
 
 .excel-template-library {
   padding: 1rem;
-  border: 1px dashed #b8cfc6;
+  border: 1px dashed var(--line);
   border-radius: 0.85rem;
-  background: linear-gradient(180deg, #f6fbf8 0%, #fff 100%);
+  background: var(--surface);
+  color: var(--ink);
   display: grid;
   gap: 0.85rem;
 }
@@ -4713,28 +4734,29 @@ label.checkbox-row {
   display: grid;
   gap: 0.25rem;
   padding: 0.75rem 0.85rem;
-  border: 1px solid #c8d8d2;
+  border: 1px solid var(--line);
   border-radius: 0.7rem;
-  background: #fff;
+  background: var(--surface-muted);
+  color: var(--ink);
   text-align: left;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
 }
 
 .excel-template-card:hover {
-  border-color: #226c5f;
-  box-shadow: 0 2px 8px rgba(34, 108, 95, 0.1);
+  border-color: var(--brand);
+  box-shadow: var(--shadow-soft);
 }
 
 .excel-template-card.is-selected {
-  border-color: #226c5f;
-  background: #eef8f3;
-  box-shadow: inset 0 0 0 1px #226c5f;
+  border-color: var(--brand);
+  background: var(--surface-emphasis);
+  box-shadow: inset 0 0 0 1px var(--brand);
 }
 
 .excel-template-card strong {
   font-size: 0.92rem;
-  color: var(--text, #1a2e28);
+  color: var(--ink);
 }
 
 .excel-template-card small {
@@ -4759,8 +4781,8 @@ label.checkbox-row {
 }
 
 .excel-mapping-field .excel-ref-tag {
-  background: #e3ebe7;
-  color: #3d5a50;
+  background: var(--surface-2);
+  color: var(--ink);
   margin-left: 0.25rem;
   vertical-align: middle;
 }
@@ -5111,4 +5133,39 @@ label.checkbox-row {
   margin: 0 0 1.25rem;
   padding-bottom: 1rem;
   border-bottom: 1px dashed var(--line);
+}
+
+html[data-theme="dark"] .excel-workspace-step,
+html[data-theme="dark"] .excel-template-library,
+html[data-theme="dark"] .excel-reference,
+html[data-theme="dark"] .excel-dropzone,
+html[data-theme="dark"] .excel-workspace-extras details,
+html[data-theme="dark"] .excel-workspace-extras summary {
+  appearance: none;
+  -webkit-appearance: none;
+  color: #17211c !important;
+}
+
+html[data-theme="dark"] .excel-workspace-step.is-active {
+  color: #174c43 !important;
+}
+
+html[data-theme="dark"] .excel-workspace-step-num {
+  color: #17211c !important;
+}
+
+html[data-theme="dark"] .excel-workspace-step.is-active .excel-workspace-step-num {
+  color: #fff !important;
+}
+
+html[data-theme="dark"] .excel-workspace-extras summary strong,
+html[data-theme="dark"] .excel-workspace-step-label,
+html[data-theme="dark"] .excel-dropzone-body strong {
+  color: #17211c !important;
+}
+
+html[data-theme="dark"] .excel-workspace-extras summary .muted,
+html[data-theme="dark"] .excel-dropzone-body span,
+html[data-theme="dark"] .excel-dropzone-file {
+  color: #3d524a !important;
 }
