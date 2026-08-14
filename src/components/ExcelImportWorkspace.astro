@@ -468,20 +468,29 @@ const gradeExampleRows = [
   :global(html[data-theme='dark']) .excel-template-library,
   :global(html[data-theme='dark']) .excel-reference,
   :global(html[data-theme='dark']) .excel-dropzone,
-  :global(html[data-theme='dark']) .excel-workspace-extras summary,
-  :global(html[data-theme='dark']) .excel-workspace-extras summary strong,
-  :global(html[data-theme='dark']) .excel-workspace-step-label,
-  :global(html[data-theme='dark']) .excel-dropzone-body strong {
-    color: #17211c;
+  :global(html[data-theme='dark']) .excel-workspace-extras details,
+  :global(html[data-theme='dark']) .excel-workspace-extras summary {
+    background: #fff;
+    background-image: none;
+    color: #111;
+    border-color: #c8d4ce;
   }
 
   :global(html[data-theme='dark']) .excel-workspace-step.is-active {
-    color: #174c43;
+    background: #fff;
+    color: #111;
+    border-color: #226c5f;
+  }
+
+  :global(html[data-theme='dark']) .excel-workspace-extras summary strong,
+  :global(html[data-theme='dark']) .excel-workspace-step-label,
+  :global(html[data-theme='dark']) .excel-dropzone-body strong {
+    color: #111;
   }
 
   :global(html[data-theme='dark']) .excel-workspace-extras summary .muted,
   :global(html[data-theme='dark']) .excel-dropzone-body span,
   :global(html[data-theme='dark']) .excel-dropzone-file {
-    color: #3d524a;
+    color: #333;
   }
 </style>
