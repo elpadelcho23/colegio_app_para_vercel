@@ -178,6 +178,7 @@ async function callGroqCorreccion(prompt: string): Promise<CorreccionResult> {
       model: MODEL,
       temperature: 0.2,
       max_tokens: 1800,
+      include_reasoning: false,
       response_format: { type: 'json_object' },
       messages: [
         {

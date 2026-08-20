@@ -3,10 +3,11 @@ import {
   type ActivityGenerationKind,
   type GeneratedActivityPayload,
 } from './activity-document-html';
+import { ACTIVITY_AI_LIMITS } from '../lib/activity-ai-limits';
 import { requireGroqApiKey } from './groq-env';
 import { groqQueue } from './groq-queue';
 
-const MODEL = 'llama-3.3-70b-versatile';
+const MODEL = ACTIVITY_AI_LIMITS.groqModelHeavy;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 const SYSTEM_PROMPT = `Sos un Asistente Pedagógico Experto en educación secundaria y técnica en Argentina.
@@ -101,6 +102,7 @@ async function callGroq(userPrompt: string) {
       model: MODEL,
       temperature: 0.45,
       max_tokens: 8000,
+      include_reasoning: false,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },

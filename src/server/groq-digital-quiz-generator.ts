@@ -1,8 +1,9 @@
+import { ACTIVITY_AI_LIMITS } from '../lib/activity-ai-limits';
 import { requireGroqApiKey } from './groq-env';
 import { groqQueue } from './groq-queue';
 import type { AulaModo, PreguntaInput } from './aula-temporal-service';
 
-const MODEL = 'llama-3.3-70b-versatile';
+const MODEL = ACTIVITY_AI_LIMITS.groqModelHeavy;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 export type DigitalQuizPayload = {
@@ -102,6 +103,7 @@ async function callGroq(userPrompt: string) {
       model: MODEL,
       temperature: 0.35,
       max_tokens: 8000,
+      include_reasoning: false,
       response_format: { type: 'json_object' },
       messages: [
         {

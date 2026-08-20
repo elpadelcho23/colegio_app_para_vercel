@@ -79,6 +79,7 @@ export async function suggestExcelColumnMapping(input: {
       model: MODEL,
       temperature: 0.1,
       max_tokens: 900,
+      include_reasoning: false,
       messages: [
         {
           role: 'system',

@@ -38,6 +38,7 @@ export async function summarizeActivitySource(rawText: string, context?: { mater
       model: MODEL,
       temperature: 0.2,
       max_tokens: ACTIVITY_AI_LIMITS.summarizerMaxTokens,
+      include_reasoning: false,
       messages: [
         {
           role: 'system',

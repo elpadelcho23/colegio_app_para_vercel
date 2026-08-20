@@ -2,7 +2,7 @@ export const ACTIVITY_AI_LIMITS = {
   maxFiles: 6,
   maxFileBytes: 8 * 1024 * 1024,
   maxFileMb: 8,
-  /** Máximo de caracteres que se envían al modelo principal (70B). */
+  /** Máximo de caracteres que se envían al modelo principal. */
   maxInputChars: 18_000,
   /** Máximo de caracteres leídos al extraer archivos (puede superar lo enviado a la IA). */
   maxExtractChars: 120_000,
@@ -10,14 +10,16 @@ export const ACTIVITY_AI_LIMITS = {
   summarizeThresholdChars: 8_000,
   /**
    * Máximo enviado al modelo liviano para resumir.
-   * El plan gratuito de Groq (~6000 TPM en 8B) no tolera prompts muy largos.
+   * El plan gratuito de Groq no tolera prompts muy largos.
    */
   summarizerInputChars: 9_000,
   /** Tokens de salida del resumen (dejar margen dentro del TPM). */
   summarizerMaxTokens: 1_200,
   approxPagesAtInputCap: '6-10',
-  groqModelHeavy: 'llama-3.3-70b-versatile',
-  groqModelLight: 'llama-3.1-8b-instant',
+  /** Reemplazo oficial de llama-3.3-70b-versatile (apagado 16/08/2026). */
+  groqModelHeavy: 'openai/gpt-oss-120b',
+  /** Reemplazo oficial de llama-3.1-8b-instant (apagado 16/08/2026). */
+  groqModelLight: 'openai/gpt-oss-20b',
 } as const;
 
 export function formatActivityChars(value: number) {

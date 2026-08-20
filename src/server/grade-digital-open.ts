@@ -55,6 +55,7 @@ export async function scoreOpenAnswersWithAi(options: {
         model: MODEL,
         temperature: 0.2,
         max_tokens: 2000,
+        include_reasoning: false,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: 'Sos un docente que puntúa respuestas digitales. Solo JSON.' },
