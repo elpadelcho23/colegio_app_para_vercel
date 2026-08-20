@@ -22,6 +22,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
       turno: String(body?.turno || ''),
       cursoId: String(body?.cursoId || ''),
       materiaId: String(body?.materiaId || ''),
+      cursoNombre: String(body?.cursoNombre || ''),
+      materiaNombre: String(body?.materiaNombre || ''),
       titulo: String(body?.titulo || ''),
       modo,
       duracionMinutos: Number(body?.duracionMinutos) || 40,

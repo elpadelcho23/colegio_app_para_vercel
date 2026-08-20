@@ -418,6 +418,8 @@ export async function createClaseVirtual(input: {
   turno: string;
   cursoId: string;
   materiaId: string;
+  cursoNombre?: string;
+  materiaNombre?: string;
   titulo: string;
   modo: AulaModo;
   duracionMinutos: number;
@@ -440,6 +442,8 @@ export async function createClaseVirtual(input: {
     materiaId,
     colegio,
     turno,
+    cursoNombre: input.cursoNombre,
+    materiaNombre: input.materiaNombre,
   });
   const resolvedCursoId = teaching.cursoId || cursoId;
   const resolvedMateriaId = teaching.materiaId || materiaId;
@@ -1137,6 +1141,14 @@ export async function appendIntentoEvent(intentoId: string, type: string, detail
 
   const aula = (await db.prepare('SELECT * FROM aulas_temporales WHERE id = ?').get(intento.aula_id)) as AulaRow;
   const anti = parseAntiTrampa(aula.anti_trampa_json, aula.modo);
+
+  if (type === 'heartbeat') {
+    await db.prepare(`
+      UPDATE aula_intentos SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(intentoId);
+    return { ok: true, estado: intento.estado };
+  }
+
   const flags = parseJson<Array<Record<string, unknown>>>(intento.flags_json, []);
   flags.push({ type, at: new Date().toISOString(), ...(detail || {}) });
 

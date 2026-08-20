@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
+import { isUsableDisplayName, pickBetterRecordName } from '../lib/record-display-name';
 import { db, dbPath, getDbBackend, isRemoteTurso } from './db-client';
 
 /**
@@ -196,6 +197,32 @@ export async function ensureTeachingContextRows(input: {
   const cursoId = await resolveOwnedId('cursos', desiredCursoId);
   const materiaId = await resolveOwnedId('materias', desiredMateriaId);
 
+  const existingCurso = (await db.prepare(`
+    SELECT nombre, escuela, turno, ciclo_lectivo
+    FROM cursos WHERE id = ? AND tenant_id = ?
+  `).get(cursoId, tenantId)) as
+    | { nombre: string; escuela: string; turno: string; ciclo_lectivo: number }
+    | undefined;
+  const existingMateria = (await db.prepare(`
+    SELECT nombre FROM materias WHERE id = ? AND tenant_id = ?
+  `).get(materiaId, tenantId)) as { nombre: string } | undefined;
+
+  const cursoNombre = pickBetterRecordName(
+    desiredCursoId,
+    input.cursoNombre,
+    existingCurso?.nombre,
+  ) || (isUsableDisplayName(desiredCursoId, existingCurso?.nombre) ? existingCurso!.nombre : 'Curso');
+  const materiaNombre = pickBetterRecordName(
+    desiredMateriaId,
+    input.materiaNombre,
+    existingMateria?.nombre,
+  ) || (isUsableDisplayName(desiredMateriaId, existingMateria?.nombre) ? existingMateria!.nombre : 'Materia');
+  const escuela = String(input.colegio || existingCurso?.escuela || 'Escuela').trim() || 'Escuela';
+  const turno = String(input.turno || existingCurso?.turno || 'Manana').trim() || 'Manana';
+  const cicloLectivo = Number(existingCurso?.ciclo_lectivo) > 0
+    ? Number(existingCurso?.ciclo_lectivo)
+    : new Date().getFullYear();
+
   const tx = db.transaction(async () => {
     await db.prepare(`
       INSERT INTO cursos (id, tenant_id, escuela, nombre, turno, ciclo_lectivo, updated_at)
@@ -209,10 +236,10 @@ export async function ensureTeachingContextRows(input: {
     `).run(
       cursoId,
       tenantId,
-      String(input.colegio || 'Escuela').trim() || 'Escuela',
-      String(input.cursoNombre || desiredCursoId).trim() || desiredCursoId,
-      String(input.turno || 'Manana').trim() || 'Manana',
-      2026,
+      escuela,
+      cursoNombre,
+      turno,
+      cicloLectivo,
       now,
     );
 
@@ -227,7 +254,7 @@ export async function ensureTeachingContextRows(input: {
     `).run(
       materiaId,
       tenantId,
-      String(input.materiaNombre || desiredMateriaId).trim() || desiredMateriaId,
+      materiaNombre,
       now,
     );
 

@@ -1,7 +1,8 @@
 import { CLIENT_STORAGE_ENTRIES } from './client-storage-keys';
+import { pickBetterRecordName } from './record-display-name';
 import type { SyncEntity } from '../scripts/offline-db';
 
-type Timestamped = { id?: string; updatedAt?: string };
+type Timestamped = { id?: string; updatedAt?: string; nombre?: string };
 
 const PULL_FIELD_TO_ENTITY: Partial<Record<string, SyncEntity>> = {
   students: 'student',
@@ -42,7 +43,10 @@ export function mergeRecordsById<T extends Timestamped>(
     }
     const currentTime = new Date(current.updatedAt || 0).getTime();
     const nextTime = new Date(item.updatedAt || 0).getTime();
-    if (nextTime >= currentTime) map.set(item.id, item);
+    const newer = nextTime >= currentTime ? item : current;
+    const older = newer === item ? current : item;
+    const nombre = pickBetterRecordName(item.id, newer.nombre, older.nombre);
+    map.set(item.id, nombre ? { ...newer, nombre } : newer);
   };
 
   serverItems.forEach(upsert);

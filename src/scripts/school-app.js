@@ -198,11 +198,15 @@ function visibleCourseIds(escuela = '') {
 }
 
 function studentsInCiclo(escuela = '', cursoId = '') {
+  const wantedCourseId = String(cursoId || '').trim();
+  if (wantedCourseId) {
+    return activeStudents().filter((student) => student.cursoId === wantedCourseId);
+  }
   const allowed = visibleCourseIds(escuela);
   return activeStudents().filter((student) => {
-    if (!allowed.has(student.cursoId)) return false;
-    if (cursoId && student.cursoId !== cursoId) return false;
-    return true;
+    if (allowed.has(student.cursoId)) return true;
+    // Alumnos cuyo curso no está en el ciclo actual siguen visibles si no hay filtro de curso.
+    return !courseById(student.cursoId);
   });
 }
 
@@ -286,7 +290,18 @@ function subjectById(id) {
   return read(KEYS.subjects).find((subject) => subject.id === id);
 }
 
-function fillSelect(select, items, placeholder, valueKey = 'id', labeler = (item) => item.nombre) {
+function looksLikeGeneratedId(value) {
+  return /^(curso|mat|esc|al)-[0-9]{10,}-[0-9a-f]+$/i.test(String(value || '').trim());
+}
+
+function displayRecordName(record, fallback = '') {
+  if (!record) return fallback;
+  const name = String(record.nombre || '').trim();
+  if (name && name !== record.id && !looksLikeGeneratedId(name)) return name;
+  return fallback;
+}
+
+function fillSelect(select, items, placeholder, valueKey = 'id', labeler = (item) => displayRecordName(item, item?.nombre || 'Sin nombre')) {
   fillSelectOptions(select, items, placeholder, valueKey, labeler);
 }
 
@@ -306,11 +321,12 @@ function average(grades) {
 
 function courseLabel(course) {
   if (!course) return 'Sin curso';
+  const nombre = displayRecordName(course, 'Curso');
   const ciclo = resolveCourseCiclo(course);
   if (ciclo !== activeCicloLectivo()) {
-    return `${course.nombre} - ${course.turno} (${ciclo})`;
+    return `${nombre} - ${course.turno} (${ciclo})`;
   }
-  return `${course.nombre} - ${course.turno}`;
+  return `${nombre} - ${course.turno}`;
 }
 
 function studentSubjectIds(student) {
@@ -679,7 +695,9 @@ function describeTeachingContext(ctx = getTeachingContext()) {
   if (!ctx.cursoId && !ctx.materiaId) return 'Elegí curso y materia';
   const course = ctx.course || courseById(ctx.cursoId);
   const subject = ctx.subject || subjectById(ctx.materiaId);
-  return [ctx.escuela || course?.escuela, course?.nombre, subject?.nombre].filter(Boolean).join(' · ') || 'Elegí curso y materia';
+  const courseName = displayRecordName(course, course?.turno ? `Curso ${course.turno}` : 'Curso');
+  const subjectName = displayRecordName(subject, 'Materia');
+  return [ctx.escuela || course?.escuela, courseName, subjectName].filter(Boolean).join(' · ') || 'Elegí curso y materia';
 }
 
 function teachingContextIsReady(ctx = getTeachingContext()) {
@@ -1034,19 +1052,43 @@ function updatePanelTodayTitle() {
     : 'Hoy: elegí curso arriba';
 }
 
+function updatePanelImportCta() {
+  const importBtn = document.querySelector('[data-panel-import-excel]');
+  const setupHelp = document.querySelector('[data-panel-setup-help]');
+  const readyHelp = document.querySelector('[data-panel-ready-help]');
+  const ctx = getTeachingContext();
+  const hasStudents = Boolean(ctx.cursoId)
+    && studentsInCiclo(ctx.escuela || '', ctx.cursoId).length > 0;
+  if (importBtn) {
+    importBtn.classList.toggle('is-hidden', hasStudents);
+    importBtn.hidden = hasStudents;
+  }
+  if (setupHelp) {
+    setupHelp.classList.toggle('is-hidden', hasStudents);
+    setupHelp.hidden = hasStudents;
+  }
+  if (readyHelp) {
+    readyHelp.classList.toggle('is-hidden', !hasStudents);
+    readyHelp.hidden = !hasStudents;
+  }
+}
+
 function initDashboard() {
   const root = document.querySelector('[data-dashboard]');
   if (!root) return;
 
   updatePanelTodayTitle();
+  updatePanelImportCta();
   renderDashboard(root);
 
   window.addEventListener('aula-clara:teaching-context-changed', () => {
     updatePanelTodayTitle();
+    updatePanelImportCta();
     renderDashboard(root);
   });
   window.addEventListener('aula-clara:ciclo-changed', () => {
     updatePanelTodayTitle();
+    updatePanelImportCta();
     renderDashboard(root);
   });
   onPanelRefresh(() => {
@@ -1056,11 +1098,15 @@ function initDashboard() {
 }
 
 function renderDashboard(root) {
+  updatePanelImportCta();
   const filters = read(KEYS.dashboardFilters) || {};
   const courses = visibleCourses(filters.escuela).filter((course) =>
     (!filters.curso || course.id === filters.curso)
   );
-  const students = studentsInCiclo(filters.escuela, filters.curso || '');
+  let students = studentsInCiclo(filters.escuela, filters.curso || '');
+  if (filters.curso && students.length === 0) {
+    students = studentsInCiclo(filters.escuela);
+  }
   const studentIds = new Set(students.map((student) => student.id));
   const attendance = read(KEYS.attendance).filter((item) =>
     studentIds.has(item.studentId) && (!filters.materia || item.subjectId === filters.materia)
@@ -1268,9 +1314,6 @@ function initStudents() {
       }
       if (panelMode === 'manual') {
         panel.classList.toggle('is-hidden', value !== 'manual');
-        if (panel instanceof HTMLDetailsElement) {
-          panel.open = value === 'manual' || !hasExcelPanel;
-        }
       }
     });
   };
@@ -1384,6 +1427,7 @@ function initStudents() {
       const mode = button.getAttribute('data-student-mode-trigger') || 'manual';
       activateStudentMode(mode);
       const target = root.querySelector(`[data-student-mode-panel="${mode === 'manual' ? 'manual' : 'excel'}"]`);
+      if (target instanceof HTMLDetailsElement) target.open = true;
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
@@ -1660,7 +1704,7 @@ function renderStudents(list) {
           el('strong', {}, student.nombre),
           tag(`Promedio ${avg === null ? '-' : avg.toFixed(1)}`, `tag ${avg !== null && avg < 6 ? 'danger' : 'ok'}`),
         ),
-        el('small', { className: 'student-row-meta' }, `${course?.escuela || 'Sin escuela'} · ${course?.nombre || 'Sin curso'} ${course?.turno || ''} · ${subjects}`),
+        el('small', { className: 'student-row-meta' }, `${course?.escuela || 'Sin escuela'} · ${displayRecordName(course, 'Sin curso')} ${course?.turno || ''} · ${subjects}`),
         el('small', {}, student.tutor ? `Contacto: ${student.tutor}` : 'Sin contacto cargado'),
       ),
       el('div', { className: 'row-actions' },
@@ -2325,6 +2369,12 @@ function initGrades() {
   const deliveryStatusFilter = root.querySelector('[data-delivery-status-filter]');
   const deliveryFromFilter = root.querySelector('[data-delivery-from-filter]');
   const deliveryToFilter = root.querySelector('[data-delivery-to-filter]');
+  const evalPanel = root.querySelector('[data-grade-eval-panel]');
+  const showEvalPanel = () => {
+    if (!evalPanel) return;
+    evalPanel.classList.remove('is-hidden');
+    evalPanel.hidden = false;
+  };
   const contextText = root.querySelector('[data-grade-context-text]');
   const inlineSubjectForm = root.querySelector('[data-inline-subject-form]');
   const inlineSubjectList = root.querySelector('[data-inline-subject-list]');
@@ -2443,6 +2493,7 @@ function initGrades() {
       motivo: grade.motivo || '',
     });
     renderBulkGrades();
+    showEvalPanel();
     metaForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -2572,7 +2623,9 @@ function initGrades() {
   applySelectFromUrl(detailCourseFilter, 'curso');
   applySelectFromUrl(subjectFilter, 'materia');
   applySelectFromUrl(detailSubjectFilter, 'materia');
-  applyTeachingContextTo({ course: courseFilter, subject: subjectFilter });
+  applyTeachingContextTo({ school: schoolFilter });
+  refreshCourseOptions();
+  applyTeachingContextTo({ school: schoolFilter, course: courseFilter, subject: subjectFilter });
   applySuggestedContextTo({ course: courseFilter, subject: subjectFilter });
   if (metaForm) {
     metaForm.fecha.value = today();
@@ -2623,7 +2676,9 @@ function initGrades() {
           if (activity.fecha_publicacion) metaForm.fecha.value = activity.fecha_publicacion;
           if (activity.fecha_vencimiento) metaForm.fechaEntrega.value = activity.fecha_vencimiento;
           syncPeriodFromType();
+          showEvalPanel();
           renderBulkGrades();
+          evalPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         },
       },
     );
@@ -2693,7 +2748,9 @@ function initGrades() {
     renderAll();
   });
   window.addEventListener('aula-clara:teaching-context-changed', () => {
-    applyTeachingContextTo({ course: courseFilter, subject: subjectFilter });
+    applyTeachingContextTo({ school: schoolFilter });
+    refreshCourseOptions();
+    applyTeachingContextTo({ school: schoolFilter, course: courseFilter, subject: subjectFilter });
     renderAll();
   });
   typeSelect?.addEventListener('change', () => {
@@ -3668,7 +3725,7 @@ function renderSubjects(list) {
     const count = grades.filter((grade) => grade.subjectId === subject.id).length;
     return el('article', { className: 'course-row' },
       el('div', {},
-        el('strong', {}, subject.nombre),
+        el('strong', {}, displayRecordName(subject, 'Materia')),
         el('small', {}, `${count} notas vinculadas`),
       ),
       el('div', { className: 'row-actions' },
@@ -3791,7 +3848,7 @@ function renderCourses(list, highlightCourseId = '') {
     },
       el('summary', {},
         el('span', {},
-          el('strong', {}, course.nombre),
+          el('strong', {}, displayRecordName(course, 'Curso')),
           el('small', {}, `${course.escuela} · Turno ${course.turno} · Ciclo ${resolveCourseCiclo(course)}`),
         ),
         tag(`${courseStudents.length} alumnos`),
@@ -4321,8 +4378,7 @@ function openActivityFlowTab(tabId = 'contenido') {
 
 async function updateActivityFlowStepper(activeTab = 'contenido') {
   const root = document.querySelector('[data-activities]');
-  const stepper = root?.querySelector('[data-activity-flow-stepper]');
-  if (!stepper) return;
+  if (!root) return;
 
   const ctx = getTeachingContext();
   let hasActividad = false;
@@ -4350,10 +4406,15 @@ async function updateActivityFlowStepper(activeTab = 'contenido') {
     corregir: hasEntregas && !hasPendientes,
   };
 
-  stepper.querySelectorAll('[data-flow-step]').forEach((step) => {
+  root.querySelectorAll('[data-flow-step]').forEach((step) => {
     const id = step.getAttribute('data-flow-step');
     step.classList.toggle('is-done', Boolean(doneByStep[id]));
     step.classList.toggle('is-current', id === activeTab);
+  });
+
+  root.querySelectorAll('[data-activity-flow-tab]').forEach((tab) => {
+    const id = tab.getAttribute('data-activity-flow-tab');
+    tab.classList.toggle('is-done', Boolean(doneByStep[id]));
   });
 }
 
@@ -5299,6 +5360,20 @@ function initClaseVirtual(activitiesRoot) {
     if (step === 2) void refreshActividadesCargables();
   };
 
+  const setQuestionMethod = (method) => {
+    const next = method === 'ia' || method === 'manual' ? method : 'existente';
+    root.querySelectorAll('[data-clase-method]').forEach((tab) => {
+      const active = tab.getAttribute('data-clase-method') === next;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    root.querySelectorAll('[data-clase-method-panel]').forEach((panel) => {
+      panel.hidden = panel.getAttribute('data-clase-method-panel') !== next;
+    });
+    const saveBtn = root.querySelector('[data-clase-guardar-actividad]');
+    if (saveBtn) saveBtn.hidden = next !== 'manual';
+  };
+
   const syncContextSelects = () => {
     const ctx = getTeachingContext();
     const schools = schoolNamesForSelect();
@@ -5456,16 +5531,18 @@ function initClaseVirtual(activitiesRoot) {
     if (!aula.intentos?.length) {
       replaceContent(box, el('p', { className: 'muted' }, 'Todavía no hay entregas digitales.'));
     } else {
-      replaceContent(box, ...aula.intentos.map((item) =>
-        el('article', { className: 'event-card' },
+      replaceContent(box, ...aula.intentos.map((item) => {
+        const focusLosses = (item.flags || []).filter((flag) => flag.type === 'focus_loss').length;
+        return el('article', { className: 'event-card' },
           el('strong', {}, `${item.apellido}, ${item.nombre}`),
           el('small', {}, [
             item.estado,
             item.nota10 != null ? `nota ${item.nota10}` : null,
             item.alumnoId ? 'vinculado' : 'sin vincular',
+            focusLosses ? `${focusLosses} salidas` : null,
           ].filter(Boolean).join(' · ')),
-        ),
-      ));
+        );
+      }));
     }
     showStep(3);
   };
@@ -5477,6 +5554,33 @@ function initClaseVirtual(activitiesRoot) {
 
   window.addEventListener('aula-clara:teaching-context-changed', syncContextSelects);
   onPanelRefresh(syncContextSelects);
+  setQuestionMethod('existente');
+
+  root.querySelectorAll('[data-clase-method]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      setQuestionMethod(tab.getAttribute('data-clase-method') || 'existente');
+    });
+  });
+
+  root.querySelectorAll('[data-clase-step]').forEach((item) => {
+    item.addEventListener('click', () => {
+      const id = Number(item.getAttribute('data-clase-step'));
+      if (id === currentStep) return;
+      if (id === 1) {
+        showStep(1);
+        return;
+      }
+      if (!currentAula) {
+        showAppToast('Primero creá la clase.', 'warning');
+        return;
+      }
+      if (id === 3 && currentStep < 3 && !currentAula.preguntas?.length && !currentAula.intentos?.length) {
+        showAppToast('Cargá las preguntas y guardá para obtener el link.', 'warning');
+        return;
+      }
+      showStep(id);
+    });
+  });
 
   root.querySelector('[data-clase-crear]')?.addEventListener('click', async () => {
     syncContextSelects();
@@ -5494,6 +5598,8 @@ function initClaseVirtual(activitiesRoot) {
           turno: data.turno || course?.turno,
           cursoId: data.cursoId,
           materiaId: data.materiaId,
+          cursoNombre: course?.nombre || '',
+          materiaNombre: subjectById(data.materiaId)?.nombre || '',
           titulo: data.titulo,
           modo: data.modo,
           duracionMinutos: Number(data.duracionMinutos) || 40,
@@ -5517,8 +5623,9 @@ function initClaseVirtual(activitiesRoot) {
       currentAula = payload.aula;
       renderQuestionEditor();
       void refreshActividadesCargables();
+      setQuestionMethod('existente');
       showStep(2);
-      showAppToast('Clase creada. Cargá una actividad existente o armá preguntas nuevas.', 'ok');
+      showAppToast('Clase creada. Ahora cargá las preguntas.', 'ok');
     } catch (error) {
       showAppToast(error instanceof Error ? error.message : 'Error al crear la clase.', 'error');
     } finally {
@@ -5606,6 +5713,7 @@ function initClaseVirtual(activitiesRoot) {
       if (payload.aula?.needsReview) {
         const preview = payload.aula.preguntasPreview || payload.aula.preguntas || [];
         renderQuestionEditor(preview);
+        setQuestionMethod('manual');
         showStep(2);
         showAppToast(
           payload.aula.importedFrom
@@ -6080,6 +6188,17 @@ async function bootstrap() {
       return;
     }
     navigateToToolsSection(section, tab || undefined);
+  });
+  document.addEventListener('click', (event) => {
+    const trigger = event.target?.closest?.('[data-scroll-target]');
+    if (!trigger) return;
+    const selector = trigger.getAttribute('data-scroll-target');
+    if (!selector) return;
+    const target = document.querySelector(selector);
+    if (!target) return;
+    event.preventDefault();
+    if (target instanceof HTMLDetailsElement) target.open = true;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   initSyncUi({ formatSyncStatus });
   startAutoSync();

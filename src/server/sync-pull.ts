@@ -1,4 +1,5 @@
 import { db, type User } from './db';
+import { isUsableDisplayName } from '../lib/record-display-name';
 
 /**
  * Filtro estricto por sesión: tenant siempre; docente_id cuando la tabla lo tiene.
@@ -200,6 +201,7 @@ export async function pullClientData(user: User) {
       }
       return {
         ...course,
+        nombre: isUsableDisplayName(course.id, course.nombre) ? course.nombre : '',
         subjectIds: [...ids],
       };
     }),
@@ -210,7 +212,7 @@ export async function pullClientData(user: User) {
     })),
     subjects: subjects.map((subject) => ({
       id: subject.id,
-      nombre: subject.nombre,
+      nombre: isUsableDisplayName(subject.id, subject.nombre) ? subject.nombre : '',
       activo: subject.activo !== 0,
     })),
     students: students.map((student) => ({
