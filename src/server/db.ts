@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
-import { isUsableDisplayName, pickBetterRecordName } from '../lib/record-display-name';
+import { pickBetterRecordName, recoveredDisplayName } from '../lib/record-display-name';
 import { db, dbPath, getDbBackend, isRemoteTurso } from './db-client';
 
 /**
@@ -211,12 +211,12 @@ export async function ensureTeachingContextRows(input: {
     desiredCursoId,
     input.cursoNombre,
     existingCurso?.nombre,
-  ) || (isUsableDisplayName(desiredCursoId, existingCurso?.nombre) ? existingCurso!.nombre : 'Curso');
+  ) || recoveredDisplayName(desiredCursoId, existingCurso?.nombre, 'Curso');
   const materiaNombre = pickBetterRecordName(
     desiredMateriaId,
     input.materiaNombre,
     existingMateria?.nombre,
-  ) || (isUsableDisplayName(desiredMateriaId, existingMateria?.nombre) ? existingMateria!.nombre : 'Materia');
+  ) || recoveredDisplayName(desiredMateriaId, existingMateria?.nombre, 'Materia');
   const escuela = String(input.colegio || existingCurso?.escuela || 'Escuela').trim() || 'Escuela';
   const turno = String(input.turno || existingCurso?.turno || 'Manana').trim() || 'Manana';
   const cicloLectivo = Number(existingCurso?.ciclo_lectivo) > 0

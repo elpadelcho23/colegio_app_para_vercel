@@ -42,7 +42,7 @@ export const STUDENT_EXCEL_EXAMPLE_ROWS = [
 
 export const STUDENT_EXCEL_NOTES = [
   'Detecta encabezados aunque no estén en la fila 1.',
-  'Si tu Excel es distinto, asigná columnas y guardá plantilla.',
+  'Si no mapeás Materia, se crean escuela y curso, pero Curso actual queda sin materias con nombre.',
   'Apellido y Nombre por separado se unen solos.',
   'Turno: Mañana, Tarde o Noche.',
 ] as const;

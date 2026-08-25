@@ -273,7 +273,9 @@ async function ensureSchool(user: User, nombre: string, updatedAt: string) {
 }
 
 async function ensureSubject(user: User, nombre: string, updatedAt: string) {
-  const soft = await findSubject(user, nombre);
+  const trimmed = String(nombre || '').trim();
+  if (!trimmed) return '';
+  const soft = await findSubject(user, trimmed);
   if (soft) {
     if (user.rol !== 'admin') {
       await db.prepare(`
@@ -289,7 +291,7 @@ async function ensureSubject(user: User, nombre: string, updatedAt: string) {
   await db.prepare(`
     INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
     VALUES (?, ?, ?, 1, ?)
-  `).run(subjectId, tenantId, nombre, updatedAt);
+  `).run(subjectId, tenantId, trimmed, updatedAt);
 
   if (user.rol !== 'admin') {
     await db.prepare(`
@@ -476,6 +478,7 @@ async function upsertStudentRow(
       `);
       for (const materiaNombre of row.materias) {
         const subjectId = await ensureSubject(user, materiaNombre, updatedAt);
+        if (!subjectId) continue;
         await insert.run(user.tenant_id, savedStudent.id, subjectId);
       }
     }

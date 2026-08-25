@@ -2,7 +2,16 @@ import { CLIENT_STORAGE_ENTRIES } from './client-storage-keys';
 import { pickBetterRecordName } from './record-display-name';
 import type { SyncEntity } from '../scripts/offline-db';
 
-type Timestamped = { id?: string; updatedAt?: string; nombre?: string };
+type Timestamped = { id?: string; updatedAt?: string; nombre?: string; subjectIds?: string[] };
+
+function pickNonEmptyIds(newer?: string[], older?: string[]) {
+  const pick = (value?: string[]) => (Array.isArray(value) ? [...new Set(value.filter(Boolean))] : null);
+  const next = pick(newer);
+  const prev = pick(older);
+  if (next?.length) return next;
+  if (prev?.length) return prev;
+  return next ?? prev ?? undefined;
+}
 
 const PULL_FIELD_TO_ENTITY: Partial<Record<string, SyncEntity>> = {
   students: 'student',
@@ -46,7 +55,14 @@ export function mergeRecordsById<T extends Timestamped>(
     const newer = nextTime >= currentTime ? item : current;
     const older = newer === item ? current : item;
     const nombre = pickBetterRecordName(item.id, newer.nombre, older.nombre);
-    map.set(item.id, nombre ? { ...newer, nombre } : newer);
+    const subjectIds = Array.isArray(newer.subjectIds) || Array.isArray(older.subjectIds)
+      ? pickNonEmptyIds(newer.subjectIds, older.subjectIds)
+      : undefined;
+    map.set(item.id, {
+      ...newer,
+      ...(nombre ? { nombre } : {}),
+      ...(subjectIds ? { subjectIds } : {}),
+    });
   };
 
   serverItems.forEach(upsert);

@@ -1,5 +1,5 @@
 import { db, type User } from './db';
-import { isUsableDisplayName } from '../lib/record-display-name';
+import { recoveredDisplayName } from '../lib/record-display-name';
 
 /**
  * Filtro estricto por sesión: tenant siempre; docente_id cuando la tabla lo tiene.
@@ -63,7 +63,7 @@ export async function pullClientData(user: User) {
     activo: number;
   }>;
 
-  const subjects = (await (isAdmin
+  let subjects = (await (isAdmin
     ? db.prepare(`
       SELECT id, nombre, activo
       FROM materias
@@ -108,7 +108,8 @@ export async function pullClientData(user: User) {
     activo: number;
   }>;
 
-  // alumno_materias no tiene docente_id: acotar por cursos y materias del docente de la sesión.
+  // alumno_materias no tiene docente_id: acotar por cursos del docente, no exigir docente_materias.
+  // Si el JOIN a docente_materias falta, el alumno “pierde” la materia en la UI aunque siga en la base.
   const subjectLinks = (await (isAdmin
     ? db.prepare(`
       SELECT alumno_id, materia_id
@@ -125,13 +126,31 @@ export async function pullClientData(user: User) {
         ON dc.curso_id = a.curso_id
        AND dc.tenant_id = am.tenant_id
        AND dc.docente_id = ?
-      INNER JOIN docente_materias dm
-        ON dm.materia_id = am.materia_id
-       AND dm.tenant_id = am.tenant_id
-       AND dm.docente_id = ?
       WHERE am.tenant_id = ?
-    `).all(docenteId, docenteId, tenantId)
+    `).all(docenteId, tenantId)
   )) as Array<{ alumno_id: string; materia_id: string }>;
+
+  const knownSubjectIds = new Set(subjects.map((subject) => subject.id));
+  const missingSubjectIds = [...new Set(subjectLinks.map((link) => link.materia_id))]
+    .filter((id) => id && !knownSubjectIds.has(id));
+  if (missingSubjectIds.length) {
+    const placeholders = missingSubjectIds.map(() => '?').join(', ');
+    const extra = (await db.prepare(`
+      SELECT id, nombre, activo
+      FROM materias
+      WHERE tenant_id = ? AND id IN (${placeholders})
+    `).all(tenantId, ...missingSubjectIds)) as Array<{ id: string; nombre: string; activo: number }>;
+    subjects = [...subjects, ...extra];
+    if (!isAdmin) {
+      const insertLink = db.prepare(`
+        INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id)
+        VALUES (?, ?, ?)
+      `);
+      for (const row of extra) {
+        await insertLink.run(tenantId, docenteId, row.id);
+      }
+    }
+  }
 
   const attendanceFilter = tenantFilter(user, 'asistencias');
   const attendance = (await db.prepare(`
@@ -201,7 +220,7 @@ export async function pullClientData(user: User) {
       }
       return {
         ...course,
-        nombre: isUsableDisplayName(course.id, course.nombre) ? course.nombre : '',
+        nombre: recoveredDisplayName(course.id, course.nombre, 'Curso'),
         subjectIds: [...ids],
       };
     }),
@@ -212,7 +231,7 @@ export async function pullClientData(user: User) {
     })),
     subjects: subjects.map((subject) => ({
       id: subject.id,
-      nombre: isUsableDisplayName(subject.id, subject.nombre) ? subject.nombre : '',
+      nombre: recoveredDisplayName(subject.id, subject.nombre, 'Materia'),
       activo: subject.activo !== 0,
     })),
     students: students.map((student) => ({

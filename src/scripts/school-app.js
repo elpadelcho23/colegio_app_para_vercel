@@ -222,6 +222,20 @@ function courseSubjectsForDisplay(course) {
     : subjects;
 }
 
+function namedSubjects(list = activeSubjects()) {
+  return list.filter((subject) => Boolean(displayRecordName(subject, '')));
+}
+
+function subjectsForContextSelect(courseId = '', escuela = '') {
+  const course = courseById(courseId) || visibleCourses(escuela)[0] || null;
+  const fromCourse = course ? courseSubjectsForDisplay(course) : activeSubjects();
+  const named = namedSubjects(fromCourse);
+  if (named.length) return named;
+  const globalNamed = namedSubjects();
+  if (globalNamed.length) return globalNamed;
+  return fromCourse.length ? fromCourse : activeSubjects();
+}
+
 function activeSchools() {
   ensureSchoolsFromCourses();
   return read(KEYS.schools).filter((school) => school.activo !== false);
@@ -291,17 +305,27 @@ function subjectById(id) {
 }
 
 function looksLikeGeneratedId(value) {
-  return /^(curso|mat|esc|al)-[0-9]{10,}-[0-9a-f]+$/i.test(String(value || '').trim());
+  const text = String(value || '').trim();
+  return /^(curso|mat|esc|al)-[0-9]{10,}-[0-9a-f]+$/i.test(text)
+    || /^(curso|mat|esc|al)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text);
+}
+
+function recoveredSubjectName(record) {
+  const slug = String(record?.id || '').trim().toLowerCase();
+  if (slug === 'matematica') return 'Matematica';
+  if (slug === 'programacion') return 'Programacion';
+  if (slug === 'literatura') return 'Literatura';
+  return '';
 }
 
 function displayRecordName(record, fallback = '') {
   if (!record) return fallback;
   const name = String(record.nombre || '').trim();
-  if (name && name !== record.id && !looksLikeGeneratedId(name)) return name;
-  return fallback;
+  if (name && !looksLikeGeneratedId(name) && !(name === record.id && looksLikeGeneratedId(record.id))) return name;
+  return recoveredSubjectName(record) || fallback;
 }
 
-function fillSelect(select, items, placeholder, valueKey = 'id', labeler = (item) => displayRecordName(item, item?.nombre || 'Sin nombre')) {
+function fillSelect(select, items, placeholder, valueKey = 'id', labeler = (item) => displayRecordName(item, 'Materia')) {
   fillSelectOptions(select, items, placeholder, valueKey, labeler);
 }
 
@@ -793,8 +817,12 @@ function refreshGlobalTeachingContextUi({ keepOpen = false } = {}) {
     courseSelect.value = ctx.cursoId || '';
   }
   if (subjectSelect) {
-    fillSelect(subjectSelect, activeSubjects(), 'Materia');
+    const subjects = subjectsForContextSelect(courseSelect?.value || ctx.cursoId, schoolSelect?.value || ctx.escuela);
+    fillSelect(subjectSelect, subjects, subjects.length ? 'Materia' : 'Sin materias con nombre');
     subjectSelect.value = ctx.materiaId || '';
+    if (ctx.materiaId && !subjects.some((subject) => subject.id === ctx.materiaId)) {
+      subjectSelect.value = subjects[0]?.id || '';
+    }
   }
 
   // Durante el tutorial (gtc--tour-open) el form debe seguir visible: si se cierra,
@@ -833,27 +861,30 @@ function initGlobalTeachingContext() {
   const toggle = root.querySelector('[data-gtc-toggle]');
   const schoolSelect = root.querySelector('[data-gtc-school]');
   const courseSelect = root.querySelector('[data-gtc-course]');
+  const subjectSelect = root.querySelector('[data-gtc-subject]');
 
   const ensureDefaults = () => {
     const ctx = getTeachingContext();
-    if (ctx.cursoId) return;
     const suggested = currentSuggestedContext();
-    if (suggested?.cursoId) {
-      setTeachingContext({
-        escuela: suggested.escuela,
-        cursoId: suggested.cursoId,
-        materiaId: suggested.materiaId,
-      }, { notify: false });
+    const pickNamed = (escuela, cursoId, materiaId) => {
+      const subjects = subjectsForContextSelect(cursoId, escuela);
+      const keep = subjects.some((subject) => subject.id === materiaId) ? materiaId : (subjects[0]?.id || '');
+      return { escuela, cursoId, materiaId: keep };
+    };
+    if (!ctx.cursoId && suggested?.cursoId) {
+      setTeachingContext(pickNamed(suggested.escuela, suggested.cursoId, suggested.materiaId), { notify: false });
       return;
     }
-    const firstCourse = visibleCourses()[0];
-    if (firstCourse) {
-      const subjects = courseSubjectsForDisplay(firstCourse);
-      setTeachingContext({
-        escuela: firstCourse.escuela,
-        cursoId: firstCourse.id,
-        materiaId: subjects[0]?.id || activeSubjects()[0]?.id || '',
-      }, { notify: false });
+    if (!ctx.cursoId) {
+      const firstCourse = visibleCourses()[0];
+      if (firstCourse) {
+        setTeachingContext(pickNamed(firstCourse.escuela, firstCourse.id, ''), { notify: false });
+      }
+      return;
+    }
+    const next = pickNamed(ctx.escuela, ctx.cursoId, ctx.materiaId);
+    if (next.materiaId !== ctx.materiaId) {
+      setTeachingContext(next, { notify: false });
     }
   };
 
@@ -874,8 +905,20 @@ function initGlobalTeachingContext() {
     openTeachingContextPicker();
   });
 
+  const refreshSubjectOptions = () => {
+    const subjects = subjectsForContextSelect(courseSelect?.value || '', schoolSelect?.value || '');
+    fillSelect(subjectSelect, subjects, subjects.length ? 'Materia' : 'Sin materias con nombre');
+    if (subjectSelect && subjects[0] && !subjects.some((subject) => subject.id === subjectSelect.value)) {
+      subjectSelect.value = subjects[0].id;
+    }
+  };
+
   schoolSelect?.addEventListener('change', () => {
     fillSelect(courseSelect, visibleCourses(schoolSelect.value || ''), 'Curso', 'id', courseLabel);
+    refreshSubjectOptions();
+  });
+  courseSelect?.addEventListener('change', () => {
+    refreshSubjectOptions();
   });
 
   form?.addEventListener('submit', (event) => {
@@ -1633,8 +1676,8 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
     el('div', { className: 'selected-subjects', attrs: { 'data-selected-subjects': '' } },
       ...subjects.filter((subject) => selected.has(subject.id)).map((subject) =>
         el('span', { className: 'subject-chip', dataset: { subjectId: subject.id } },
-          subject.nombre,
-          el('button', { type: 'button', attrs: { 'aria-label': `Eliminar ${subject.nombre}`, 'data-remove-subject': '' } }, '×'),
+          displayRecordName(subject, 'Materia'),
+          el('button', { type: 'button', attrs: { 'aria-label': `Eliminar ${displayRecordName(subject, 'Materia')}`, 'data-remove-subject': '' } }, '×'),
           el('input', { type: 'hidden', name: 'subjectIds', value: subject.id }),
         ),
       ),
@@ -1642,7 +1685,7 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
     el('div', { className: 'subject-suggestions', attrs: { 'data-subject-suggestions': '' } },
       availableSubjects.length
         ? availableSubjects.map((subject) =>
-          el('button', { type: 'button', className: 'subject-suggestion', dataset: { addSubject: subject.id } }, subject.nombre),
+          el('button', { type: 'button', className: 'subject-suggestion', dataset: { addSubject: subject.id } }, displayRecordName(subject, 'Materia')),
         )
         : el('p', { className: 'muted' }, 'No hay materias disponibles para seleccionar.'),
     ),
@@ -1653,11 +1696,11 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
 
   const updateSuggestions = (query = '') => {
     const value = String(query).trim().toLowerCase();
-    const filtered = availableSubjects.filter((subject) => subject.nombre.toLowerCase().includes(value));
+    const filtered = availableSubjects.filter((subject) => displayRecordName(subject, subject.nombre || '').toLowerCase().includes(value));
     replaceContent(suggestions,
       filtered.length
         ? filtered.map((subject) =>
-          el('button', { type: 'button', className: 'subject-suggestion', dataset: { addSubject: subject.id } }, subject.nombre),
+          el('button', { type: 'button', className: 'subject-suggestion', dataset: { addSubject: subject.id } }, displayRecordName(subject, 'Materia')),
         )
         : el('p', { className: 'muted' }, 'No se encontraron materias con ese nombre.'),
     );
@@ -1697,7 +1740,9 @@ function renderStudents(list) {
   replaceContent(list, ...students.map((student) => {
     const course = courseById(student.cursoId);
     const avg = average(gradesForStudent(student.id));
-    const subjects = subjectsForStudent(student).map((subject) => subject.nombre).join(', ') || 'Sin materias';
+    const assignedIds = studentSubjectIds(student);
+    const subjects = subjectsForStudent(student).map((subject) => displayRecordName(subject, '')).filter(Boolean).join(', ')
+      || (assignedIds.length ? 'Materia' : 'Sin materias');
     return el('article', { className: 'student-row' },
       el('div', { className: 'student-row-info' },
         el('div', { className: 'student-row-head' },
@@ -2965,7 +3010,7 @@ function renderGrades(table, subjectId = '', courseId = '') {
 
 function renderInlineSubjects(list) {
   if (!list) return;
-  renderTags(list, activeSubjects(), (subject) => subject.nombre, 'Sin materias');
+  renderTags(list, activeSubjects(), (subject) => displayRecordName(subject, 'Materia'), 'Sin materias');
 }
 
 function deliveryStatusLabel(status) {
@@ -6142,6 +6187,15 @@ async function bootstrap() {
       }
       if (importType === 'alumnos') {
         window.dispatchEvent(new CustomEvent('aula-clara:schools-changed'));
+        const course = courseById(getTeachingContext().cursoId) || visibleCourses()[0];
+        if (course) {
+          const subjects = subjectsForContextSelect(course.id, course.escuela);
+          setTeachingContext({
+            escuela: course.escuela,
+            cursoId: course.id,
+            materiaId: subjects[0]?.id || '',
+          });
+        }
         showSpaView('registro');
       }
       notifyDataChanged({ scope: importType });

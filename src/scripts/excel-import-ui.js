@@ -178,6 +178,7 @@ function initExcelImportWorkspace(workspace, options = {}) {
   const mappingProgress = workspace.querySelector('[data-excel-mapping-progress]');
   const mappingProgressText = workspace.querySelector('[data-excel-mapping-progress-text]');
   const mappingProgressFill = workspace.querySelector('[data-excel-mapping-progress-fill]');
+  const mappingHint = workspace.querySelector('[data-excel-mapping-hint]');
   const detectedHeadersWrap = workspace.querySelector('[data-excel-detected-headers]');
   const headerChips = workspace.querySelector('[data-excel-header-chips]');
   const headerRowInput = workspace.querySelector('[data-excel-header-row]');
@@ -567,6 +568,14 @@ function initExcelImportWorkspace(workspace, options = {}) {
       mappingProgressFill.style.width = `${pct}%`;
     }
     mappingProgress?.classList.toggle('is-complete', progress.complete);
+    if (mappingHint) {
+      const showHint = importType === 'alumnos' && mapping.columns.materias == null;
+      mappingHint.hidden = !showHint;
+      mappingHint.classList.toggle('is-hidden', !showHint);
+      mappingHint.textContent = showHint
+        ? 'Sin columna de Materia: se crean escuela y curso, pero Curso actual no va a tener materias con nombre.'
+        : '';
+    }
 
     const requiredMissing = new Set(
       fields
@@ -1000,6 +1009,9 @@ function initExcelImportWorkspace(workspace, options = {}) {
     if (mappingErrors.length) {
       showToast(mappingErrors.join(' · '), 'warning');
       return;
+    }
+    if (importType === 'alumnos' && mapping.columns.materias == null) {
+      showToast('Sin columna de Materia: se importan alumnos, pero Curso actual no va a listar materias con nombre.', 'warning');
     }
 
     const defaultLabel = submitBtn?.dataset.defaultLabel || submitBtn?.textContent || 'Importar';
