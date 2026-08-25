@@ -4,7 +4,8 @@ import { initGuestSession } from './guest-session.js';
 import { initSyncUi } from './sync-ui.js';
 import { initToolsView, navigateToToolsSection, initSimpleExcelImport } from './tools-ui.js';
 import { countPendingOperations, getOperationStatusCounts, getPendingOperations, queueOfflineOperation, resetOfflineDatabaseOnce, saveAttendanceOffline } from './offline-db.ts';
-import { hydrateLocalStorageFromServer, startAutoSync, syncPendingOperations } from './sync-client.ts';
+import { hydrateFromServer, startAutoSync, syncPendingOperations } from './sync-client.ts';
+import { initClientDataStore, readClientData, writeClientData } from './client-data-store.ts';
 import { initMobileNav, openMenu, closeMenu } from './ui-nav.js';
 import { initSpaRouter, registerSpaViewRefresh, showSpaView } from './spa-router.ts';
 import { initSchoolCycleUi } from './school-cycle-ui.js';
@@ -110,30 +111,41 @@ function emptyValue(key) {
 }
 
 function read(key) {
-  try {
-    const stored = JSON.parse(localStorage.getItem(storageKey(key)) || 'null');
-    if (stored !== null) return stored;
-    if (currentUser?.id) return emptyValue(key);
-    return DEFAULTS[key] ?? [];
-  } catch {
-    if (currentUser?.id) return emptyValue(key);
-    return DEFAULTS[key] ?? [];
-  }
+  const fallback = currentUser?.id ? emptyValue(key) : (DEFAULTS[key] ?? emptyValue(key));
+  return readClientData(key, fallback);
 }
 
 function write(key, value) {
-  localStorage.setItem(storageKey(key), JSON.stringify(value));
+  writeClientData(key, value);
+  if (currentUser?.id && (key === KEYS.dashboardFilters || key === KEYS.teacherContext)) {
+    scheduleClientStateSync();
+  }
 }
 
 function seed() {
+  if (currentUser?.id) return;
   Object.entries(DEFAULTS).forEach(([key, value]) => {
-    if (localStorage.getItem(storageKey(key))) return;
-    write(key, currentUser?.id ? emptyValue(key) : value);
+    if (localStorage.getItem(key)) return;
+    write(key, value);
   });
 }
 
 function storageKey(key) {
   return currentUser?.id ? `${key}:${currentUser.id}` : key;
+}
+
+let clientStateSyncTimer = 0;
+function scheduleClientStateSync() {
+  if (!currentUser?.id) return;
+  window.clearTimeout(clientStateSyncTimer);
+  clientStateSyncTimer = window.setTimeout(() => {
+    void queue('clientState', 'upsert', {
+      id: currentUser.id,
+      dashboardFilters: read(KEYS.dashboardFilters) || {},
+      teacherContext: read(KEYS.teacherContext) || [],
+      updatedAt: nowIso(),
+    });
+  }, 400);
 }
 
 function uid(prefix) {
@@ -211,29 +223,47 @@ function studentsInCiclo(escuela = '', cursoId = '') {
 }
 
 function courseSubjectsForDisplay(course) {
-  const subjectIds = subjectsForCourseDisplay(
+  const storedIds = subjectsForCourseDisplay(
     course,
     activeSubjects().map((subject) => subject.id),
     read(KEYS.teacherContext),
   );
   const subjects = activeSubjects();
-  return subjectIds.length
-    ? subjects.filter((subject) => subjectIds.includes(subject.id))
-    : subjects;
+  const ids = new Set(storedIds);
+  if (!ids.size) {
+    activeStudents()
+      .filter((student) => student.cursoId === course.id)
+      .forEach((student) => studentSubjectIds(student).forEach((id) => ids.add(id)));
+  }
+  if (!ids.size) return [];
+  return subjects.filter((subject) => ids.has(subject.id));
 }
 
 function namedSubjects(list = activeSubjects()) {
   return list.filter((subject) => Boolean(displayRecordName(subject, '')));
 }
 
-function subjectsForContextSelect(courseId = '', escuela = '') {
-  const course = courseById(courseId) || visibleCourses(escuela)[0] || null;
-  const fromCourse = course ? courseSubjectsForDisplay(course) : activeSubjects();
+function subjectsForContextSelect(courseId = '', _escuela = '') {
+  const course = courseById(courseId);
+  const fromCourse = course ? courseSubjectsForDisplay(course) : [];
   const named = namedSubjects(fromCourse);
   if (named.length) return named;
   const globalNamed = namedSubjects();
   if (globalNamed.length) return globalNamed;
   return fromCourse.length ? fromCourse : activeSubjects();
+}
+
+function fillSubjectSelectForCourse(select, courseId = '', escuela = '', placeholder = 'Materia', { keepEmpty = false } = {}) {
+  if (!select) return [];
+  const previous = select.value;
+  const subjects = subjectsForContextSelect(courseId, escuela);
+  fillSelect(select, subjects, subjects.length ? placeholder : 'Sin materias');
+  if (previous && [...select.options].some((option) => option.value === previous)) {
+    select.value = previous;
+  } else if (!keepEmpty && subjects[0]) {
+    select.value = subjects[0].id;
+  }
+  return subjects;
 }
 
 function activeSchools() {
@@ -359,14 +389,21 @@ function studentSubjectIds(student) {
 
 function studentHasSubject(student, subjectId = '') {
   if (!subjectId) return true;
-  const ids = studentSubjectIds(student);
-  return ids.length === 0 || ids.includes(subjectId);
+  return studentSubjectIds(student).includes(subjectId);
 }
 
 function subjectsForStudent(student) {
   const subjects = activeSubjects();
   const ids = studentSubjectIds(student);
-  return ids.length ? subjects.filter((subject) => ids.includes(subject.id)) : subjects;
+  if (!ids.length) return [];
+  return subjects.filter((subject) => ids.includes(subject.id));
+}
+
+function subjectIdsForStudentSave(selectedSubjects) {
+  const ids = [...new Set((selectedSubjects || []).filter(Boolean))];
+  if (ids.length) return ids;
+  const materiaId = String(getTeachingContext().materiaId || '').trim();
+  return materiaId ? [materiaId] : [];
 }
 
 function importanceByType(type = '') {
@@ -603,8 +640,9 @@ function renderGradesDetail(root) {
   const courseId = root.querySelector('[data-detail-course-filter]')?.value || '';
   const subjectId = root.querySelector('[data-detail-subject-filter]')?.value || '';
   const period = root.querySelector('[data-detail-period-filter]')?.value || 'anual';
+  const escuela = root.querySelector('[data-filter-school]')?.value || '';
 
-  const students = studentsInCiclo('', courseId).filter((student) =>
+  const students = studentsInCiclo(escuela, courseId).filter((student) =>
     studentHasSubject(student, subjectId)
   );
 
@@ -651,7 +689,7 @@ function renderGradesDetail(root) {
     ['Alumno', 'Curso', 'Actividad', 'Tipo', 'Fecha', 'Nota', 'Motivo', 'Período'],
     rows.map(({ student, grade, course }) => [
       el('strong', {}, student.nombre),
-      `${course?.nombre || '-'} ${course?.turno || ''}`,
+      `${displayRecordName(course, '-') } ${course?.turno || ''}`,
       grade.titulo,
       grade.tipoEvaluacion || 'Eval.',
       grade.fecha || '-',
@@ -1562,7 +1600,7 @@ function initStudents() {
       dni: String(data.dni || '').trim(),
       cursoId: data.cursoId,
       tutor: String(data.tutor || '').trim(),
-      subjectIds: [...new Set(selectedSubjects)],
+      subjectIds: subjectIdsForStudentSave(selectedSubjects),
       activo: Boolean(profileForm.activo?.checked),
       updatedAt: nowIso(),
     };
@@ -1608,7 +1646,7 @@ function initStudents() {
       dni: String(data.dni || '').trim(),
       cursoId: data.cursoId,
       tutor: String(data.tutor || '').trim(),
-      subjectIds: [...new Set(selectedSubjects)],
+      subjectIds: subjectIdsForStudentSave(selectedSubjects),
       activo: true,
       updatedAt: nowIso(),
     };
@@ -1849,7 +1887,7 @@ function initAttendance() {
 
   dateInput.value = today();
   fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
-  fillSelect(subjectSelect, activeSubjects(), 'Materia');
+  fillSubjectSelectForCourse(subjectSelect, courseSelect?.value || '', '', 'Materia');
   applySelectFromUrl(courseSelect, 'curso');
   applySelectFromUrl(subjectSelect, 'materia');
 
@@ -1894,6 +1932,9 @@ function initAttendance() {
         return;
       }
       clearDraftForContext(lastAttendanceContext.date, lastAttendanceContext.subjectId);
+      if (control === courseSelect) {
+        fillSubjectSelectForCourse(subjectSelect, courseSelect.value, '', 'Materia');
+      }
       lastAttendanceContext = attendanceContext();
       rollCallIndex = 0;
       if (control === courseSelect || control === subjectSelect) {
@@ -2187,7 +2228,7 @@ function initAttendance() {
   renderHistory();
   onPanelRefresh(() => {
     fillSelect(courseSelect, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
-    fillSelect(subjectSelect, activeSubjects(), 'Materia');
+    fillSubjectSelectForCourse(subjectSelect, courseSelect?.value || '', '', 'Materia');
     fillSelect(historyCourse, visibleCourses(), 'Todos los cursos', 'id', courseLabel);
     fillSelect(historySubject, activeSubjects(), 'Todas las materias');
     syncHistoryFiltersFromTake();
@@ -2462,11 +2503,22 @@ function initGrades() {
   };
 
   const refreshSubjectOptions = (selected = subjectFilter?.value || '') => {
-    fillSelect(subjectFilter, activeSubjects(), 'Elegir materia');
-    if (selected && [...subjectFilter.options].some((option) => option.value === selected)) {
+    fillSubjectSelectForCourse(subjectFilter, courseFilter?.value || '', schoolFilter?.value || '', 'Elegir materia');
+    if (selected && subjectFilter && [...subjectFilter.options].some((option) => option.value === selected)) {
       subjectFilter.value = selected;
-    } else if (!subjectFilter.value && activeSubjects()[0]) {
-      subjectFilter.value = activeSubjects()[0].id;
+    }
+    if (detailSubjectFilter) {
+      const detailSelected = detailSubjectFilter.value || selected;
+      fillSubjectSelectForCourse(
+        detailSubjectFilter,
+        detailCourseFilter?.value || courseFilter?.value || '',
+        schoolFilter?.value || '',
+        'Todas las materias',
+        { keepEmpty: true },
+      );
+      if (detailSelected && [...detailSubjectFilter.options].some((option) => option.value === detailSelected)) {
+        detailSubjectFilter.value = detailSelected;
+      }
     }
     if (subjectHidden) subjectHidden.value = subjectFilter?.value || '';
     renderInlineSubjects(inlineSubjectList);
@@ -2544,7 +2596,7 @@ function initGrades() {
 
   const renderBulkGrades = () => {
     const meta = currentMeta();
-    const students = studentsInCiclo('', courseFilter?.value || '').filter((student) =>
+    const students = studentsInCiclo(schoolFilter?.value || '', courseFilter?.value || '').filter((student) =>
       studentHasSubject(student, subjectFilter?.value || '')
     ).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
@@ -2637,7 +2689,7 @@ function initGrades() {
       },
         el('div', {},
           el('strong', {}, student.nombre),
-          el('small', {}, [course?.escuela, `${course?.nombre || ''} ${course?.turno || ''}`.trim(), subjectById(meta.subjectId)?.nombre].filter(Boolean).join(' · ')),
+          el('small', {}, [course?.escuela, `${displayRecordName(course, '')} ${course?.turno || ''}`.trim(), displayRecordName(subjectById(meta.subjectId), '')].filter(Boolean).join(' · ')),
           saved ? el('small', {}, `Guardada: ${gradeLabel(saved)}`) : null,
         ),
         el('div', { className: 'grade-bulk-inputs' },
@@ -2697,7 +2749,7 @@ function initGrades() {
   const renderAll = async () => {
     if (subjectHidden) subjectHidden.value = subjectFilter?.value || '';
     syncDetailFiltersFromTake();
-    renderGrades(table, subjectFilter?.value || '', courseFilter?.value || '');
+    renderGrades(table, subjectFilter?.value || '', courseFilter?.value || '', schoolFilter?.value || '');
     renderBulkGrades();
 
     await renderUpcomingActivities(
@@ -2735,8 +2787,8 @@ function initGrades() {
       const subject = subjectById(subjectFilter?.value);
       contextText.textContent = [
         schoolFilter?.value || course?.escuela,
-        course ? `${course.nombre} (${course.turno})` : '',
-        subject?.nombre,
+        course ? `${displayRecordName(course, 'Curso')} (${course.turno})` : '',
+        displayRecordName(subject, ''),
       ].filter(Boolean).join(' · ') || 'Seleccioná escuela, curso y materia.';
     }
   };
@@ -2768,6 +2820,7 @@ function initGrades() {
 
   schoolFilter?.addEventListener('change', () => {
     refreshCourseOptions('');
+    refreshSubjectOptions(subjectFilter?.value || '');
     renderAll();
   });
   subjectFilter?.addEventListener('change', () => {
@@ -2790,6 +2843,7 @@ function initGrades() {
       materiaId: subjectFilter?.value || '',
     }, { notify: false });
     refreshGlobalTeachingContextUi();
+    refreshSubjectOptions(subjectFilter?.value || '');
     renderAll();
   });
   window.addEventListener('aula-clara:teaching-context-changed', () => {
@@ -2962,8 +3016,8 @@ function initGrades() {
   });
 }
 
-function renderGrades(table, subjectId = '', courseId = '') {
-  const students = studentsInCiclo('', courseId).filter((student) =>
+function renderGrades(table, subjectId = '', courseId = '', escuela = '') {
+  const students = studentsInCiclo(escuela, courseId).filter((student) =>
     studentHasSubject(student, subjectId)
   );
 
@@ -2988,7 +3042,7 @@ function renderGrades(table, subjectId = '', courseId = '') {
     return [
       [
         el('strong', {}, student.nombre),
-        el('small', {}, courseById(student.cursoId)?.nombre || 'Sin curso'),
+        el('small', {}, displayRecordName(courseById(student.cursoId), 'Sin curso')),
       ],
       avg === null ? '-' : avg.toFixed(1),
       rate === null ? '-' : `${rate.toFixed(0)}%`,
@@ -3567,7 +3621,7 @@ function initTrabajosEntregas(root, context = {}) {
         if (!response.ok) throw new Error(result.error || 'No se pudo corregir la entrega.');
 
         if (currentUser?.id) {
-          await hydrateLocalStorageFromServer(currentUser.id, { notify: false });
+          await hydrateFromServer(currentUser.id, { notify: false });
         }
         notifyDataChanged({ scope: 'grades' });
         await refresh();
@@ -3909,7 +3963,7 @@ function renderCourses(list, highlightCourseId = '') {
         ),
         el('div', {},
           el('h3', {}, 'Materias'),
-          el('div', { className: 'notes-list' }, ...courseSubjects.map((subject) => tag(subject.nombre))),
+          el('div', { className: 'notes-list' }, ...courseSubjects.map((subject) => tag(displayRecordName(subject, 'Materia')))),
         ),
         el('div', { className: 'button-row' },
           el('a', { className: 'btn btn-primary', href: contextUrl('/asistencia', actionContext) }, 'Tomar asistencia'),
@@ -6082,6 +6136,7 @@ function initExcelExport() {
 
 async function bootstrap() {
   document.documentElement.dataset.appBooting = 'true';
+  initClientDataStore(currentUser?.id || null);
   seed();
   initTheme();
   initMobileNav();
@@ -6096,7 +6151,7 @@ async function bootstrap() {
   await resetOfflineDatabaseOnce();
 
   if (currentUser?.id) {
-    await hydrateLocalStorageFromServer(currentUser.id, { notify: false });
+    await hydrateFromServer(currentUser.id, { notify: false });
   }
 
   initResponsiveTables();
@@ -6177,9 +6232,9 @@ async function bootstrap() {
       }
       let hydrated = false;
       if (currentUser?.id) {
-        hydrated = await hydrateLocalStorageFromServer(currentUser.id);
+        hydrated = await hydrateFromServer(currentUser.id);
         if (!hydrated) {
-          hydrated = await hydrateLocalStorageFromServer(currentUser.id);
+          hydrated = await hydrateFromServer(currentUser.id);
         }
       }
       if (!hydrated) {

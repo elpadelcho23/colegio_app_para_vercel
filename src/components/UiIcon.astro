@@ -1,0 +1,148 @@
+---
+interface Props {
+  name: string;
+  class?: string;
+}
+
+const { name, class: className = 'ui-icon' } = Astro.props;
+
+const paths: Record<string, string[]> = {
+  panel: [
+    'M3 3h7v7H3z',
+    'M14 3h7v7h-7z',
+    'M3 14h7v7H3z',
+    'M14 14h7v7h-7z',
+  ],
+  alumnos: [
+    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
+    'M22 21v-2a4 4 0 0 0-3-3.87',
+    'M16 3.13a4 4 0 0 1 0 7.75',
+  ],
+  cursos: [
+    'M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z',
+    'M8 7h8',
+    'M8 11h8',
+  ],
+  asistencia: [
+    'M22 11.08V12a10 10 0 1 1-5.93-9.14',
+    'M9 11l3 3L22 4',
+  ],
+  notas: [
+    'M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z',
+    'M14 2v4a2 2 0 0 0 2 2h4',
+    'M10 13h4',
+    'M10 17h4',
+  ],
+  actividades: [
+    'M9 11l3 3L22 4',
+    'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+  ],
+  herramientas: [
+    'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z',
+  ],
+  excel: [
+    'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
+    'M14 2v6h6',
+    'M8 13h8',
+    'M8 17h5',
+  ],
+  crear: [
+    'M12 5v14',
+    'M5 12h14',
+  ],
+  clase: [
+    'M2 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z',
+    'M22 8l-4 4 4 4',
+  ],
+  recibir: [
+    'M22 12h-6l-2 3h-4l-2-3H2',
+    'M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z',
+  ],
+  corregir: [
+    'M12 20h9',
+    'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z',
+  ],
+  cuenta: [
+    'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2',
+  ],
+  informes: [
+    'M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2',
+    'M18 14h-8',
+    'M15 18h-5',
+    'M10 6h8v4h-8V6Z',
+  ],
+  copiar: [
+    'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2',
+    'M15 2H9a1 1 0 0 0-1 1v1h8V3a1 1 0 0 0-1-1z',
+  ],
+  enlace: [
+    'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71',
+    'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+  ],
+  reloj: [
+    'M12 6v6l4 2',
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+  ],
+  escudo: [
+    'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  ],
+  ia: [
+    'M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z',
+    'M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z',
+  ],
+  carpeta: [
+    'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z',
+  ],
+  lista: [
+    'M8 6h13',
+    'M8 12h13',
+    'M8 18h13',
+  ],
+  examen: [
+    'M8 2v4',
+    'M16 2v4',
+    'M3 10h18',
+    'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  ],
+  externo: [
+    'M15 3h6v6',
+    'M10 14L21 3',
+    'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
+  ],
+  candado: [
+    'M7 11V7a5 5 0 0 1 10 0v4',
+    'M5 11h14v10H5z',
+  ],
+  documento: [
+    'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
+    'M14 2v6h6',
+  ],
+};
+
+const circles: Record<string, Array<{ cx: string; cy: string; r: string }>> = {
+  alumnos: [{ cx: '9', cy: '7', r: '4' }],
+  cuenta: [{ cx: '12', cy: '7', r: '4' }],
+  lista: [
+    { cx: '3.5', cy: '6', r: '1.2' },
+    { cx: '3.5', cy: '12', r: '1.2' },
+    { cx: '3.5', cy: '18', r: '1.2' },
+  ],
+};
+
+const iconPaths = paths[name] || paths.panel;
+const iconCircles = circles[name] || [];
+---
+
+<svg
+  class={className}
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+>
+  {iconPaths.map((d) => <path d={d} />)}
+  {iconCircles.map((circle) => <circle cx={circle.cx} cy={circle.cy} r={circle.r} />)}
+</svg>

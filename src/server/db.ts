@@ -229,7 +229,12 @@ export async function ensureTeachingContextRows(input: {
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         escuela = excluded.escuela,
-        nombre = excluded.nombre,
+        nombre = CASE
+          WHEN excluded.nombre IN ('Curso', 'Materia', 'Escuela') AND TRIM(cursos.nombre) != ''
+            AND cursos.nombre NOT IN ('Curso', 'Materia', 'Escuela')
+          THEN cursos.nombre
+          ELSE excluded.nombre
+        END,
         turno = excluded.turno,
         updated_at = excluded.updated_at
       WHERE cursos.tenant_id = excluded.tenant_id
@@ -247,7 +252,12 @@ export async function ensureTeachingContextRows(input: {
       INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
       VALUES (?, ?, ?, 1, ?)
       ON CONFLICT(id) DO UPDATE SET
-        nombre = excluded.nombre,
+        nombre = CASE
+          WHEN excluded.nombre IN ('Curso', 'Materia', 'Escuela') AND TRIM(materias.nombre) != ''
+            AND materias.nombre NOT IN ('Curso', 'Materia', 'Escuela')
+          THEN materias.nombre
+          ELSE excluded.nombre
+        END,
         activo = 1,
         updated_at = excluded.updated_at
       WHERE materias.tenant_id = excluded.tenant_id
@@ -346,6 +356,7 @@ export async function purgeGuestAccount(userId: string, tenantIdHint?: string) {
         'escuelas',
         'sync_log',
         'notification_preferences',
+        'docente_client_state',
       ];
       for (const table of tables) {
         try {
@@ -661,6 +672,16 @@ async function initSchema() {
     FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS docente_client_state (
+    docente_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    dashboard_filters TEXT NOT NULL DEFAULT '{}',
+    teacher_context TEXT NOT NULL DEFAULT '[]',
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (docente_id) REFERENCES usuarios(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS sync_log (
     client_mutation_id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT '${DEFAULT_TENANT_ID}',
@@ -750,6 +771,7 @@ async function initSchema() {
   await migrateTrabajoCorreccion();
   await migrateGuestFlag();
   await migrateAulaTemporal();
+  await migrateDocenteClientState();
   await createIndexes();
   await setSchemaVersion(1);
 
@@ -806,6 +828,20 @@ async function migrateTrabajoCorreccion() {
 
 async function migrateGuestFlag() {
   await ensureColumn('usuarios', 'is_guest', 'is_guest INTEGER NOT NULL DEFAULT 0');
+}
+
+async function migrateDocenteClientState() {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS docente_client_state (
+      docente_id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      dashboard_filters TEXT NOT NULL DEFAULT '{}',
+      teacher_context TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (docente_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    );
+  `);
 }
 
 async function migrateAulaTemporal() {

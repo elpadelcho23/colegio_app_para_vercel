@@ -21,12 +21,12 @@ export async function pullClientData(user: User) {
 
   const courses = (await (isAdmin
     ? db.prepare(`
-      SELECT id, escuela, nombre, turno, ciclo_lectivo AS cicloLectivo
+      SELECT id, escuela, nombre, turno, ciclo_lectivo AS cicloLectivo, updated_at AS updatedAt
       FROM cursos
       WHERE tenant_id = ?
     `)
     : db.prepare(`
-      SELECT cursos.id, cursos.escuela, cursos.nombre, cursos.turno, cursos.ciclo_lectivo AS cicloLectivo
+      SELECT cursos.id, cursos.escuela, cursos.nombre, cursos.turno, cursos.ciclo_lectivo AS cicloLectivo, cursos.updated_at AS updatedAt
       FROM cursos
       JOIN docente_cursos
         ON docente_cursos.curso_id = cursos.id
@@ -40,16 +40,17 @@ export async function pullClientData(user: User) {
     nombre: string;
     turno: string;
     cicloLectivo: number;
+    updatedAt?: string;
   }>;
 
   const schools = (await (isAdmin
     ? db.prepare(`
-      SELECT id, nombre, activo
+      SELECT id, nombre, activo, updated_at AS updatedAt
       FROM escuelas
       WHERE tenant_id = ?
     `)
     : db.prepare(`
-      SELECT escuelas.id, escuelas.nombre, escuelas.activo
+      SELECT escuelas.id, escuelas.nombre, escuelas.activo, escuelas.updated_at AS updatedAt
       FROM escuelas
       JOIN docente_escuelas
         ON docente_escuelas.escuela_id = escuelas.id
@@ -61,16 +62,17 @@ export async function pullClientData(user: User) {
     id: string;
     nombre: string;
     activo: number;
+    updatedAt?: string;
   }>;
 
   let subjects = (await (isAdmin
     ? db.prepare(`
-      SELECT id, nombre, activo
+      SELECT id, nombre, activo, updated_at AS updatedAt
       FROM materias
       WHERE tenant_id = ?
     `)
     : db.prepare(`
-      SELECT materias.id, materias.nombre, materias.activo
+      SELECT materias.id, materias.nombre, materias.activo, materias.updated_at AS updatedAt
       FROM materias
       JOIN docente_materias
         ON docente_materias.materia_id = materias.id
@@ -82,16 +84,17 @@ export async function pullClientData(user: User) {
     id: string;
     nombre: string;
     activo: number;
+    updatedAt?: string;
   }>;
 
   const students = (await (isAdmin
     ? db.prepare(`
-      SELECT id, nombre, dni, curso_id AS cursoId, tutor, activo
+      SELECT id, nombre, dni, curso_id AS cursoId, tutor, activo, updated_at AS updatedAt
       FROM alumnos
       WHERE tenant_id = ?
     `)
     : db.prepare(`
-      SELECT alumnos.id, alumnos.nombre, alumnos.dni, alumnos.curso_id AS cursoId, alumnos.tutor, alumnos.activo
+      SELECT alumnos.id, alumnos.nombre, alumnos.dni, alumnos.curso_id AS cursoId, alumnos.tutor, alumnos.activo, alumnos.updated_at AS updatedAt
       FROM alumnos
       JOIN docente_cursos
         ON docente_cursos.curso_id = alumnos.curso_id
@@ -106,6 +109,7 @@ export async function pullClientData(user: User) {
     cursoId: string;
     tutor: string | null;
     activo: number;
+    updatedAt?: string;
   }>;
 
   // alumno_materias no tiene docente_id: acotar por cursos del docente, no exigir docente_materias.
@@ -136,10 +140,10 @@ export async function pullClientData(user: User) {
   if (missingSubjectIds.length) {
     const placeholders = missingSubjectIds.map(() => '?').join(', ');
     const extra = (await db.prepare(`
-      SELECT id, nombre, activo
+      SELECT id, nombre, activo, updated_at AS updatedAt
       FROM materias
       WHERE tenant_id = ? AND id IN (${placeholders})
-    `).all(tenantId, ...missingSubjectIds)) as Array<{ id: string; nombre: string; activo: number }>;
+    `).all(tenantId, ...missingSubjectIds)) as Array<{ id: string; nombre: string; activo: number; updatedAt?: string }>;
     subjects = [...subjects, ...extra];
     if (!isAdmin) {
       const insertLink = db.prepare(`
@@ -207,6 +211,32 @@ export async function pullClientData(user: User) {
     subjectByStudent.set(link.alumno_id, list);
   }
 
+  let dashboardFilters: Record<string, unknown> = {};
+  let teacherContext: unknown[] = [];
+  try {
+    const clientState = (await db.prepare(`
+      SELECT dashboard_filters, teacher_context
+      FROM docente_client_state
+      WHERE docente_id = ? AND tenant_id = ?
+    `).get(docenteId, tenantId)) as { dashboard_filters?: string; teacher_context?: string } | undefined;
+
+    try {
+      const parsed = JSON.parse(clientState?.dashboard_filters || '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) dashboardFilters = parsed;
+    } catch {
+      dashboardFilters = {};
+    }
+    try {
+      const parsed = JSON.parse(clientState?.teacher_context || '[]');
+      if (Array.isArray(parsed)) teacherContext = parsed;
+    } catch {
+      teacherContext = [];
+    }
+  } catch {
+    dashboardFilters = {};
+    teacherContext = [];
+  }
+
   return {
     courses: courses.map((course) => {
       const ids = new Set<string>();
@@ -214,25 +244,24 @@ export async function pullClientData(user: User) {
         if (student.cursoId !== course.id) continue;
         for (const materiaId of subjectByStudent.get(student.id) || []) ids.add(materiaId);
       }
-      // Fallback: si el curso aún no tiene alumnos con materias, ofrecer las del docente.
-      if (!ids.size) {
-        for (const subject of subjects) ids.add(subject.id);
-      }
       return {
         ...course,
         nombre: recoveredDisplayName(course.id, course.nombre, 'Curso'),
         subjectIds: [...ids],
+        updatedAt: course.updatedAt,
       };
     }),
     schools: schools.map((school) => ({
       id: school.id,
       nombre: school.nombre,
       activo: school.activo !== 0,
+      updatedAt: school.updatedAt,
     })),
     subjects: subjects.map((subject) => ({
       id: subject.id,
       nombre: recoveredDisplayName(subject.id, subject.nombre, 'Materia'),
       activo: subject.activo !== 0,
+      updatedAt: subject.updatedAt,
     })),
     students: students.map((student) => ({
       id: student.id,
@@ -242,8 +271,11 @@ export async function pullClientData(user: User) {
       tutor: student.tutor || '',
       activo: student.activo !== 0,
       subjectIds: subjectByStudent.get(student.id) || [],
+      updatedAt: student.updatedAt,
     })),
     attendance,
     grades,
+    dashboardFilters,
+    teacherContext,
   };
 }

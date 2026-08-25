@@ -1,4 +1,5 @@
 import { productGuidesKey, productTourKey } from '../lib/client-storage-keys.ts';
+import { readClientData } from './client-data-store.ts';
 import { showAppToast } from './app-feedback.js';
 import { showSpaView } from './spa-router.ts';
 import { navigateToToolsSection } from './tools-ui.js';
@@ -730,12 +731,8 @@ function setTourStatus(userId, value) {
 }
 
 function readStorageList(key) {
-  try {
-    const list = JSON.parse(localStorage.getItem(key) || '[]');
-    return Array.isArray(list) ? list : [];
-  } catch {
-    return [];
-  }
+  const list = readClientData(key, []);
+  return Array.isArray(list) ? list : [];
 }
 
 function classroomFlag(flag) {

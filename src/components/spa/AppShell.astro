@@ -5,6 +5,7 @@ import GradesView from '../GradesView.astro';
 import SchoolCyclePanel from '../SchoolCyclePanel.astro';
 import ToolsView from '../ToolsView.astro';
 import TrabajosEntregasPanel from '../TrabajosEntregasPanel.astro';
+import UiIcon from '../UiIcon.astro';
 
 interface Props {
   initialView?: string;
@@ -48,7 +49,8 @@ const { initialView = 'panel' } = Astro.props;
     <section class="hero-card" data-panel-hero>
       <p class="eyebrow">Hoy</p>
       <h1 data-panel-today-title>Hoy: elegí curso arriba</h1>
-      <p class="hero-help copy-collapse-mobile">Importá con Excel o elegí el curso arriba.</p>
+      <p class="hero-help copy-collapse-mobile" data-panel-setup-help>Importá con Excel o elegí el curso arriba.</p>
+      <p class="hero-help copy-collapse-mobile is-hidden" data-panel-ready-help hidden>Asistencia y actividades del curso actual.</p>
 
       <div class="schedule-suggestion is-hidden" data-schedule-suggestion hidden>
         <p>
@@ -61,7 +63,7 @@ const { initialView = 'panel' } = Astro.props;
       <div class="hero-actions hero-actions--triple">
         <button type="button" data-spa-nav="asistencia" class="btn btn-primary hero-cta">Asistencia</button>
         <button type="button" data-spa-nav="actividades" class="btn btn-secondary hero-cta">Actividades</button>
-        <button type="button" class="btn btn-secondary hero-cta" data-tools-focus="importar" data-tools-tab="alumnos">
+        <button type="button" class="btn btn-secondary hero-cta" data-panel-import-excel data-tools-focus="importar" data-tools-tab="alumnos">
           <span class="copy-long">Importar desde Excel</span>
           <span class="copy-short">Importar</span>
         </button>
@@ -130,7 +132,7 @@ const { initialView = 'panel' } = Astro.props;
     <header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
-        <h1>Cargar alumnos</h1>
+        <h1>Alumnos</h1>
         <p class="copy-collapse-mobile">Listado del curso. La importación masiva está en Herramientas.</p>
       </div>
       <div class="actions-group">
@@ -144,20 +146,16 @@ const { initialView = 'panel' } = Astro.props;
       </div>
     </header>
 
-    <section class="panel student-import-cta">
-      <div class="section-title">
-        <h2>Importar desde Excel</h2>
-        <p class="copy-collapse-mobile">
-          La carga en lote de alumnos, asistencias y notas está centralizada en Herramientas.
-        </p>
-      </div>
-      <button type="button" class="btn btn-primary" data-tools-focus="importar" data-tools-tab="alumnos">
-        Ir a Importar Datos → Alumnos
-      </button>
-    </section>
-
     <section class="panel student-workspace">
-      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual" open>
+      <section class="panel">
+        <div class="section-title">
+          <h2>Alumnos cargados</h2>
+          <p>Listado con curso, materias y promedio actualizado.</p>
+        </div>
+        <div class="list" data-student-list></div>
+      </section>
+
+      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual">
         <summary class="panel-collapsible-summary">
           <span class="section-title">
             <h2>Cargar uno a uno</h2>
@@ -199,14 +197,6 @@ const { initialView = 'panel' } = Astro.props;
           <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
         </form>
       </details>
-
-      <section class="panel">
-        <div class="section-title">
-          <h2>Alumnos cargados</h2>
-          <p>Listado con curso, materias y promedio actualizado.</p>
-        </div>
-        <div class="list" data-student-list></div>
-      </section>
     </section>
 
     <dialog class="modal modal--wide" data-student-profile-dialog>
@@ -276,10 +266,15 @@ const { initialView = 'panel' } = Astro.props;
         <h1>Cursos y divisiones</h1>
         <p class="copy-collapse-mobile">Escuela, curso, materias y horarios del ciclo.</p>
       </div>
-      <button type="button" class="btn btn-primary btn-block" data-tools-focus="importar" data-tools-tab="alumnos">
-        <span class="copy-long">Importar alumnos (Excel)</span>
-        <span class="copy-short">Importar Excel</span>
-      </button>
+      <div class="actions-group">
+        <button type="button" class="btn btn-primary btn-block" data-scroll-target="[data-course-form]">
+          Nuevo curso
+        </button>
+        <button type="button" class="btn btn-secondary btn-block" data-scroll-target="[data-excel-import='cursos']">
+          <span class="copy-long">Importar cursos</span>
+          <span class="copy-short">Importar</span>
+        </button>
+      </div>
     </header>
 
     <section class="courses-workspace" data-course-workspace>
@@ -373,11 +368,11 @@ const { initialView = 'panel' } = Astro.props;
     </section>
   </section>
 
-  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="asistencia" data-spa-title="Asistencia" data-attendance>
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="asistencia" data-spa-title="Asistencia" data-attendance data-inherit-global-context>
     <AttendanceView spaMode />
   </section>
 
-  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="notas" data-spa-title="Calificaciones" data-grades>
+  <section class="spa-view page page-stack spa-view--hidden" data-spa-view="notas" data-spa-title="Calificaciones" data-grades data-inherit-global-context>
     <GradesView spaMode />
   </section>
 
@@ -398,24 +393,21 @@ const { initialView = 'panel' } = Astro.props;
 
     <p class="activity-context-hint" data-activity-context-hint>Elegí curso y materia en “Curso actual” arriba.</p>
 
-    <ol class="activity-flow-stepper" data-activity-flow-stepper aria-label="Pasos del flujo de actividades">
-      <li data-flow-step="contenido" class="is-current"><span>1</span> Crear</li>
-      <li data-flow-step="clase"><span>2</span> Clase virtual</li>
-      <li data-flow-step="entregas"><span>3</span> Recibir</li>
-      <li data-flow-step="corregir"><span>4</span> Corregir</li>
-    </ol>
-
     <div class="activity-flow-tabs" role="tablist" aria-label="Flujo de actividades" data-activity-flow-tabs>
       <button type="button" class="activity-flow-tab is-active" role="tab" data-activity-flow-tab="contenido" aria-selected="true" aria-controls="activity-flow-contenido" id="activity-tab-contenido">
+        <UiIcon name="crear" />
         Crear
       </button>
       <button type="button" class="activity-flow-tab" role="tab" data-activity-flow-tab="clase" aria-selected="false" aria-controls="activity-flow-clase" id="activity-tab-clase">
+        <UiIcon name="clase" />
         Clase virtual
       </button>
       <button type="button" class="activity-flow-tab" role="tab" data-activity-flow-tab="entregas" aria-selected="false" aria-controls="activity-flow-entregas" id="activity-tab-entregas">
+        <UiIcon name="recibir" />
         Recibir entregas
       </button>
       <button type="button" class="activity-flow-tab" role="tab" data-activity-flow-tab="corregir" aria-selected="false" aria-controls="activity-flow-corregir" id="activity-tab-corregir">
+        <UiIcon name="corregir" />
         Corregir
       </button>
     </div>
@@ -484,17 +476,40 @@ const { initialView = 'panel' } = Astro.props;
       <section class="panel clase-virtual-workspace">
         <div class="section-title">
           <h2>Clase virtual</h2>
-          <p>Los alumnos responden todo en digital por un link. Así se puede corregir en automático (MC) y con IA (abiertas).</p>
+          <p>Los alumnos entran con un link, responden en el celular o la compu, y al cerrar se corrige sola.</p>
         </div>
 
         <ol class="clase-virtual-steps" data-clase-steps aria-label="Pasos de la clase virtual">
-          <li data-clase-step="1" class="is-current"><span>1</span> Crear clase</li>
-          <li data-clase-step="2"><span>2</span> Añadir actividad</li>
-          <li data-clase-step="3"><span>3</span> Compartir link</li>
+          <li>
+            <button type="button" class="clase-step-btn is-current" data-clase-step="1">
+              <span class="clase-step-icon"><UiIcon name="crear" /></span>
+              <span class="clase-step-copy"><strong>Crear</strong><small>Tipo y tiempo</small></span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="clase-step-btn" data-clase-step="2">
+              <span class="clase-step-icon"><UiIcon name="lista" /></span>
+              <span class="clase-step-copy"><strong>Preguntas</strong><small>IA, hecha o a mano</small></span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="clase-step-btn" data-clase-step="3">
+              <span class="clase-step-icon"><UiIcon name="enlace" /></span>
+              <span class="clase-step-copy"><strong>Compartir</strong><small>Link al curso</small></span>
+            </button>
+          </li>
         </ol>
 
         <form class="form-grid" data-clase-form novalidate>
           <section data-clase-panel="1">
+            <div class="clase-panel-heading">
+              <UiIcon name="crear" />
+              <div>
+                <h3>Datos de la clase</h3>
+                <p>Elegí el tipo. El curso ya está en el encabezado.</p>
+              </div>
+            </div>
+
             <div class="input-group full-width activity-local-context">
               <label><span>Escuela</span><select name="colegio" data-clase-colegio></select></label>
               <label><span>Turno</span><select name="turno" data-clase-turno></select></label>
@@ -503,109 +518,207 @@ const { initialView = 'panel' } = Astro.props;
             </div>
 
             <label class="full-width">
-              <span>Título de la clase</span>
+              <span>Título</span>
               <input name="titulo" placeholder="Ej: Prueba digital — funciones" required />
             </label>
 
             <div class="activity-template-picker full-width" role="radiogroup" aria-label="Tipo de clase digital">
-              <label class="template-card"><input type="radio" name="modo" value="multiple_choice" checked /> <strong>Opción múltiple</strong><small>Corrección automática</small></label>
-              <label class="template-card"><input type="radio" name="modo" value="actividad_preguntas" /> <strong>Actividad con preguntas</strong><small>MC + abiertas (IA)</small></label>
-              <label class="template-card"><input type="radio" name="modo" value="examen" /> <strong>Examen / prueba</strong><small>Timer + anti-trampas</small></label>
+              <label class="template-card clase-mode-card">
+                <input type="radio" name="modo" value="multiple_choice" checked />
+                <span>
+                  <UiIcon name="lista" />
+                  <strong>Opción múltiple</strong>
+                  <small>Se corrige sola</small>
+                </span>
+              </label>
+              <label class="template-card clase-mode-card">
+                <input type="radio" name="modo" value="actividad_preguntas" />
+                <span>
+                  <UiIcon name="notas" />
+                  <strong>Con abiertas</strong>
+                  <small>MC + texto (IA)</small>
+                </span>
+              </label>
+              <label class="template-card clase-mode-card">
+                <input type="radio" name="modo" value="examen" />
+                <span>
+                  <UiIcon name="examen" />
+                  <strong>Examen</strong>
+                  <small>Timer y control</small>
+                </span>
+              </label>
             </div>
 
-            <div class="input-group full-width">
-              <label><span>Tiempo límite (min)</span><input type="number" name="duracionMinutos" min="5" max="240" value="40" /></label>
-              <label><span>Link válido (horas)</span><input type="number" name="expiresInHours" min="1" max="72" value="24" /></label>
+            <div class="clase-time-row full-width">
+              <p class="clase-field-label"><UiIcon name="reloj" /> Tiempo</p>
+              <div class="input-group">
+                <label><span>Minutos para responder</span><input type="number" name="duracionMinutos" min="5" max="240" value="40" /></label>
+                <label><span>El link vale (horas)</span><input type="number" name="expiresInHours" min="1" max="72" value="24" /></label>
+              </div>
             </div>
 
             <label class="full-width aula-temp-check">
               <input type="checkbox" name="mostrarNota" checked />
-              <span>Mostrar nota al alumno al entregar</span>
+              <span>Mostrar la nota al alumno cuando entrega</span>
             </label>
 
-            <fieldset class="aula-temp-antitrampa full-width">
-              <legend>Disminuir trampas</legend>
-              <label><input type="checkbox" name="atShuffleQuestions" checked /> Mezclar preguntas</label>
-              <label><input type="checkbox" name="atShuffleOptions" checked /> Mezclar opciones</label>
-              <label><input type="checkbox" name="atOneAtATime" /> Una pregunta a la vez</label>
-              <label><input type="checkbox" name="atLockNav" /> Sin volver atrás</label>
-              <label><input type="checkbox" name="atClipboard" checked /> Bloquear copiar/pegar</label>
-              <label><input type="checkbox" name="atWatermark" checked /> Marca de agua con nombre</label>
-              <label><input type="checkbox" name="atHideResults" /> Ocultar nota hasta cerrar</label>
-              <label><span>Salidas de pestaña máx.</span><input type="number" name="atMaxFocus" min="0" max="20" value="3" /></label>
-              <label>
-                <span>Si supera el límite</span>
-                <select name="atFocusAction">
-                  <option value="flag">Solo alerta</option>
-                  <option value="autosubmit">Entregar automático</option>
-                  <option value="block">Bloquear</option>
-                </select>
-              </label>
-            </fieldset>
+            <details class="clase-extra-details full-width">
+              <summary>
+                <UiIcon name="escudo" />
+                <span>
+                  <strong>Opciones de seguridad</strong>
+                  <small>Opcional. En el celular no se puede bloquear Gemini al 100%: si sale, se ocultan las preguntas y cuenta como salida.</small>
+                </span>
+              </summary>
+              <fieldset class="aula-temp-antitrampa">
+                <legend class="sr-only">Disminuir trampas</legend>
+                <label><input type="checkbox" name="atShuffleQuestions" checked /> Mezclar preguntas</label>
+                <label><input type="checkbox" name="atShuffleOptions" checked /> Mezclar opciones</label>
+                <label><input type="checkbox" name="atOneAtATime" /> Una pregunta a la vez</label>
+                <label><input type="checkbox" name="atLockNav" /> Sin volver atrás</label>
+                <label><input type="checkbox" name="atClipboard" checked /> Bloquear copiar/pegar</label>
+                <label><input type="checkbox" name="atWatermark" checked /> Marca de agua con nombre</label>
+                <label><input type="checkbox" name="atHideResults" /> Ocultar nota hasta cerrar</label>
+                <label><span>Salidas de pestaña máx.</span><input type="number" name="atMaxFocus" min="0" max="20" value="3" /></label>
+                <label>
+                  <span>Si supera el límite</span>
+                  <select name="atFocusAction">
+                    <option value="flag">Solo alerta</option>
+                    <option value="autosubmit">Entregar automático</option>
+                    <option value="block">Bloquear</option>
+                  </select>
+                </label>
+              </fieldset>
+            </details>
 
             <div class="button-row full-width">
-              <button type="button" class="btn btn-primary" data-clase-crear>Crear clase</button>
+              <button type="button" class="btn btn-primary" data-clase-crear>
+                <UiIcon name="crear" /> Crear y cargar preguntas
+              </button>
             </div>
           </section>
 
           <section data-clase-panel="2" hidden>
-            <p class="muted">Respuestas 100% digitales. Al <strong>cerrar la clase</strong> se auto-corrige todo (MC + abiertas con IA) y se cargan las notas.</p>
-
-            <div class="clase-ai-panel full-width">
-              <div class="section-title">
-                <h3>Generar con IA desde una referencia</h3>
-                <p>Elegí una actividad ya hecha y/o un documento, pedí el formato (MC, preguntas o examen según el modo de la clase) y se carga solo.</p>
+            <div class="clase-panel-heading">
+              <UiIcon name="lista" />
+              <div>
+                <h3>Cargar preguntas</h3>
+                <p>Elegí una forma. Después se publica el link.</p>
               </div>
-              <label>
-                <span>Actividad de referencia</span>
-                <select data-clase-ai-ref>
-                  <option value="">— Opcional —</option>
-                </select>
-              </label>
-              <label>
-                <span>Documento de referencia (PDF/DOCX/TXT)</span>
-                <input type="file" data-clase-ai-files accept=".pdf,.docx,.txt,application/pdf" multiple />
-              </label>
-              <label>
-                <span>Qué querés que haga la IA</span>
-                <textarea data-clase-ai-prompt rows="3" placeholder="Ej: Armá 10 multiple choice sobre funciones lineales, nivel 3º, con clave"></textarea>
-              </label>
-              <div class="button-row">
-                <button type="button" class="btn btn-primary" data-clase-ai-generar>Generar y cargar automático</button>
-              </div>
-              <p class="muted" data-clase-ai-status hidden></p>
             </div>
 
-            <div class="clase-load-existing full-width">
-              <label>
-                <span>O cargar actividad ya hecha (sin IA)</span>
-                <select data-clase-actividad-existente>
-                  <option value="">— Elegí una actividad guardada —</option>
-                </select>
-              </label>
-              <button type="button" class="btn btn-secondary" data-clase-cargar-existente>Usar esta actividad</button>
+            <div class="clase-method-tabs" role="tablist" aria-label="Cómo cargar las preguntas">
+              <button type="button" class="clase-method-tab is-active" data-clase-method="existente">
+                <UiIcon name="carpeta" /> Ya hecha
+              </button>
+              <button type="button" class="clase-method-tab" data-clase-method="ia">
+                <UiIcon name="ia" /> Con IA
+              </button>
+              <button type="button" class="clase-method-tab" data-clase-method="manual">
+                <UiIcon name="corregir" /> A mano
+              </button>
             </div>
 
-            <p><strong>O armá / revisá preguntas a mano</strong></p>
-            <div data-clase-questions-editor></div>
+            <div data-clase-method-panel="existente" class="clase-method-panel">
+              <p class="muted">Usá una actividad que ya creaste en la pestaña Crear.</p>
+              <div class="clase-load-existing">
+                <label>
+                  <span>Actividad guardada</span>
+                  <select data-clase-actividad-existente>
+                    <option value="">Elegí una actividad</option>
+                  </select>
+                </label>
+                <button type="button" class="btn btn-primary" data-clase-cargar-existente>
+                  <UiIcon name="carpeta" /> Usar esta actividad
+                </button>
+              </div>
+            </div>
+
+            <div data-clase-method-panel="ia" class="clase-method-panel" hidden>
+              <p class="muted">Pedile el formato y, si querés, adjuntá un documento o una actividad de referencia.</p>
+              <div class="clase-ai-panel">
+                <label>
+                  <span>Actividad de referencia (opcional)</span>
+                  <select data-clase-ai-ref>
+                    <option value="">Ninguna</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Documento (PDF, DOCX o TXT)</span>
+                  <input type="file" data-clase-ai-files accept=".pdf,.docx,.txt,application/pdf" multiple />
+                </label>
+                <label>
+                  <span>Qué tiene que armar</span>
+                  <textarea data-clase-ai-prompt rows="3" placeholder="Ej: 10 multiple choice sobre funciones, 3º año, con clave"></textarea>
+                </label>
+                <div class="button-row">
+                  <button type="button" class="btn btn-primary" data-clase-ai-generar>
+                    <UiIcon name="ia" /> Generar preguntas
+                  </button>
+                </div>
+                <p class="muted" data-clase-ai-status hidden></p>
+              </div>
+            </div>
+
+            <div data-clase-method-panel="manual" class="clase-method-panel" hidden>
+              <p class="muted">Armá o revisá las preguntas acá. Las respuestas son todas digitales.</p>
+              <div data-clase-questions-editor></div>
+            </div>
+
             <div class="button-row full-width">
               <button type="button" class="btn btn-secondary" data-clase-back-1>Volver</button>
-              <button type="button" class="btn btn-primary" data-clase-guardar-actividad>Guardar actividad y continuar</button>
+              <button type="button" class="btn btn-primary" data-clase-guardar-actividad hidden>
+                <UiIcon name="enlace" /> Guardar y obtener link
+              </button>
             </div>
           </section>
 
           <section data-clase-panel="3" hidden>
+            <div class="clase-panel-heading">
+              <UiIcon name="enlace" />
+              <div>
+                <h3>Compartir con el curso</h3>
+                <p>Mandá el link. Al cerrar, se corrige y se cargan las notas.</p>
+              </div>
+            </div>
+
             <div class="aula-temp-link-box">
-              <strong>Compartí este link con el curso</strong>
-              <p class="muted">Al cerrar la clase se auto-corrigen las entregas (MC + IA en abiertas) y se cargan las notas.</p>
+              <p class="clase-field-label"><UiIcon name="enlace" /> Link de la clase</p>
               <p class="aula-temp-link-url" data-clase-url></p>
-              <div class="button-row">
-                <button type="button" class="btn btn-primary btn-sm" data-clase-copy>Copiar link</button>
-                <a class="btn btn-secondary btn-sm" data-clase-open target="_blank" rel="noopener">Abrir</a>
-                <button type="button" class="btn btn-secondary btn-sm" data-clase-doc>Documento referencia</button>
-                <button type="button" class="btn btn-secondary btn-sm" data-clase-refresh>Ver intentos</button>
-                <button type="button" class="btn btn-secondary btn-sm" data-clase-close>Cerrar clase y corregir</button>
-                <button type="button" class="btn btn-secondary btn-sm" data-clase-nueva>Nueva clase</button>
+              <div class="clase-share-actions">
+                <div class="clase-action-group">
+                  <p class="clase-action-label">Para el curso</p>
+                  <div class="button-row">
+                    <button type="button" class="btn btn-primary btn-sm" data-clase-copy>
+                      <UiIcon name="copiar" /> Copiar link
+                    </button>
+                    <a class="btn btn-secondary btn-sm" data-clase-open target="_blank" rel="noopener">
+                      <UiIcon name="externo" /> Abrir
+                    </a>
+                  </div>
+                </div>
+                <div class="clase-action-group">
+                  <p class="clase-action-label">Durante la clase</p>
+                  <div class="button-row">
+                    <button type="button" class="btn btn-secondary btn-sm" data-clase-refresh>
+                      <UiIcon name="alumnos" /> Ver intentos
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-clase-doc>
+                      <UiIcon name="documento" /> Documento
+                    </button>
+                  </div>
+                </div>
+                <div class="clase-action-group">
+                  <p class="clase-action-label">Cuando termina</p>
+                  <div class="button-row">
+                    <button type="button" class="btn btn-primary btn-sm" data-clase-close>
+                      <UiIcon name="asistencia" /> Cerrar y corregir
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-clase-nueva>
+                      <UiIcon name="crear" /> Nueva clase
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="list" data-clase-intentos></div>

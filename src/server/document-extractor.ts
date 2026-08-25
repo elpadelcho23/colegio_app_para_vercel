@@ -1,5 +1,9 @@
 import mammoth from 'mammoth';
 import { ACTIVITY_AI_LIMITS } from '../lib/activity-ai-limits';
+import { installPdfDomPolyfills } from './pdf-dom-polyfill';
+import { configurePdfJsWorker, resolvePdfWorkerSrc } from './pdf-worker-setup';
+
+installPdfDomPolyfills();
 
 const ALLOWED_EXTENSIONS = new Set(['pdf', 'docx', 'txt']);
 const ALLOWED_MIME = new Set([
@@ -30,15 +34,75 @@ export function assertSupportedUpload(file: File) {
   }
 }
 
-async function extractPdf(buffer: Buffer) {
-  const { PDFParse } = await import('pdf-parse');
-  const parser = new PDFParse({ data: buffer });
-  try {
-    const result = await parser.getText();
-    return String(result?.text || '').trim();
-  } finally {
-    await parser.destroy?.();
+async function extractPdfWithPdfJs(buffer: Buffer) {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const workerSrc = configurePdfJsWorker(pdfjs);
+  if (!workerSrc) {
+    throw new Error('No se encontró el worker de PDF en el servidor.');
   }
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    isOffscreenCanvasSupported: false,
+    useSystemFonts: false,
+    verbosity: 0,
+  });
+  const doc = await loadingTask.promise;
+  try {
+    const pages: string[] = [];
+    const maxPages = Math.min(doc.numPages, 40);
+    for (let index = 1; index <= maxPages; index += 1) {
+      const page = await doc.getPage(index);
+      const content = await page.getTextContent();
+      const text = content.items
+        .map((item) => ('str' in item ? String(item.str || '') : ''))
+        .join(' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/[ ]{2,}/g, ' ')
+        .trim();
+      if (text) pages.push(text);
+    }
+    return pages.join('\n\n').trim();
+  } finally {
+    await doc.destroy();
+  }
+}
+
+async function extractPdf(buffer: Buffer) {
+  installPdfDomPolyfills();
+  let lastError = '';
+  try {
+    const text = await extractPdfWithPdfJs(buffer);
+    if (text) return text;
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : 'pdf.js';
+  }
+
+  try {
+    const { PDFParse } = await import('pdf-parse');
+    const workerSrc = resolvePdfWorkerSrc();
+    if (workerSrc) PDFParse.setWorker(workerSrc);
+    const parser = new PDFParse({
+      data: buffer,
+      isOffscreenCanvasSupported: false,
+      useSystemFonts: false,
+      verbosity: 0,
+    });
+    try {
+      const result = await parser.getText();
+      const text = String(result?.text || '').trim();
+      if (text) return text;
+    } finally {
+      await parser.destroy?.();
+    }
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : lastError || 'pdf-parse';
+  }
+
+  throw new Error(
+    lastError && !/DOMMatrix|Path2D|ImageData|workerSrc|fake worker/i.test(lastError)
+      ? `No se pudo leer el PDF (${lastError.slice(0, 120)}). Si es un escaneo, subí un DOCX o TXT.`
+      : 'No se pudo leer el PDF. Si es un escaneo sin texto seleccionable, subí un DOCX o TXT.',
+  );
 }
 
 async function extractDocx(buffer: Buffer) {

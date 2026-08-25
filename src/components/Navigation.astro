@@ -1,16 +1,18 @@
 ﻿---
+import UiIcon from './UiIcon.astro';
+
 const { currentPath = '/', spaEnabled = false } = Astro.props;
 const user = Astro.locals.user;
 const isGuest = Boolean(user?.is_guest);
 
 const spaLinks = [
-  { view: 'panel', href: '/', label: 'Panel' },
-  { view: 'registro', href: '/registro', label: 'Alumnos' },
-  { view: 'cursos', href: '/cursos', label: 'Cursos' },
-  { view: 'asistencia', href: '/asistencia', label: 'Asistencia' },
-  { view: 'notas', href: '/notas', label: 'Calificaciones' },
-  { view: 'actividades', href: '/actividades', label: 'Actividades' },
-  { view: 'herramientas', href: '/herramientas?tab=importar', label: 'Herramientas' },
+  { view: 'panel', href: '/', label: 'Panel', icon: 'panel' },
+  { view: 'registro', href: '/registro', label: 'Alumnos', icon: 'alumnos' },
+  { view: 'cursos', href: '/cursos', label: 'Cursos', icon: 'cursos' },
+  { view: 'asistencia', href: '/asistencia', label: 'Asistencia', icon: 'asistencia' },
+  { view: 'notas', href: '/notas', label: 'Calificaciones', icon: 'notas' },
+  { view: 'actividades', href: '/actividades', label: 'Actividades', icon: 'actividades' },
+  { view: 'herramientas', href: '/herramientas?tab=importar', label: 'Herramientas', icon: 'herramientas' },
 ] as const;
 
 const isActive = (href: string) => {
@@ -114,6 +116,7 @@ const isActive = (href: string) => {
               data-spa-nav={link.view}
               role="menuitem"
             >
+              <UiIcon name={link.icon} />
               {link.label}
             </button>
           ))}
@@ -127,6 +130,7 @@ const isActive = (href: string) => {
               aria-current={isActive(link.href) ? 'page' : undefined}
               role="menuitem"
             >
+              <UiIcon name={link.icon} />
               {link.label}
             </a>
           ))}
@@ -257,6 +261,13 @@ const isActive = (href: string) => {
     width: 100%;
     padding: 0.65rem 0.85rem;
     border-radius: var(--radius-sm);
+  }
+
+  .nav-tab .ui-icon,
+  .nav-links a .ui-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex-shrink: 0;
   }
 
   .nav-tab.active,

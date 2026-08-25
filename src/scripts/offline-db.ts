@@ -1,4 +1,4 @@
-export type SyncEntity = 'attendance' | 'student' | 'grade' | 'subject' | 'school' | 'course';
+export type SyncEntity = 'attendance' | 'student' | 'grade' | 'subject' | 'school' | 'course' | 'clientState';
 export type SyncAction = 'upsert' | 'delete';
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'conflict' | 'error';
 

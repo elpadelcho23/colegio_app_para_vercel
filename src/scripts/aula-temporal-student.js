@@ -31,6 +31,13 @@
   let saveTimer = null;
   let focusLossReported = false;
   let submitting = false;
+  let antiCheatBound = false;
+  let examPaused = false;
+  let lastFocusLossAt = 0;
+  let wakeLock = null;
+  let focusPollId = null;
+  let heartbeatId = null;
+  let lockGraceUntil = 0;
 
   function show(panel) {
     [joinPanel, examPanel, donePanel, closedPanel, preparandoPanel].forEach((node) => {
@@ -159,6 +166,10 @@
 
   function applyAntiCheat() {
     const anti = session?.antiTrampa || {};
+    const pauseEl = root.querySelector('[data-aula-pause]');
+    const pauseCount = root.querySelector('[data-aula-pause-count]');
+    const resumeBtn = root.querySelector('[data-aula-resume]');
+
     if (anti.watermark && session.watermarkText) {
       watermarkEl.textContent = session.watermarkText;
       watermarkEl.hidden = false;
@@ -166,25 +177,42 @@
       watermarkEl.hidden = true;
     }
 
-    if (anti.blockClipboard) {
-      examPanel.addEventListener('copy', (e) => e.preventDefault());
-      examPanel.addEventListener('cut', (e) => e.preventDefault());
-      examPanel.addEventListener('paste', (e) => e.preventDefault());
-      examPanel.addEventListener('contextmenu', (e) => e.preventDefault());
-    }
+    const requestExamLock = async () => {
+      lockGraceUntil = Date.now() + 2500;
+      try {
+        if (document.fullscreenEnabled && !document.fullscreenElement) {
+          await (examPanel.requestFullscreen?.() || document.documentElement.requestFullscreen?.());
+        }
+      } catch {
+        // El navegador puede rechazar fullscreen; no bloquea la prueba.
+      }
+      try {
+        if (navigator.wakeLock?.request) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch {
+        wakeLock = null;
+      }
+      lockGraceUntil = Date.now() + 800;
+    };
 
-    const onHide = () => {
-      if (!session || submitting || document.visibilityState === 'visible') return;
+    const reportFocusLoss = (source) => {
+      const stamp = Date.now();
+      if (stamp - lastFocusLossAt < 1200) return;
+      lastFocusLossAt = stamp;
       api(`/api/aula-temporal/intento/${session.intentoId}/event`, {
         method: 'POST',
-        body: JSON.stringify({ type: 'focus_loss' }),
+        body: JSON.stringify({ type: 'focus_loss', detail: { source } }),
       }).then((result) => {
+        if (pauseCount && result.maxFocusLoss) {
+          pauseCount.textContent = `Salidas registradas: ${result.focusLosses || '?'} de ${result.maxFocusLoss}.`;
+        }
         if (result.estado === 'bloqueado') {
           showDone({
             estado: 'bloqueado',
             mostrarNota: false,
             pendingLink: false,
-            message: 'El intento se bloqueó por salir demasiadas veces de la pestaña.',
+            message: 'El intento se bloqueó por salir demasiadas veces de la prueba.',
           });
           return;
         }
@@ -197,25 +225,94 @@
           return;
         }
         if (!focusLossReported) {
-          statusEl.textContent = `Atención: se registró que saliste de la pestaña (${result.focusLosses || '?'}/${result.maxFocusLoss || '?'}).`;
+          statusEl.textContent = `Atención: se registró que saliste (${result.focusLosses || '?'}/${result.maxFocusLoss || '?'}).`;
           focusLossReported = true;
           setTimeout(() => { focusLossReported = false; }, 4000);
         }
       }).catch(() => {});
     };
 
-    document.addEventListener('visibilitychange', onHide);
-    window.addEventListener('blur', () => {
-      if (document.visibilityState === 'hidden') onHide();
+    const pauseExam = (source) => {
+      if (!session || submitting || examPaused) return;
+      if (Date.now() < lockGraceUntil) return;
+      examPaused = true;
+      examPanel.classList.add('is-paused');
+      if (pauseEl) pauseEl.hidden = false;
+      reportFocusLoss(source);
+    };
+
+    const resumeExam = async () => {
+      if (!session || submitting) return;
+      if (document.visibilityState === 'hidden' || !document.hasFocus()) {
+        if (pauseCount) {
+          pauseCount.textContent = 'Todavía hay otra app o asistente abierto. Cerralo y volvé a tocar.';
+        }
+        return;
+      }
+      examPaused = false;
+      examPanel.classList.remove('is-paused');
+      if (pauseEl) pauseEl.hidden = true;
+      await requestExamLock();
+    };
+
+    const maybeAway = (source) => {
+      if (!session || submitting) return;
+      const hidden = document.visibilityState === 'hidden';
+      const unfocused = typeof document.hasFocus === 'function' ? !document.hasFocus() : false;
+      if (hidden || unfocused) pauseExam(source || (hidden ? 'hidden' : 'blur'));
+    };
+
+    if (anti.blockClipboard) {
+      examPanel.classList.add('aula-temp-nocopy');
+    }
+
+    if (antiCheatBound) {
+      void requestExamLock();
+      return;
+    }
+    antiCheatBound = true;
+
+    if (anti.blockClipboard) {
+      const block = (event) => event.preventDefault();
+      document.addEventListener('copy', block);
+      document.addEventListener('cut', block);
+      document.addEventListener('paste', block);
+      document.addEventListener('contextmenu', block);
+      document.addEventListener('dragstart', block);
+      document.addEventListener('keydown', (event) => {
+        if (!session || submitting) return;
+        const key = String(event.key || '').toLowerCase();
+        if ((event.ctrlKey || event.metaKey) && ['c', 'v', 'x', 'p', 's', 'u'].includes(key)) {
+          event.preventDefault();
+        }
+      });
+    }
+
+    document.addEventListener('visibilitychange', () => maybeAway('hidden'));
+    window.addEventListener('blur', () => maybeAway('blur'));
+    window.addEventListener('pagehide', () => pauseExam('pagehide'));
+    document.addEventListener('freeze', () => pauseExam('freeze'));
+    resumeBtn?.addEventListener('click', () => { void resumeExam(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !wakeLock) void requestExamLock();
     });
 
-    setInterval(() => {
+    clearInterval(focusPollId);
+    focusPollId = setInterval(() => {
+      if (!session || submitting || examPaused) return;
+      maybeAway('poll');
+    }, 700);
+
+    clearInterval(heartbeatId);
+    heartbeatId = setInterval(() => {
       if (!session || submitting) return;
       api(`/api/aula-temporal/intento/${session.intentoId}/event`, {
         method: 'POST',
         body: JSON.stringify({ type: 'heartbeat' }),
       }).catch(() => {});
     }, 30000);
+
+    void requestExamLock();
   }
 
   function startTimer() {
@@ -234,7 +331,13 @@
 
   function showDone(result) {
     clearInterval(timerId);
+    clearInterval(focusPollId);
+    clearInterval(heartbeatId);
     submitting = true;
+    examPaused = false;
+    examPanel.classList.remove('is-paused');
+    const pauseEl = root.querySelector('[data-aula-pause]');
+    if (pauseEl) pauseEl.hidden = true;
     show(donePanel);
     doneMsg.textContent = result.message
       || (result.estado === 'vencido'

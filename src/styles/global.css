@@ -471,6 +471,7 @@ h3 {
   min-height: 46px;
   align-items: center;
   justify-content: flex-start;
+  gap: 0.55rem;
   border-radius: var(--radius);
   padding: 0.72rem 0.85rem;
   color: var(--muted);
@@ -548,6 +549,9 @@ h3 {
 }
 
 .activity-flow-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
@@ -580,8 +584,14 @@ h3 {
   font-size: 0.92rem;
 }
 
+.activity-flow-tab.is-done {
+  border-color: color-mix(in srgb, var(--ok, #2f7d4a) 40%, var(--line));
+}
+
 [data-inherit-global-context] [data-trabajo-context-form],
-[data-inherit-global-context] .activity-local-context {
+[data-inherit-global-context] .activity-local-context,
+[data-inherit-global-context] .local-teaching-context,
+[data-inherit-global-context] .filter-context-note {
   display: none !important;
 }
 
@@ -1406,11 +1416,6 @@ h3 {
   }
 }
 
-.student-import-cta {
-  display: grid;
-  gap: var(--space-3);
-}
-
 .tools-placeholder-card {
   display: grid;
   gap: var(--space-3);
@@ -1467,6 +1472,9 @@ h3 {
 }
 
 .tools-hub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
@@ -2158,6 +2166,9 @@ body.product-tour-active[data-active-spa-view='notas'] .product-tour-card {
 }
 
 .tools-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
@@ -2378,6 +2389,13 @@ a.tools-nav-link {
   justify-self: end;
   color: var(--brand);
   opacity: 0.92;
+}
+
+.ui-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  color: currentColor;
 }
 
 .metric--link {
@@ -5284,6 +5302,51 @@ label.checkbox-row {
   margin-top: 0.75rem;
 }
 
+.aula-temp-panel[data-aula-exam].is-paused .aula-temp-questions,
+.aula-temp-panel[data-aula-exam].is-paused .aula-temp-nav,
+.aula-temp-panel[data-aula-exam].is-paused .aula-temp-watermark {
+  visibility: hidden;
+}
+
+.aula-temp-pause {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: var(--surface, #f4f1ea);
+}
+
+.aula-temp-pause[hidden] {
+  display: none;
+}
+
+.aula-temp-pause-card {
+  width: min(28rem, 100%);
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line, #c8d4ce);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.aula-temp-pause-card h2 {
+  margin: 0;
+}
+
+.aula-temp-pause-card p {
+  margin: 0;
+}
+
+.aula-temp-nocopy,
+.aula-temp-nocopy .aula-temp-question h3,
+.aula-temp-nocopy .aula-temp-option {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* —— Aula temporal (docente) —— */
 .aula-temp-teacher-panel {
   margin-top: 0.75rem;
@@ -5339,15 +5402,24 @@ label.checkbox-row {
 }
 
 .aula-temp-link-box {
-  margin-top: 1rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--line);
+  margin-top: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  display: grid;
+  gap: 0.75rem;
 }
 
 .aula-temp-link-url {
   word-break: break-all;
   font-family: ui-monospace, monospace;
   font-size: 0.9rem;
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
 }
 
 .activity-template-picker {
@@ -5363,51 +5435,275 @@ label.checkbox-row {
   color: var(--muted);
 }
 
-.clase-virtual-steps {
+.clase-virtual-workspace .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.clase-virtual-workspace .btn .ui-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.clase-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin: 0 0 1rem;
+}
+
+.clase-panel-heading .ui-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-top: 0.15rem;
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.clase-panel-heading h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.clase-panel-heading p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.clase-field-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.45rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.clase-field-label .ui-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  color: var(--brand);
+}
+
+.clase-time-row .input-group {
+  width: 100%;
+}
+
+.clase-mode-card span {
+  display: grid;
+  justify-items: start;
+  gap: 0.15rem;
+}
+
+.clase-mode-card .ui-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  color: var(--brand);
+  margin-bottom: 0.1rem;
+}
+
+.clase-extra-details {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.15rem 0.85rem 0.35rem;
+  background: var(--surface);
+}
+
+.clase-extra-details summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  cursor: pointer;
+  list-style: none;
+  padding: 0.7rem 0;
+}
+
+.clase-extra-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.clase-extra-details summary .ui-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.15rem;
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.clase-extra-details summary span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.clase-extra-details summary small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.clase-extra-details .aula-temp-antitrampa {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.clase-method-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.clase-method-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.clase-method-tab .ui-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.clase-method-tab.is-active {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  color: var(--brand-strong);
+  font-weight: 700;
+}
+
+.clase-method-panel[hidden] {
+  display: none;
+}
+
+.clase-share-actions {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.clase-action-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.clase-virtual-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
   list-style: none;
   margin: 0 0 1.25rem;
   padding: 0;
 }
 
-.clase-virtual-steps li {
+.clase-step-btn {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 52px;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
   color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.clase-virtual-steps li span {
+.clase-step-icon {
   display: inline-grid;
   place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.85rem;
+  height: 1.85rem;
+  flex-shrink: 0;
   border-radius: 999px;
   border: 1px solid var(--line);
-  font-size: 0.8rem;
+  background: var(--surface);
 }
 
-.clase-virtual-steps li.is-current {
-  color: inherit;
+.clase-step-icon .ui-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.clase-step-copy {
+  display: grid;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.clase-step-copy strong {
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.clase-step-copy small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.clase-step-btn.is-current {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  color: var(--brand-strong);
   font-weight: 700;
+}
+
+.clase-step-btn.is-current .clase-step-icon {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 16%, var(--surface));
+  color: var(--brand);
+}
+
+.clase-step-btn.is-done {
+  color: var(--text);
+}
+
+.clase-step-btn.is-done .clase-step-icon {
+  border-color: color-mix(in srgb, var(--ok, #2f7d4a) 50%, var(--line));
+  background: color-mix(in srgb, var(--ok, #2f7d4a) 12%, var(--surface));
+  color: var(--ok, #2f7d4a);
+}
+
+@media (max-width: 639px) {
+  .clase-virtual-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .clase-step-copy small {
+    display: none;
+  }
 }
 
 .clase-load-existing {
   display: grid;
   gap: 0.55rem;
-  margin: 0.75rem 0 1.25rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px dashed var(--line);
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .clase-ai-panel {
   display: grid;
   gap: 0.65rem;
-  margin: 0 0 1.25rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px dashed var(--line);
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 html[data-theme="dark"] .excel-workspace-step,

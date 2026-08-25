@@ -36,10 +36,12 @@ const { spaMode = false } = Astro.props;
 
   <div class="filters-grid">
     <input type="date" data-attendance-date aria-label="Fecha" />
-    <select data-filter-course aria-label="Curso (curso actual)"></select>
-    <div class="filter-field">
-      <select data-filter-subject aria-label="Materia (curso actual)"></select>
-      <small class="field-error" data-attendance-subject-error hidden></small>
+    <div class="local-teaching-context">
+      <select data-filter-course aria-label="Curso (curso actual)"></select>
+      <div class="filter-field">
+        <select data-filter-subject aria-label="Materia (curso actual)"></select>
+        <small class="field-error" data-attendance-subject-error hidden></small>
+      </div>
     </div>
   </div>
   <p class="muted filter-context-note copy-collapse-mobile">Sigue el Curso actual.</p>

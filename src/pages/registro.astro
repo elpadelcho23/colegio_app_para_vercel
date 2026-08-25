@@ -7,7 +7,7 @@ import Layout from '../layouts/Layout.astro';
     <header class="page-header">
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
-        <h1>Cargar alumnos</h1>
+        <h1>Alumnos</h1>
         <p>Listado del curso. La importación masiva está en Herramientas.</p>
       </div>
       <div class="actions-group">
@@ -18,20 +18,18 @@ import Layout from '../layouts/Layout.astro';
       </div>
     </header>
 
-    <section class="panel student-import-cta">
-      <div class="section-title">
-        <h2>Importar desde Excel</h2>
-        <p>
-          La carga en lote de alumnos, asistencias y notas está centralizada en Herramientas.
-        </p>
-      </div>
-      <a class="btn btn-primary" href="/herramientas?tab=importar&tipo=alumnos">
-        Ir a Importar Datos → Alumnos
-      </a>
+    <section class="responsive-grid">
+      <section class="panel">
+        <div class="section-title">
+          <h2>Alumnos cargados</h2>
+          <p>Listado con curso, materias y promedio actualizado.</p>
+        </div>
+        <div class="list" data-student-list></div>
+      </section>
     </section>
 
     <section class="panel student-workspace">
-      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual" open>
+      <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual">
         <summary class="panel-collapsible-summary">
           <span class="section-title">
             <h2>Cargar uno a uno</h2>
@@ -71,16 +69,6 @@ import Layout from '../layouts/Layout.astro';
           <button class="btn btn-primary btn-block" type="submit">Guardar alumno</button>
         </form>
       </details>
-    </section>
-
-    <section class="responsive-grid">
-      <section class="panel">
-        <div class="section-title">
-          <h2>Alumnos cargados</h2>
-          <p>Listado con curso, materias y promedio actualizado.</p>
-        </div>
-        <div class="list" data-student-list></div>
-      </section>
     </section>
   </main>
 </Layout>

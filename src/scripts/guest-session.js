@@ -6,7 +6,7 @@ import {
 } from '../lib/client-storage-keys.ts';
 import { clearOfflineDatabase } from './offline-db.ts';
 
-const KEEP_KEYS = new Set(['aula_clara_theme', 'aula_clara_offline_reset_v2']);
+const KEEP_KEYS = new Set(['aula_clara_theme', 'aula_clara_offline_reset_v2', 'aula_clara_offline_reset_v3']);
 
 const SESSION_DRAFT_KEYS = [
   'aula_clara_recovery_draft',

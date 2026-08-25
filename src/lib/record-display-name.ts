@@ -33,10 +33,15 @@ export function preferredDisplayName(id: string, nombre: unknown, fallback = '')
   return recoveredDisplayName(id, nombre, fallback);
 }
 
+export function isGenericPlaceholderName(nombre: unknown) {
+  return /^(curso|materia|escuela)$/i.test(String(nombre || '').trim());
+}
+
 export function pickBetterRecordName(id: string, ...candidates: unknown[]) {
   for (const candidate of candidates) {
+    if (isGenericPlaceholderName(candidate)) continue;
     const recovered = recoveredDisplayName(id, candidate, '');
-    if (recovered) return recovered;
+    if (recovered && !isGenericPlaceholderName(recovered)) return recovered;
     if (isUsableDisplayName(id, candidate)) return String(candidate).trim();
   }
   return '';

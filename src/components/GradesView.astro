@@ -26,7 +26,7 @@ const { spaMode = false } = Astro.props;
       <strong>Curso actual</strong>
       <p data-grade-context-text>Seleccioná escuela, curso y materia arriba.</p>
     </div>
-    <div class="filters-grid">
+    <div class="filters-grid local-teaching-context">
       <select data-grade-school-filter aria-label="Escuela">
         <option value="">Todas las escuelas</option>
       </select>
@@ -69,7 +69,7 @@ const { spaMode = false } = Astro.props;
     <div class="list" data-grade-deliveries></div>
   </section>
 
-  <section class="panel">
+  <section class="panel is-hidden" data-grade-eval-panel hidden>
     <form class="form-grid" data-grade-meta-form>
       <div class="section-title full-width">
         <h2>Cargar evaluación</h2>
@@ -158,8 +158,10 @@ const { spaMode = false } = Astro.props;
   </div>
 
   <div class="filters-grid">
-    <select data-detail-course-filter aria-label="Curso"></select>
-    <select data-detail-subject-filter aria-label="Materia"></select>
+    <div class="local-teaching-context">
+      <select data-detail-course-filter aria-label="Curso"></select>
+      <select data-detail-subject-filter aria-label="Materia"></select>
+    </div>
     <select data-detail-period-filter aria-label="Período">
       <option value="1c">1er cuatrimestre</option>
       <option value="2c">2do cuatrimestre</option>

@@ -116,12 +116,10 @@ export function deriveCourseSubjectIds(
 
 export function subjectsForCourseDisplay(
   course: CourseLike,
-  allSubjectIds: string[],
+  _allSubjectIds: string[],
   teacherContext: TeacherScheduleBlock[],
 ) {
-  const ids = deriveCourseSubjectIds(course.id, course, teacherContext);
-  if (ids.length) return ids;
-  return allSubjectIds;
+  return deriveCourseSubjectIds(course.id, course, teacherContext);
 }
 
 export function cloneSchoolCycle(options: CloneSchoolCycleOptions): CloneSchoolCycleResult {

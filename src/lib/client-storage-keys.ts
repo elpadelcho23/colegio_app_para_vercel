@@ -12,8 +12,8 @@ export const CLIENT_STORAGE_ENTRIES: ClientStorageEntry[] = [
   { key: 'aula_clara_subjects', pullField: 'subjects', empty: '[]' },
   { key: 'aula_clara_attendance', pullField: 'attendance', empty: '[]' },
   { key: 'aula_clara_grades', pullField: 'grades', empty: '[]' },
-  { key: 'aula_clara_dashboard_filters', pullField: null, empty: '{}' },
-  { key: 'aula_clara_teacher_context', pullField: null, empty: '[]' },
+  { key: 'aula_clara_dashboard_filters', pullField: 'dashboardFilters', empty: '{}' },
+  { key: 'aula_clara_teacher_context', pullField: 'teacherContext', empty: '[]' },
 ];
 
 export const CLIENT_DATA_STORAGE: Record<string, string> = Object.fromEntries(

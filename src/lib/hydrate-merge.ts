@@ -40,6 +40,7 @@ export function mergeRecordsById<T extends Timestamped>(
   localItems: T[],
   pendingUpserts: T[] = [],
   pendingDeletes: Set<string> = new Set(),
+  options: { keepNonEmptySubjectIds?: boolean } = {},
 ): T[] {
   const map = new Map<string, T>();
 
@@ -55,13 +56,18 @@ export function mergeRecordsById<T extends Timestamped>(
     const newer = nextTime >= currentTime ? item : current;
     const older = newer === item ? current : item;
     const nombre = pickBetterRecordName(item.id, newer.nombre, older.nombre);
-    const subjectIds = Array.isArray(newer.subjectIds) || Array.isArray(older.subjectIds)
-      ? pickNonEmptyIds(newer.subjectIds, older.subjectIds)
-      : undefined;
+    let subjectIds: string[] | undefined;
+    if (Array.isArray(newer.subjectIds) || Array.isArray(older.subjectIds)) {
+      subjectIds = options.keepNonEmptySubjectIds
+        ? pickNonEmptyIds(newer.subjectIds, older.subjectIds)
+        : Array.isArray(newer.subjectIds)
+          ? [...new Set(newer.subjectIds.filter(Boolean))]
+          : older.subjectIds;
+    }
     map.set(item.id, {
       ...newer,
       ...(nombre ? { nombre } : {}),
-      ...(subjectIds ? { subjectIds } : {}),
+      ...(subjectIds !== undefined ? { subjectIds } : {}),
     });
   };
 
@@ -138,6 +144,7 @@ export function mergeHydratedStorageValue(
     localItems,
     pending?.upserts || [],
     pending?.deletes || new Set<string>(),
+    { keepNonEmptySubjectIds: pullField === 'students' },
   );
 }
 

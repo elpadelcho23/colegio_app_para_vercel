@@ -60,6 +60,14 @@ const token = Astro.params.token || '';
           <button type="button" class="btn btn-primary" data-aula-submit>Entregar</button>
         </div>
         <p class="muted" data-aula-status></p>
+        <div class="aula-temp-pause" data-aula-pause hidden>
+          <div class="aula-temp-pause-card">
+            <h2>Pausa</h2>
+            <p>Saliste de la prueba (otra app, asistente o botón de apagado). Las preguntas se ocultan.</p>
+            <p class="muted" data-aula-pause-count></p>
+            <button type="button" class="btn btn-primary btn-block" data-aula-resume>Volver a la prueba</button>
+          </div>
+        </div>
       </section>
 
       <section class="aula-temp-panel" data-aula-done hidden>

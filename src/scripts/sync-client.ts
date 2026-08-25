@@ -1,48 +1,113 @@
 import { CLIENT_STORAGE_ENTRIES } from '../lib/client-storage-keys';
 import { groupPendingMutations, mergeHydratedStorageValue } from '../lib/hydrate-merge';
 import {
+  clearCatalogLocalStorage,
+  initClientDataStore,
+  peekLocalCatalog,
+  replaceClientDataSnapshot,
+} from './client-data-store';
+import {
   countPendingOperations,
   getPendingOperations,
   getOperationStatusCounts,
   markOperationError,
   markOperationSynced,
   markOperationSyncing,
+  queueOfflineOperation,
   type PendingOperation,
 } from './offline-db';
 
 let syncInProgress = false;
 
-export async function hydrateLocalStorageFromServer(userId: string, options: { notify?: boolean } = {}) {
+function isEmptyFilters(value: unknown) {
+  return !value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value as object).length === 0;
+}
+
+function isEmptyList(value: unknown) {
+  return !Array.isArray(value) || value.length === 0;
+}
+
+function hydrateMemoryFromLocalFallback(userId: string) {
+  const snapshot: Record<string, unknown> = {};
+  for (const { key, empty } of CLIENT_STORAGE_ENTRIES) {
+    const local = peekLocalCatalog(key, userId);
+    snapshot[key] = local ?? JSON.parse(empty);
+  }
+  replaceClientDataSnapshot(snapshot);
+}
+
+export async function hydrateFromServer(userId: string, options: { notify?: boolean } = {}) {
   const { notify = true } = options;
   if (!userId) return false;
 
-  const scoped = (key: string) => `${key}:${userId}`;
+  initClientDataStore(userId);
 
   try {
     const response = await fetch('/api/sync/pull', { credentials: 'same-origin' });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      hydrateMemoryFromLocalFallback(userId);
+      return false;
+    }
 
     let pendingOperations: Awaited<ReturnType<typeof getPendingOperations>> = [];
     try {
       pendingOperations = await getPendingOperations();
     } catch {
-      // IndexedDB puede fallar tras wipe de invitado; igual hidratamos desde el servidor.
       pendingOperations = [];
     }
 
-    const data = await response.json();
+    const data = await response.json() as Record<string, unknown>;
     const pendingByEntity = groupPendingMutations(pendingOperations);
+    const pendingState = [...pendingOperations]
+      .filter((operation) => operation.entity === 'clientState' && operation.action === 'upsert')
+      .at(-1)?.payload as { dashboardFilters?: unknown; teacherContext?: unknown } | undefined;
 
+    if (pendingState?.dashboardFilters && typeof pendingState.dashboardFilters === 'object') {
+      data.dashboardFilters = pendingState.dashboardFilters;
+    }
+    if (Array.isArray(pendingState?.teacherContext)) {
+      data.teacherContext = pendingState.teacherContext;
+    }
+
+    const snapshot: Record<string, unknown> = {};
     for (const { key: storageKey, pullField, empty } of CLIENT_STORAGE_ENTRIES) {
-      const merged = mergeHydratedStorageValue(
+      snapshot[storageKey] = mergeHydratedStorageValue(
         storageKey,
         pullField,
         empty,
         data,
-        localStorage.getItem(scoped(storageKey)),
+        null,
         pendingByEntity,
       );
-      localStorage.setItem(scoped(storageKey), JSON.stringify(merged));
+    }
+
+    let migratedClientState = false;
+    const localFilters = peekLocalCatalog('aula_clara_dashboard_filters', userId);
+    const localContext = peekLocalCatalog('aula_clara_teacher_context', userId);
+    if (isEmptyFilters(snapshot.aula_clara_dashboard_filters) && localFilters && typeof localFilters === 'object') {
+      snapshot.aula_clara_dashboard_filters = localFilters;
+      migratedClientState = true;
+    }
+    if (isEmptyList(snapshot.aula_clara_teacher_context) && Array.isArray(localContext) && localContext.length) {
+      snapshot.aula_clara_teacher_context = localContext;
+      migratedClientState = true;
+    }
+
+    replaceClientDataSnapshot(snapshot);
+    clearCatalogLocalStorage(userId);
+
+    if (migratedClientState) {
+      await queueOfflineOperation({
+        entity: 'clientState',
+        action: 'upsert',
+        payload: {
+          id: userId,
+          docenteId: userId,
+          dashboardFilters: snapshot.aula_clara_dashboard_filters,
+          teacherContext: snapshot.aula_clara_teacher_context,
+          updatedAt: new Date().toISOString(),
+        },
+      });
     }
 
     if (notify) {
@@ -50,9 +115,13 @@ export async function hydrateLocalStorageFromServer(userId: string, options: { n
     }
     return true;
   } catch {
+    hydrateMemoryFromLocalFallback(userId);
     return false;
   }
 }
+
+/** @deprecated El catalogo autenticado ya no vive en localStorage. */
+export const hydrateLocalStorageFromServer = hydrateFromServer;
 
 const SYNC_ENTITY_ORDER: Record<string, number> = {
   school: 0,
@@ -61,6 +130,7 @@ const SYNC_ENTITY_ORDER: Record<string, number> = {
   student: 3,
   attendance: 4,
   grade: 5,
+  clientState: 6,
 };
 
 export async function syncPendingOperations() {

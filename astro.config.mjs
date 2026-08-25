@@ -89,7 +89,12 @@ export default defineConfig({
   devToolbar: {
     enabled: false,
   },
-  adapter: vercel(),
+  adapter: vercel({
+    includeFiles: [
+      'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
+      'node_modules/pdfjs-dist/legacy/build/pdf.mjs',
+    ],
+  }),
   integrations: [aulaClaraPwaIntegration()],
   vite: {
     plugins: [
@@ -108,6 +113,9 @@ export default defineConfig({
         },
       }),
     ],
+    ssr: {
+      external: ['pdf-parse', 'pdfjs-dist', '@napi-rs/canvas'],
+    },
     optimizeDeps: {
       noDiscovery: true,
       include: [],

@@ -11,7 +11,10 @@ import SchoolCyclePanel from '../components/SchoolCyclePanel.astro';
         <h1>Cursos y divisiones</h1>
         <p>Base de trabajo para inscripciones, asistencia y reportes.</p>
       </div>
-      <a class="btn btn-primary btn-block" href="/herramientas?tab=importar&tipo=alumnos">Importar alumnos (Excel)</a>
+      <div class="actions-group">
+        <a class="btn btn-primary btn-block" href="#nuevo-curso">Nuevo curso</a>
+        <a class="btn btn-secondary btn-block" href="#importar-cursos">Importar cursos</a>
+      </div>
     </header>
 
     <section class="courses-workspace" data-course-workspace>
@@ -20,7 +23,7 @@ import SchoolCyclePanel from '../components/SchoolCyclePanel.astro';
         <p>Creá una división nueva o revisá las que ya existen en el ciclo activo.</p>
       </div>
     <section class="responsive-grid">
-      <form class="panel form-grid" data-course-form>
+      <form class="panel form-grid" data-course-form id="nuevo-curso">
         <div class="section-title">
           <h2>Nuevo curso</h2>
         </div>
@@ -83,7 +86,7 @@ import SchoolCyclePanel from '../components/SchoolCyclePanel.astro';
       <div class="list" data-subject-list></div>
     </section>
 
-    <section class="panel import-panel" data-excel-import="cursos">
+    <section class="panel import-panel" data-excel-import="cursos" id="importar-cursos">
       <div class="section-title">
         <h2>Cargar cursos desde Excel</h2>
         <p>Importá divisiones masivamente. Descargá la plantilla para ver columnas y ejemplos.</p>

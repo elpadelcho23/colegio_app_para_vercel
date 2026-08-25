@@ -27,7 +27,7 @@ const registered = Astro.url.searchParams.get('registered');
         localStorage.getItem('aula_clara_theme') || 'light';
 
       (function () {
-        var keep = { aula_clara_theme: 1, aula_clara_offline_reset_v2: 1 };
+        var keep = { aula_clara_theme: 1, aula_clara_offline_reset_v2: 1, aula_clara_offline_reset_v3: 1 };
         var remove = [];
         for (var i = 0; i < localStorage.length; i++) {
           var key = localStorage.key(i);

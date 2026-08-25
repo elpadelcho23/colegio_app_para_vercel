@@ -1,5 +1,6 @@
 ---
 import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
+import UiIcon from './UiIcon.astro';
 ---
 
 <header class="page-header">
@@ -20,6 +21,7 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     aria-controls="tools-hub-importar"
     id="tools-hub-tab-importar"
   >
+    <UiIcon name="excel" />
     <span class="copy-long">Importar Datos</span>
     <span class="copy-short">Importar</span>
   </button>
@@ -32,6 +34,7 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     aria-controls="tools-hub-cuenta"
     id="tools-hub-tab-cuenta"
   >
+    <UiIcon name="cuenta" />
     <span class="copy-long">Cuenta / Instalar</span>
     <span class="copy-short">Cuenta</span>
   </button>
@@ -44,6 +47,7 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
     aria-controls="tools-hub-informes"
     id="tools-hub-tab-informes"
   >
+    <UiIcon name="informes" />
     <span class="copy-long">Informes / Comunicados</span>
     <span class="copy-short">Informes</span>
   </button>
@@ -68,12 +72,15 @@ import ExcelImportWorkspace from './ExcelImportWorkspace.astro';
 
   <div class="tools-tabs" role="tablist" aria-label="Tipo de importación Excel">
     <button type="button" class="tools-tab is-active" role="tab" data-tools-tab="alumnos" aria-selected="true" aria-controls="tools-panel-alumnos" id="tools-tab-alumnos">
+      <UiIcon name="alumnos" />
       Alumnos
     </button>
     <button type="button" class="tools-tab" role="tab" data-tools-tab="asistencias" aria-selected="false" aria-controls="tools-panel-asistencias" id="tools-tab-asistencias">
+      <UiIcon name="asistencia" />
       Asistencias
     </button>
     <button type="button" class="tools-tab" role="tab" data-tools-tab="notas" aria-selected="false" aria-controls="tools-panel-notas" id="tools-tab-notas">
+      <UiIcon name="notas" />
       Notas
     </button>
   </div>
