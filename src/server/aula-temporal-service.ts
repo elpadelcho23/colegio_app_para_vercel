@@ -168,9 +168,8 @@ export async function replaceActividadPreguntas(
   `).get(actividadId)) as { id: string; tenant_id: string; docente_id: string } | undefined;
 
   if (!actividad) throw new Error('Actividad no encontrada.');
-  if (user.rol !== 'admin' && (actividad.tenant_id !== user.tenant_id || actividad.docente_id !== user.id)) {
-    throw new Error('Sin acceso a la actividad.');
-  }
+  if (actividad.tenant_id !== user.tenant_id) throw new Error('Sin acceso a la actividad.');
+  if (user.rol !== 'admin' && actividad.docente_id !== user.id) throw new Error('Sin acceso a la actividad.');
 
   const cleaned = preguntas
     .map((item, index) => {
@@ -349,10 +348,8 @@ export async function createAulaTemporal(input: {
   } | undefined;
 
   if (!actividad) throw new Error('Actividad no encontrada.');
-  if (
-    input.user.rol !== 'admin'
-    && (actividad.tenant_id !== input.user.tenant_id || actividad.docente_id !== input.user.id)
-  ) {
+  if (actividad.tenant_id !== input.user.tenant_id) throw new Error('Sin acceso a la actividad.');
+  if (input.user.rol !== 'admin' && actividad.docente_id !== input.user.id) {
     throw new Error('Sin acceso a la actividad.');
   }
 
@@ -582,7 +579,8 @@ export async function getAulaForTeacher(user: User, aulaId: string) {
   }) | undefined;
 
   if (!aula) throw new Error('Aula no encontrada.');
-  if (user.rol !== 'admin' && (aula.tenant_id !== user.tenant_id || aula.docente_id !== user.id)) {
+  if (aula.tenant_id !== user.tenant_id) throw new Error('Sin acceso al aula.');
+  if (user.rol !== 'admin' && aula.docente_id !== user.id) {
     throw new Error('Sin acceso al aula.');
   }
 
@@ -726,8 +724,8 @@ export async function listActividadesCargables(user: User, cursoId?: string) {
       a.contenido_json,
       (SELECT COUNT(*) FROM actividad_preguntas p WHERE p.actividad_id = a.id) AS preguntas_count
     FROM actividades a
-    JOIN cursos ON cursos.id = a.curso_id
-    JOIN materias ON materias.id = a.materia_id
+    JOIN cursos ON cursos.id = a.curso_id AND cursos.tenant_id = a.tenant_id
+    JOIN materias ON materias.id = a.materia_id AND materias.tenant_id = a.tenant_id
     WHERE a.tenant_id = ?
       AND a.docente_id = ?
       AND (? IS NULL OR ? = '' OR a.curso_id = ?)
@@ -890,7 +888,8 @@ export async function cargarActividadExistente(
   `).get(actividadOrigenId)) as { id: string; tenant_id: string; docente_id: string; titulo: string } | undefined;
 
   if (!origen) throw new Error('Actividad no encontrada.');
-  if (user.rol !== 'admin' && (origen.tenant_id !== user.tenant_id || origen.docente_id !== user.id)) {
+  if (origen.tenant_id !== user.tenant_id) throw new Error('Sin acceso a esa actividad.');
+  if (user.rol !== 'admin' && origen.docente_id !== user.id) {
     throw new Error('Sin acceso a esa actividad.');
   }
 
@@ -1454,7 +1453,8 @@ export async function vincularIntento(user: User, intentoId: string, alumnoId: s
     WHERE a.id = ?
   `).get(intento.aula_id)) as AulaRow & { materia_id: string; actividad_titulo: string };
 
-  if (user.rol !== 'admin' && (aula.tenant_id !== user.tenant_id || aula.docente_id !== user.id)) {
+  if (aula.tenant_id !== user.tenant_id) throw new Error('Sin acceso.');
+  if (user.rol !== 'admin' && aula.docente_id !== user.id) {
     throw new Error('Sin acceso.');
   }
 

@@ -3201,7 +3201,12 @@ async function renderUpcomingActivities(list, summary, subjectId = '', courseId 
         proxima ? tag('Próxima', 'tag warning') : null,
       ),
       el('strong', {}, item.titulo),
-      el('small', {}, [item.colegio, item.turno, item.curso, item.materia].filter(Boolean).join(' · ')),
+      el('small', {}, [
+        item.colegio,
+        item.turno,
+        displayRecordName({ id: item.curso_id, nombre: item.curso }, 'Curso'),
+        displayRecordName({ id: item.materia_id, nombre: item.materia }, 'Materia'),
+      ].filter(Boolean).join(' · ')),
       el('p', {}, [
         fechaPublicacion ? `Publicación: ${fechaPublicacion}` : null,
         fechaEntrega ? `Entrega: ${fechaEntrega}` : null,
@@ -5993,7 +5998,12 @@ async function renderActivitiesList(list, onLoaded) {
         tag(item.estado === 'publicado' ? 'Publicado' : 'Borrador', item.estado === 'publicado' ? 'tag ok' : 'tag'),
       ),
       el('strong', {}, item.titulo),
-      el('small', {}, [item.colegio, item.turno, item.curso, item.materia].filter(Boolean).join(' · ')),
+      el('small', {}, [
+        item.colegio,
+        item.turno,
+        displayRecordName({ id: item.curso_id, nombre: item.curso }, 'Curso'),
+        displayRecordName({ id: item.materia_id, nombre: item.materia }, 'Materia'),
+      ].filter(Boolean).join(' · ')),
       el('p', {}, item.fecha_publicacion ? `Publicación: ${item.fecha_publicacion}` : 'Sin fecha de publicación'),
       el('p', {}, item.fecha_vencimiento ? `Entrega: ${item.fecha_vencimiento}` : 'Sin fecha de entrega'),
       el('div', { className: 'actions-group' },

@@ -3,7 +3,8 @@ import { db, type User } from './db';
 export type TrabajoSeguimientoEstado = 'pendiente' | 'en_progreso' | 'completado';
 
 export function docenteTrabajoFilter(user: User) {
-  return user.rol === 'admin' ? '' : 'AND te.tenant_id = @tenant_id AND te.docente_id = @docente_id';
+  if (user.rol === 'admin') return 'AND te.tenant_id = @tenant_id';
+  return 'AND te.tenant_id = @tenant_id AND te.docente_id = @docente_id';
 }
 
 export async function countStudentsForContext(cursoId: string, materiaId: string, tenantId: string) {

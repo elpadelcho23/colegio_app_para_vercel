@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { randomUUID } from 'node:crypto';
 import { ensureDocenteCourseAccess, ensureDocenteSubjectAccess } from '../../server/docente-access';
 import { cicloLectivoCourseFilter, parseCicloLectivoParam } from '../../server/ciclo-lectivo';
+import { recoveredDisplayName } from '../../lib/record-display-name';
 import { db, type User } from '../../server/db';
 
 function paramsFromUrl(url: URL, user: User) {
@@ -19,7 +20,9 @@ function paramsFromUrl(url: URL, user: User) {
 const cicloFilter = cicloLectivoCourseFilter('cursos');
 
 function docenteFilter(user: User) {
-  return user.rol === 'admin' ? '' : 'AND actividades.tenant_id = @tenant_id AND actividades.docente_id = @docente_id';
+  const tenant = 'AND actividades.tenant_id = @tenant_id';
+  if (user.rol === 'admin') return tenant;
+  return `${tenant} AND actividades.docente_id = @docente_id`;
 }
 
 async function validateAccess(
@@ -67,8 +70,12 @@ export const GET: APIRoute = async ({ locals, url }) => {
       actividades.created_at,
       actividades.updated_at
     FROM actividades
-    JOIN cursos ON cursos.id = actividades.curso_id
-    JOIN materias ON materias.id = actividades.materia_id
+    JOIN cursos
+      ON cursos.id = actividades.curso_id
+     AND cursos.tenant_id = actividades.tenant_id
+    JOIN materias
+      ON materias.id = actividades.materia_id
+     AND materias.tenant_id = actividades.tenant_id
     WHERE (@colegio IS NULL OR actividades.colegio = @colegio)
       AND (@turno IS NULL OR actividades.turno = @turno)
       AND (@curso_id IS NULL OR actividades.curso_id = @curso_id)
@@ -79,15 +86,25 @@ export const GET: APIRoute = async ({ locals, url }) => {
   `).all(paramsFromUrl(url, user));
 
   const actividades = rows.map((actividad) => {
-    const item = actividad as { contenido_json: string };
+    const item = actividad as {
+      contenido_json: string;
+      curso_id: string;
+      materia_id: string;
+      curso: string;
+      materia: string;
+    };
     return {
       ...actividad as Record<string, unknown>,
+      curso: recoveredDisplayName(item.curso_id, item.curso, 'Curso'),
+      materia: recoveredDisplayName(item.materia_id, item.materia, 'Materia'),
       contenido: JSON.parse(item.contenido_json || '{}'),
       contenido_json: undefined,
     };
   });
 
-  return Response.json({ actividades });
+  return Response.json({ actividades }, {
+    headers: { 'Cache-Control': 'private, no-store' },
+  });
 };
 
 export const POST: APIRoute = async ({ locals, request }) => {

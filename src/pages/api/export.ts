@@ -23,7 +23,9 @@ function sanitizeExportRows(rows: ExportRow[]): ExportRow[] {
 }
 
 function docenteCourseClause(user: User) {
-  if (user.rol === 'admin') return '';
+  if (user.rol === 'admin') {
+    return 'AND cursos.tenant_id = @tenant_id';
+  }
   return `
     AND cursos.tenant_id = @tenant_id
     AND EXISTS (
@@ -119,8 +121,12 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const params = buildParams(url, user);
   const exportType = parseExportType(url.searchParams.get('type'));
   const coursePermission = docenteCourseClause(user);
-  const attendanceTenantFilter = user.rol === 'admin' ? '' : 'AND asistencias.tenant_id = @tenant_id AND asistencias.docente_id = @docente_id';
-  const gradeTenantFilter = user.rol === 'admin' ? '' : 'AND notas.tenant_id = @tenant_id AND notas.docente_id = @docente_id';
+  const attendanceTenantFilter = user.rol === 'admin'
+    ? 'AND asistencias.tenant_id = @tenant_id'
+    : 'AND asistencias.tenant_id = @tenant_id AND asistencias.docente_id = @docente_id';
+  const gradeTenantFilter = user.rol === 'admin'
+    ? 'AND notas.tenant_id = @tenant_id'
+    : 'AND notas.tenant_id = @tenant_id AND notas.docente_id = @docente_id';
 
   const asistencias = (await db.prepare(`
     WITH ranked_asistencias AS (
@@ -217,7 +223,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       AND (@colegio IS NULL OR cursos.escuela = @colegio)
       AND (@curso_id IS NULL OR cursos.id = @curso_id)
       ${cicloFilter}
-      ${user.rol === 'admin' ? '' : 'AND alumnos.tenant_id = @tenant_id'}
+      AND alumnos.tenant_id = @tenant_id
       ${coursePermission}
     ORDER BY cursos.escuela, cursos.nombre, alumnos.nombre
   `).all(params)) as ExportRow[];
@@ -229,7 +235,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
     WHERE (@colegio IS NULL OR cursos.escuela = @colegio)
       AND (@curso_id IS NULL OR cursos.id = @curso_id)
       ${cicloFilter}
-      ${user.rol === 'admin' ? '' : 'AND alumnos.tenant_id = @tenant_id'}
+      AND alumnos.tenant_id = @tenant_id
       ${coursePermission}
     ORDER BY cursos.nombre, alumnos.nombre
   `).all(params)) as Array<{ id: string; nombre: string; curso: string; colegio: string; turno: string }>;
@@ -242,7 +248,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
         AND valor IS NOT NULL
         AND fecha BETWEEN @desde AND @hasta
         AND (@materia_id IS NULL OR materia_id = @materia_id)
-        ${user.rol === 'admin' ? '' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
+        ${user.rol === 'admin' ? 'AND tenant_id = @tenant_id' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
     `).all({ ...params, alumno_id: alumno.id })) as Array<{ valor: number; peso: number }>;
 
     const attendanceRows = (await db.prepare(`
@@ -251,7 +257,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       WHERE alumno_id = @alumno_id
         AND fecha BETWEEN @desde AND @hasta
         AND (@materia_id IS NULL OR materia_id = @materia_id)
-        ${user.rol === 'admin' ? '' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
+        ${user.rol === 'admin' ? 'AND tenant_id = @tenant_id' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
     `).all({ ...params, alumno_id: alumno.id })) as Array<{ estado: string }>;
 
     const totalPeso = grades.reduce((acc, grade) => acc + Number(grade.peso || 100), 0);

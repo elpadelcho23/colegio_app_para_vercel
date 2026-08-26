@@ -60,7 +60,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
         titulo: string;
         contenido_json: string;
       } | undefined;
-      if (!ref || (user.rol !== 'admin' && (ref.tenant_id !== user.tenant_id || ref.docente_id !== user.id))) {
+      if (!ref || ref.tenant_id !== user.tenant_id || (user.rol !== 'admin' && ref.docente_id !== user.id)) {
         return Response.json({ error: 'Actividad de referencia no encontrada.' }, { status: 404 });
       }
       sourceText += `\n[Actividad: ${ref.titulo}]\n${ref.contenido_json}\n`;

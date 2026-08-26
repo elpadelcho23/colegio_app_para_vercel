@@ -50,17 +50,11 @@ function isCalendarEventType(value: unknown): value is CalendarEventType {
 }
 
 function scope(user: User) {
-  if (user.rol === 'admin') {
-    return {
-      docente: '',
-      coursePermission: '',
-      params: { tenant_id: user.tenant_id, docente_id: user.id },
-    };
-  }
-
   return {
-    docente: 'AND base.tenant_id = @tenant_id AND base.docente_id = @docente_id',
-    coursePermission: `
+    docente: user.rol === 'admin'
+      ? 'AND base.tenant_id = @tenant_id'
+      : 'AND base.tenant_id = @tenant_id AND base.docente_id = @docente_id',
+    coursePermission: user.rol === 'admin' ? '' : `
       AND EXISTS (
         SELECT 1
         FROM docente_cursos dc
@@ -236,8 +230,8 @@ export const GET: APIRoute = async ({ locals, url }) => {
       'actividades' AS source_type,
       base.id AS source_id
     FROM actividades base
-    JOIN cursos ON cursos.id = base.curso_id
-    JOIN materias ON materias.id = base.materia_id
+    JOIN cursos ON cursos.id = base.curso_id AND cursos.tenant_id = base.tenant_id
+    JOIN materias ON materias.id = base.materia_id AND materias.tenant_id = base.tenant_id
     WHERE base.fecha_publicacion IS NOT NULL
       AND date(base.fecha_publicacion) BETWEEN @desde AND @hasta
       AND (@curso_id IS NULL OR base.curso_id = @curso_id)
@@ -267,8 +261,8 @@ export const GET: APIRoute = async ({ locals, url }) => {
       'actividades' AS source_type,
       base.id AS source_id
     FROM actividades base
-    JOIN cursos ON cursos.id = base.curso_id
-    JOIN materias ON materias.id = base.materia_id
+    JOIN cursos ON cursos.id = base.curso_id AND cursos.tenant_id = base.tenant_id
+    JOIN materias ON materias.id = base.materia_id AND materias.tenant_id = base.tenant_id
     WHERE base.fecha_vencimiento IS NOT NULL
       AND date(base.fecha_vencimiento) BETWEEN @desde AND @hasta
       AND (@curso_id IS NULL OR base.curso_id = @curso_id)
