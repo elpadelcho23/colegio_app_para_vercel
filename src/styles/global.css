@@ -978,7 +978,8 @@ h3 {
     gap: 0;
   }
 
-  .hero-actions--triple .hero-cta {
+  .hero-actions--triple .hero-cta,
+  .hero-actions--work .hero-cta {
     min-height: 46px;
     font-size: 0.98rem;
   }
@@ -1006,12 +1007,15 @@ h3 {
     height: 1.15rem;
   }
 
-  .hero-actions--triple {
+  .hero-actions--triple,
+  .hero-actions--work {
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
   }
 
-  .hero-actions--triple .hero-cta:last-child {
+  .hero-actions--triple .hero-cta:last-child,
+  .hero-actions--work [data-panel-pick-course]:not([hidden]):not(.is-hidden),
+  .hero-actions--work [data-panel-import-excel]:not([hidden]):not(.is-hidden) {
     grid-column: 1 / -1;
   }
 
@@ -1354,7 +1358,8 @@ h3 {
   font-size: 0.95rem;
 }
 
-.hero-actions--triple {
+.hero-actions--triple,
+.hero-actions--work {
   grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
 }
@@ -1363,19 +1368,30 @@ h3 {
   grid-column: 1 / -1;
 }
 
-.hero-actions--triple .hero-cta {
+.hero-actions--work [data-panel-pick-course]:not([hidden]):not(.is-hidden),
+.hero-actions--work [data-panel-import-excel]:not([hidden]):not(.is-hidden) {
+  grid-column: 1 / -1;
+}
+
+.hero-actions--triple .hero-cta,
+.hero-actions--work .hero-cta {
   min-height: 52px;
   font-size: 1.05rem;
   font-weight: 700;
 }
 
 @media (min-width: 640px) {
-  .hero-actions--triple {
+  .hero-actions--triple,
+  .hero-actions--work {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .hero-actions--triple .hero-cta:last-child {
     grid-column: auto;
+  }
+
+  .hero-actions--work [data-panel-import-excel]:not([hidden]):not(.is-hidden) {
+    grid-column: 1 / -1;
   }
 }
 
@@ -1440,6 +1456,10 @@ h3 {
 
 .metric-grid--compact {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metric-grid--panel {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .informe-editor {
@@ -2103,6 +2123,28 @@ body.product-tour-active[data-active-spa-view='notas'] .product-tour-card {
   font-size: 0.95rem;
 }
 
+.onboarding-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: 0.7rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.onboarding-progress p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.onboarding-progress.is-hidden,
+.onboarding-progress[hidden] {
+  display: none;
+}
+
 @keyframes onboarding-card-in {
   from {
     opacity: 0.55;
@@ -2452,6 +2494,10 @@ body[data-active-spa-view='asistencia'] .metric--link[data-spa-nav='asistencia']
 @media (min-width: 1024px) {
   .metric-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .metric-grid--panel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

@@ -24,6 +24,8 @@ import { el, emptyState, replaceContent, tag } from './dom-utils.js';
  *  getAttendance: () => any[],
  *  getGrades: () => any[],
  *  getDashboardFilters: () => { escuela?: string, curso?: string, materia?: string },
+ *  hasTeachingContext?: () => boolean,
+ *  getContextLabel?: () => string,
  *  showSpaView: (view: string, opts?: object) => void,
  *  onPanelRefresh: (fn: () => void) => void,
  * }} deps
@@ -76,13 +78,24 @@ export function initTeacherFeatures(deps) {
     const list = root?.querySelector('[data-seguimiento-list]');
     if (!list) return;
 
+    const ready = typeof deps.hasTeachingContext === 'function'
+      ? deps.hasTeachingContext()
+      : Boolean(deps.getDashboardFilters()?.curso && deps.getDashboardFilters()?.materia);
+    if (!ready) {
+      replaceContent(list);
+      return;
+    }
+
     const filters = deps.getDashboardFilters();
     const followUp = situationsNeedingFollowUp(computeSituations(filters));
+    const contextLabel = typeof deps.getContextLabel === 'function'
+      ? deps.getContextLabel()
+      : 'este curso';
 
     if (!followUp.length) {
       replaceContent(list, emptyState(
-        'Sin alumnos en seguimiento',
-        'Nadie en riesgo con este filtro. Cargá más asistencia o trabajos.',
+        'Todo en orden',
+        `No hay alumnos con riesgo de asistencia o notas en ${contextLabel}.`,
       ));
       return;
     }

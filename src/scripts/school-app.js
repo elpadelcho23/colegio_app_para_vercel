@@ -1124,66 +1124,69 @@ function initResponsiveTables() {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
-function updatePanelTodayTitle() {
-  const title = document.querySelector('[data-panel-today-title]');
-  if (!title) return;
-  const ctx = getTeachingContext();
-  title.textContent = ctx.cursoId
-    ? `Hoy: ${describeTeachingContext(ctx)}`
-    : 'Hoy: elegí curso arriba';
+function setPanelNodeHidden(node, hidden) {
+  if (!node) return;
+  node.classList.toggle('is-hidden', hidden);
+  node.hidden = hidden;
 }
 
-function updatePanelImportCta() {
-  const importBtn = document.querySelector('[data-panel-import-excel]');
-  const setupHelp = document.querySelector('[data-panel-setup-help]');
-  const readyHelp = document.querySelector('[data-panel-ready-help]');
+function syncPanelHeroState() {
+  const ready = teachingContextIsReady();
   const ctx = getTeachingContext();
   const hasStudents = Boolean(ctx.cursoId)
     && studentsInCiclo(ctx.escuela || '', ctx.cursoId).length > 0;
-  if (importBtn) {
-    importBtn.classList.toggle('is-hidden', hasStudents);
-    importBtn.hidden = hasStudents;
+  const title = document.querySelector('[data-panel-today-title]');
+  const eyebrow = document.querySelector('[data-panel-eyebrow]');
+  const setupHelp = document.querySelector('[data-panel-setup-help]');
+  const readyHelp = document.querySelector('[data-panel-ready-help]');
+  const pickCourse = document.querySelector('[data-panel-pick-course]');
+  const importBtn = document.querySelector('[data-panel-import-excel]');
+  const summary = document.querySelector('[data-panel-summary]');
+  const seguimiento = document.querySelector('[data-seguimiento]');
+
+  if (title) {
+    title.textContent = ready
+      ? describeTeachingContext(ctx)
+      : 'Elegí el curso para empezar';
   }
-  if (setupHelp) {
-    setupHelp.classList.toggle('is-hidden', hasStudents);
-    setupHelp.hidden = hasStudents;
-  }
-  if (readyHelp) {
-    readyHelp.classList.toggle('is-hidden', !hasStudents);
-    readyHelp.hidden = !hasStudents;
-  }
+  if (eyebrow) eyebrow.textContent = ready ? 'Hoy' : 'Empezar';
+
+  setPanelNodeHidden(setupHelp, ready);
+  setPanelNodeHidden(readyHelp, !ready);
+  setPanelNodeHidden(pickCourse, ready);
+  document.querySelectorAll('[data-panel-work-cta]').forEach((button) => {
+    setPanelNodeHidden(button, !ready);
+  });
+  setPanelNodeHidden(importBtn, ready && hasStudents);
+  setPanelNodeHidden(summary, !ready);
+  setPanelNodeHidden(seguimiento, !ready);
 }
 
 function initDashboard() {
   const root = document.querySelector('[data-dashboard]');
   if (!root) return;
 
-  updatePanelTodayTitle();
-  updatePanelImportCta();
+  syncPanelHeroState();
   renderDashboard(root);
 
   window.addEventListener('aula-clara:teaching-context-changed', () => {
-    updatePanelTodayTitle();
-    updatePanelImportCta();
+    syncPanelHeroState();
     renderDashboard(root);
   });
   window.addEventListener('aula-clara:ciclo-changed', () => {
-    updatePanelTodayTitle();
-    updatePanelImportCta();
+    syncPanelHeroState();
     renderDashboard(root);
   });
   onPanelRefresh(() => {
-    updatePanelTodayTitle();
+    syncPanelHeroState();
     renderDashboard(root);
   });
 }
 
 function renderDashboard(root) {
-  updatePanelImportCta();
   const filters = read(KEYS.dashboardFilters) || {};
-  const courses = visibleCourses(filters.escuela).filter((course) =>
-    (!filters.curso || course.id === filters.curso)
-  );
+  const ctxReady = teachingContextIsReady();
+  const contextLabel = describeTeachingContext();
   let students = studentsInCiclo(filters.escuela, filters.curso || '');
   if (filters.curso && students.length === 0) {
     students = studentsInCiclo(filters.escuela);
@@ -1203,10 +1206,15 @@ function renderDashboard(root) {
     return (studentAverage !== null && studentAverage < 6) || (studentAttendance !== null && studentAttendance < attendancePassThreshold());
   }).length;
 
+  if (!ctxReady) {
+    replaceContent(root);
+    const alerts = document.querySelector('[data-alerts]');
+    if (alerts) replaceContent(alerts);
+    return;
+  }
+
   renderMetrics(root, [
     { value: students.length, label: 'Alumnos', view: 'registro', hint: 'Abrir' },
-    { value: courses.length, label: 'Cursos', view: 'cursos', hint: 'Abrir' },
-    { value: activeSubjects().length, label: 'Materias', view: 'cursos', hint: 'Abrir' },
     { value: avg === null ? '-' : avg.toFixed(1), label: 'Promedio', view: 'notas', hint: 'Abrir' },
     {
       value: present === null ? '-' : `${present.toFixed(0)}%`,
@@ -1219,8 +1227,14 @@ function renderDashboard(root) {
   const alerts = document.querySelector('[data-alerts]');
   if (alerts) {
     replaceContent(alerts, risk === 0
-      ? emptyState('Sin alertas en este contexto', 'El filtro actual no muestra riesgo académico o de asistencia.')
-      : emptyState(`${risk} alumnos requieren seguimiento`, 'El cálculo respeta escuela, curso y materia seleccionados.'));
+      ? emptyState(
+        'Todo en orden',
+        `No hay alumnos con riesgo de asistencia o notas en ${contextLabel}.`,
+      )
+      : emptyState(
+        `${risk} alumno${risk === 1 ? '' : 's'} necesitan seguimiento`,
+        'Revisá la lista de seguimiento abajo.',
+      ));
   }
 }
 
@@ -6201,6 +6215,8 @@ async function bootstrap() {
     getAttendance: () => read(KEYS.attendance),
     getGrades: () => read(KEYS.grades),
     getDashboardFilters: () => read(KEYS.dashboardFilters) || {},
+    hasTeachingContext: () => teachingContextIsReady(),
+    getContextLabel: () => describeTeachingContext(),
     showSpaView,
     onPanelRefresh,
   });

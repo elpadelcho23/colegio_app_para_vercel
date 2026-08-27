@@ -41,16 +41,24 @@ const { initialView = 'panel' } = Astro.props;
       </div>
     </section>
 
+    <div class="onboarding-progress is-hidden" data-onboarding-progress hidden>
+      <p>
+        <strong>Tutorial</strong>
+        · <span data-onboarding-progress-count>1 de 4</span>
+      </p>
+      <button type="button" class="btn btn-primary btn-sm" data-setup-tutorial-continue>Continuar</button>
+    </div>
+
     <button type="button" class="onboarding-resume btn btn-ghost is-hidden" data-onboarding-resume hidden>
-      <span class="copy-long">¿Arrancamos con el tutorial?</span>
-      <span class="copy-short">Ver tutorial</span>
+      <span class="copy-long">Retomar tutorial</span>
+      <span class="copy-short">Tutorial</span>
     </button>
 
     <section class="hero-card" data-panel-hero>
-      <p class="eyebrow">Hoy</p>
-      <h1 data-panel-today-title>Hoy: elegí curso arriba</h1>
-      <p class="hero-help copy-collapse-mobile" data-panel-setup-help>Importá con Excel o elegí el curso arriba.</p>
-      <p class="hero-help copy-collapse-mobile is-hidden" data-panel-ready-help hidden>Asistencia y actividades del curso actual.</p>
+      <p class="eyebrow" data-panel-eyebrow>Hoy</p>
+      <h1 data-panel-today-title>Elegí el curso para empezar</h1>
+      <p class="hero-help copy-collapse-mobile" data-panel-setup-help>Elegí curso y materia arriba, o importá el listado.</p>
+      <p class="hero-help copy-collapse-mobile is-hidden" data-panel-ready-help hidden>Asistencia, notas y actividades de este curso.</p>
 
       <div class="schedule-suggestion is-hidden" data-schedule-suggestion hidden>
         <p>
@@ -60,9 +68,13 @@ const { initialView = 'panel' } = Astro.props;
         <button type="button" class="btn btn-secondary btn-sm" data-schedule-suggestion-apply>Usar ahora</button>
       </div>
 
-      <div class="hero-actions hero-actions--triple">
-        <button type="button" data-spa-nav="asistencia" class="btn btn-primary hero-cta">Asistencia</button>
-        <button type="button" data-spa-nav="actividades" class="btn btn-secondary hero-cta">Actividades</button>
+      <div class="hero-actions hero-actions--work">
+        <button type="button" class="btn btn-primary hero-cta" data-panel-pick-course data-gtc-open>
+          Elegir curso
+        </button>
+        <button type="button" data-spa-nav="asistencia" class="btn btn-primary hero-cta is-hidden" data-panel-work-cta hidden>Asistencia</button>
+        <button type="button" data-spa-nav="notas" class="btn btn-secondary hero-cta is-hidden" data-panel-work-cta hidden>Calificaciones</button>
+        <button type="button" data-spa-nav="actividades" class="btn btn-secondary hero-cta is-hidden" data-panel-work-cta hidden>Actividades</button>
         <button type="button" class="btn btn-secondary hero-cta" data-panel-import-excel data-tools-focus="importar" data-tools-tab="alumnos">
           <span class="copy-long">Importar desde Excel</span>
           <span class="copy-short">Importar</span>
@@ -70,22 +82,15 @@ const { initialView = 'panel' } = Astro.props;
       </div>
     </section>
 
-    <section class="panel panel-day-summary" data-panel-summary>
+    <section class="panel panel-day-summary is-hidden" data-panel-summary hidden>
       <div class="section-title">
         <h2>Resumen</h2>
-        <p class="copy-collapse-mobile">Tocá una tarjeta para abrir esa sección.</p>
       </div>
-      <div class="metric-grid" data-dashboard></div>
+      <div class="metric-grid metric-grid--panel" data-dashboard></div>
       <div data-alerts></div>
-      <div class="button-row summary-actions">
-        <button type="button" class="btn btn-secondary" data-print-course-notes>
-          <span class="copy-long">Imprimir notas del curso</span>
-          <span class="copy-short">Imprimir notas</span>
-        </button>
-      </div>
     </section>
 
-    <section class="panel" data-seguimiento>
+    <section class="panel is-hidden" data-seguimiento hidden>
       <div class="section-title">
         <h2>Seguimiento</h2>
         <p class="copy-collapse-mobile">Asistencia o trabajos pendientes.</p>

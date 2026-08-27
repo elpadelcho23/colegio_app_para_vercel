@@ -1,9 +1,9 @@
 import { onboardingDismissedKey, productTourKey } from '../lib/client-storage-keys.ts';
+import { basicTourProgressFromRecord } from './product-tour.js';
 import { registerSpaViewRefresh } from './spa-router.ts';
 
 /**
- * Invitación simple al tutorial en el panel (sin checklist).
- * Se oculta si el usuario ya hizo/omitió el tour, dismiss, o ya tiene aula armada.
+ * Invitación al tutorial: tarjeta grande el primer día, barra compacta si ya arrancó.
  */
 export function initOnboarding({
   getUserId,
@@ -16,9 +16,12 @@ export function initOnboarding({
   const root = document.querySelector('[data-onboarding]');
   const hero = document.querySelector('[data-panel-hero]');
   const resume = document.querySelector('[data-onboarding-resume]');
+  const progress = document.querySelector('[data-onboarding-progress]');
   if (!root) return;
 
   const startBtn = root.querySelector('[data-setup-tutorial-start]');
+  const continueBtn = progress?.querySelector('[data-setup-tutorial-continue]');
+  const progressCount = progress?.querySelector('[data-onboarding-progress-count]');
   const dismiss = root.querySelector('[data-onboarding-dismiss]');
 
   function getTourRecord() {
@@ -56,6 +59,16 @@ export function initOnboarding({
     return Boolean(hasCourse?.() && hasStudents?.() && hasTeachingContext?.());
   }
 
+  function hasStartedClassroom() {
+    return Boolean(hasCourse?.() || hasStudents?.() || hasTeachingContext?.());
+  }
+
+  function updateProgressLabel(record) {
+    if (!progressCount) return;
+    const { current, total } = basicTourProgressFromRecord(record);
+    progressCount.textContent = `${current} de ${total}`;
+  }
+
   function showNode(node) {
     if (!node) return;
     node.classList.remove('is-hidden');
@@ -91,17 +104,20 @@ export function initOnboarding({
     const userId = getUserId();
     if (!userId) {
       hideNode(root);
+      hideNode(progress);
       showNode(hero);
       hideNode(resume);
       setTutorialHighlight(false);
       return;
     }
 
-    const status = getTourStatus();
+    const record = getTourRecord();
+    const status = record.status || '';
     const ready = isReadyEnough();
 
     if (status === 'done' || ready) {
       hideNode(root);
+      hideNode(progress);
       showNode(hero);
       hideNode(resume);
       setTutorialHighlight(false);
@@ -110,29 +126,39 @@ export function initOnboarding({
 
     if (status === 'skipped' || isDismissed()) {
       hideNode(root);
+      hideNode(progress);
       showNode(hero);
       showNode(resume);
       setTutorialHighlight(false);
       return;
     }
 
+    const compact = status === 'in_progress' || hasStartedClassroom();
+    if (compact) {
+      hideNode(root);
+      showNode(progress);
+      showNode(hero);
+      hideNode(resume);
+      setTutorialHighlight(false);
+      updateProgressLabel(record);
+      return;
+    }
+
     showNode(root);
+    hideNode(progress);
     hideNode(hero);
     hideNode(resume);
     setTutorialHighlight(true);
-    if (startBtn && status === 'in_progress') {
-      const long = startBtn.querySelector('.copy-long');
-      const short = startBtn.querySelector('.copy-short');
-      if (long) long.textContent = 'Seguir el tutorial';
-      if (short) short.textContent = 'Seguir tutorial';
-    }
   }
 
-  startBtn?.addEventListener('click', (event) => {
-    event.preventDefault();
+  const launchTour = (event) => {
+    event?.preventDefault();
     if (typeof startTour === 'function') startTour();
     else document.querySelector('[data-product-tour-start]')?.click();
-  });
+  };
+
+  startBtn?.addEventListener('click', launchTour);
+  continueBtn?.addEventListener('click', launchTour);
 
   dismiss?.addEventListener('click', () => {
     setDismissed(true);

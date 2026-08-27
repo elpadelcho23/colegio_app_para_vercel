@@ -53,15 +53,15 @@ export const PANEL_GUIDES = {
     tips: [
       {
         title: 'Tu resumen del día',
-        body: 'Acá ves de un vistazo el curso que elegiste arriba: números, alertas y accesos rápidos.',
+        body: 'Acá ves de un vistazo el curso que elegiste arriba: números y accesos a Asistencia, Calificaciones y Actividades.',
         action: 'Miralo después de elegir curso y materia arriba.',
         connects: 'Todo depende del “Curso actual” de la barra superior.',
         target: '[data-spa-view="panel"] [data-panel-hero]',
       },
       {
         title: 'Atajos del día',
-        body: 'Los botones te llevan a Asistencia, Actividades o a importar alumnos con Excel (lo más rápido).',
-        action: 'Si faltan alumnos, usá “Importar alumnos”.',
+        body: 'Los botones te llevan a Asistencia, Calificaciones o Actividades. Si faltan alumnos, importá el Excel.',
+        action: 'Si faltan alumnos, usá “Importar desde Excel”.',
         target: '[data-spa-view="panel"] [data-spa-nav="herramientas"]',
       },
       {

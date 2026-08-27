@@ -196,6 +196,16 @@ function buildBasicTour(path) {
   return { id: 'basico', title: 'Tutorial inicial', path: path || '', steps };
 }
 
+export function basicTourProgressFromRecord(record) {
+  const path = record?.path === 'manual' ? 'manual' : 'excel';
+  const total = buildBasicTour(path).steps.length;
+  const index = Number.isInteger(record?.stepIndex) ? Math.max(0, record.stepIndex) : 0;
+  return {
+    current: Math.min(index + 1, total),
+    total,
+  };
+}
+
 const BASIC_TOUR = buildBasicTour('excel');
 
 const TOPIC_GUIDES = {
@@ -653,7 +663,7 @@ const TOPIC_GUIDES = {
         id: 'panel-hoy',
         view: 'panel',
         title: 'Hoy en el Panel',
-        body: 'El Panel resume el día. Desde acá saltás a Asistencia, Actividades o Importar.',
+        body: 'El Panel muestra el curso de hoy. Desde acá saltás a Asistencia, Calificaciones o Actividades.',
         bodyShort: 'Atajos del día en el Panel.',
         why: 'Es tu punto de partida cada mañana.',
         actionHint: 'Tocá Seguir',
@@ -665,7 +675,7 @@ const TOPIC_GUIDES = {
         id: 'panel-resumen',
         view: 'panel',
         title: 'Tarjetas del Resumen',
-        body: 'Tocá una tarjeta (Alumnos, Cursos, Promedio o Asistencia) para abrir esa sección.',
+        body: 'Tocá Alumnos, Promedio o Asistencia para abrir esa sección.',
         bodyShort: 'Tocá una tarjeta del Resumen.',
         why: 'Son atajos, no solo números.',
         actionHint: 'Tocá una tarjeta',
