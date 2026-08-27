@@ -243,7 +243,16 @@ export function renderTable(container, headers, rows, empty = null, options = {}
     replaceContent(container, empty || emptyState('Sin datos'));
     return;
   }
-  replaceContent(container, buildTable(headers, rows, options));
+  const table = buildTable(headers, rows, options);
+  if (options.scrollHint) {
+    replaceContent(
+      container,
+      el('p', { className: 'planilla-scroll-hint', attrs: { 'aria-hidden': 'true' } }, options.scrollHint),
+      table,
+    );
+    return;
+  }
+  replaceContent(container, table);
 }
 
 export function fillSelectOptions(select, items, placeholder, valueKey = 'id', labeler = (item) => item.nombre) {

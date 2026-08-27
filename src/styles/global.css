@@ -937,6 +937,19 @@ h3 {
     margin-bottom: 0.15rem;
   }
 
+  .page-header .actions-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 0.45rem;
+  }
+
+  .modal,
+  .modal--wide {
+    width: calc(100% - 12px);
+    max-height: calc(100dvh - 10px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    margin: max(4px, env(safe-area-inset-top, 0px)) auto max(4px, env(safe-area-inset-bottom, 0px));
+  }
+
   .page-header .header-content > p:not(.eyebrow) {
     display: none;
   }
@@ -960,10 +973,19 @@ h3 {
   }
 
   /* Mantener visibles: hint de planilla e instrucciones de instalación. */
-  .attendance-matrix-scroll-hint {
+  .attendance-matrix-scroll-hint,
+  .planilla-scroll-hint {
     display: block !important;
     margin: 0 0 0.4rem;
     font-size: 0.8rem;
+  }
+
+  .section-title > p[data-student-list-caption],
+  .section-title > p[data-grade-bulk-summary] {
+    display: block !important;
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.35;
   }
 
   .onboarding,
@@ -1085,9 +1107,9 @@ h3 {
   }
 
   .attendance-options button {
-    min-height: 40px;
-    padding: 0.35rem 0.4rem;
-    font-size: 0.78rem;
+    min-height: 44px;
+    padding: 0.4rem 0.4rem;
+    font-size: 0.82rem;
   }
 
   .student-row .btn,
@@ -1460,6 +1482,20 @@ h3 {
 
 .metric-grid--panel {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 479px) {
+  .metric-grid--panel {
+    gap: 0.4rem;
+  }
+
+  .metric-grid--panel .metric {
+    padding: 0.55rem 0.5rem;
+  }
+
+  .metric-grid--panel .metric strong {
+    font-size: 1.12rem;
+  }
 }
 
 .informe-editor {
@@ -2568,6 +2604,11 @@ body[data-active-spa-view='asistencia'] .metric--link[data-spa-nav='asistencia']
   gap: var(--space-3);
 }
 
+.list[hidden],
+.stack[hidden] {
+  display: none !important;
+}
+
 .checkbox-grid,
 .day-picker,
 .subject-picker {
@@ -2847,6 +2888,66 @@ td small {
   .roll-call-actions button {
     min-height: 64px;
     font-size: 1.08rem;
+  }
+}
+
+.roll-call-dialog {
+  width: min(34rem, calc(100% - 16px));
+  max-height: min(calc(100dvh - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 46rem);
+}
+
+.roll-call-dialog-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: min(46rem, calc(100dvh - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+  max-height: inherit;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.roll-call-dialog-head,
+.roll-call-dialog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+}
+
+.roll-call-dialog-head {
+  border-bottom: 1px solid var(--line);
+}
+
+.roll-call-dialog-foot {
+  display: block;
+  border-top: 1px solid var(--line);
+}
+
+.roll-call-dialog .roll-call {
+  min-height: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.roll-call-dialog[open] ~ .attendance-save-bar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .roll-call-dialog-card {
+    height: calc(100dvh - 10px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    border-radius: calc(var(--radius) - 2px);
+  }
+
+  .roll-call-dialog .roll-call {
+    min-height: 0;
+    padding: var(--space-4) var(--space-3);
   }
 }
 
@@ -3150,6 +3251,19 @@ td small {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.table-wrap.planilla--sheet {
+  background:
+    linear-gradient(90deg, var(--surface) 70%, transparent),
+    linear-gradient(270deg, var(--surface) 70%, transparent) 100% 0,
+    linear-gradient(90deg, rgba(0, 0, 0, 0.08), transparent),
+    linear-gradient(270deg, rgba(0, 0, 0, 0.08), transparent) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 28px 100%, 28px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
 }
 
 .table-wrap.planilla table {
@@ -3297,9 +3411,17 @@ button.planilla-grade.is-low {
   background: color-mix(in srgb, var(--warning) 12%, var(--surface));
 }
 
+.planilla-scroll-hint {
+  display: none;
+  margin: 0 0 0.45rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 @media (max-width: 767px) {
   .table-wrap.planilla {
     overflow-x: auto;
+    margin-inline: -0.15rem;
   }
 
   .table-wrap.planilla table,
@@ -3311,8 +3433,14 @@ button.planilla-grade.is-low {
     display: revert;
   }
 
-  .table-wrap.planilla table {
-    min-width: 36rem;
+  .table-wrap.planilla--compact table {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .table-wrap.planilla--sheet table {
+    min-width: 0;
+    width: max-content;
   }
 
   .table-wrap.planilla thead {
@@ -3345,7 +3473,7 @@ button.planilla-grade.is-low {
     grid-template-columns: none;
     gap: 0;
     border-bottom: 1px solid var(--line);
-    padding: 0.42rem 0.5rem;
+    padding: 0.55rem 0.5rem;
     word-break: normal;
   }
 
@@ -3355,6 +3483,53 @@ button.planilla-grade.is-low {
 
   .table-wrap.planilla td:last-child {
     border-bottom: 1px solid var(--line);
+  }
+
+  .table-wrap.planilla .planilla-hide-mobile {
+    display: none !important;
+  }
+
+  .table-wrap.planilla th:first-child,
+  .table-wrap.planilla td:first-child {
+    min-width: 8.25rem;
+    max-width: 42vw;
+  }
+
+  button.planilla-name {
+    min-height: 44px;
+    padding: 0.15rem 0;
+  }
+
+  button.planilla-name::after {
+    content: 'Ver perfil';
+    display: block;
+    margin-top: 0.1rem;
+    color: var(--brand);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  button.planilla-grade {
+    min-width: 2.8rem;
+    min-height: 44px;
+  }
+
+  .table-wrap.planilla .grade-bulk-value {
+    width: 5.25rem;
+    min-height: 44px;
+    font-size: 1.05rem;
+  }
+
+  .planilla-th-title {
+    max-width: 5.5rem;
+  }
+
+  .planilla-th-title + small {
+    display: none;
+  }
+
+  .planilla-scroll-hint {
+    display: block;
   }
 }
 

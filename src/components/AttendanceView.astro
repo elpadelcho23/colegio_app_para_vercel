@@ -54,7 +54,21 @@ const { spaMode = false } = Astro.props;
   <section class="summary-strip" data-attendance-summary></section>
 
   <div class="list" data-attendance-list></div>
-  <div class="roll-call" data-attendance-roll hidden></div>
+
+  <dialog class="modal roll-call-dialog" data-attendance-roll-dialog aria-labelledby="roll-call-title">
+    <div class="roll-call-dialog-card">
+      <div class="roll-call-dialog-head">
+        <strong id="roll-call-title">Dar lista</strong>
+        <button type="button" class="btn btn-ghost btn-sm" data-roll-nav="list">Cerrar</button>
+      </div>
+      <div class="roll-call" data-attendance-roll></div>
+      <div class="roll-call-dialog-foot">
+        <button class="btn btn-primary btn-block" type="button" data-attendance-save disabled>
+          Guardar asistencias
+        </button>
+      </div>
+    </div>
+  </dialog>
 
   <div class="attendance-save-bar" data-attendance-save-bar>
     <p class="attendance-save-hint" data-attendance-save-hint>

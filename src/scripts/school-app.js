@@ -638,8 +638,8 @@ function renderGradePlanilla(container, {
     { text: 'Alumno', className: 'planilla-name-col' },
     ...columns.map((grade) => planillaEvalHeader(grade)),
     { text: 'Prom.', className: 'planilla-num' },
-    { text: 'Asist.', className: 'planilla-num' },
-    'Estado',
+    { text: 'Asist.', className: 'planilla-num planilla-hide-mobile' },
+    { text: 'Estado', className: 'planilla-hide-mobile' },
   ];
   const rows = students.map((student) => {
     const grades = period
@@ -659,14 +659,15 @@ function renderGradePlanilla(container, {
         el('span', {
           className: `planilla-grade${avg !== null && avg < GRADE_PASS_THRESHOLD ? ' is-low' : ''}`,
         }, avg === null ? '—' : avg.toFixed(1)),
-        rate === null ? '—' : `${rate.toFixed(0)}%`,
-        tag(
+        el('td', { className: 'planilla-num planilla-hide-mobile' }, rate === null ? '—' : `${rate.toFixed(0)}%`),
+        el('td', { className: 'planilla-hide-mobile' }, tag(
           status === 'danger' ? 'Riesgo' : status === 'warning' ? 'Atención' : 'OK',
           `tag ${status}`,
-        ),
+        )),
       ],
     };
   });
+  const wide = columns.length > 0;
   renderTable(
     container,
     headers,
@@ -675,7 +676,10 @@ function renderGradePlanilla(container, {
       ctaLabel: 'Importar con Excel',
       spaNav: 'registro',
     }),
-    { wrapClass: 'planilla' },
+    {
+      wrapClass: wide ? 'planilla planilla--sheet' : 'planilla planilla--compact',
+      scrollHint: wide ? 'Deslizá para ver las notas →' : '',
+    },
   );
 }
 
@@ -813,7 +817,7 @@ function renderGradesDetail(root) {
         { text: 'Alumno', className: 'planilla-name-col' },
         { text: 'Eval.', className: 'planilla-num' },
         { text: 'Prom.', className: 'planilla-num' },
-        'Estado',
+        { text: 'Estado', className: 'planilla-hide-mobile' },
       ],
       averageRows.map((item) => ({
         cells: [
@@ -822,11 +826,11 @@ function renderGradesDetail(root) {
           el('span', {
             className: `planilla-grade${item.avg !== null && item.avg < GRADE_PASS_THRESHOLD ? ' is-low' : ''}`,
           }, item.avg === null ? '—' : item.avg.toFixed(1)),
-          tag(item.aprueba ? 'Aprueba' : 'No aprueba', `tag ${item.aprueba ? 'ok' : 'danger'}`),
+          el('td', { className: 'planilla-hide-mobile' }, tag(item.aprueba ? 'Aprueba' : 'No aprueba', `tag ${item.aprueba ? 'ok' : 'danger'}`)),
         ],
       })),
       emptyState('Sin promedios calculables', 'No hay calificaciones numéricas en el período seleccionado.'),
-      { wrapClass: 'planilla' },
+      { wrapClass: 'planilla planilla--compact' },
     );
   }
 }
@@ -1924,11 +1928,11 @@ function renderStudents(list) {
 
   const headers = [
     { text: 'Alumno', className: 'planilla-name-col' },
-    'DNI',
-    ...(filtered ? [] : ['Curso']),
-    'Materias',
+    { text: 'DNI', className: 'planilla-hide-mobile' },
+    ...(filtered ? [] : [{ text: 'Curso', className: 'planilla-hide-mobile' }]),
+    { text: 'Materias', className: 'planilla-hide-mobile' },
     { text: 'Prom.', className: 'planilla-num' },
-    'Acciones',
+    { text: 'Acciones', className: 'planilla-hide-mobile' },
   ];
 
   const rows = students.map((student) => {
@@ -1943,25 +1947,29 @@ function renderStudents(list) {
         className: 'planilla-name',
         dataset: { openStudentProfile: student.id },
       }, student.nombre),
-      student.dni || '—',
+      el('td', { className: 'planilla-hide-mobile' }, student.dni || '—'),
     ];
     if (!filtered) {
-      cells.push(`${displayRecordName(course, 'Sin curso')} ${course?.turno || ''}`.trim());
+      cells.push(el('td', { className: 'planilla-hide-mobile' }, `${displayRecordName(course, 'Sin curso')} ${course?.turno || ''}`.trim()));
     }
     cells.push(
-      el('span', { className: 'planilla-subjects', attrs: { title: subjects } }, subjects),
+      el('td', { className: 'planilla-hide-mobile' },
+        el('span', { className: 'planilla-subjects', attrs: { title: subjects } }, subjects),
+      ),
       el('span', {
         className: `planilla-grade${avg !== null && avg < GRADE_PASS_THRESHOLD ? ' is-low' : ''}`,
       }, avg === null ? '—' : avg.toFixed(1)),
-      el('div', { className: 'planilla-actions' },
-        el('button', { type: 'button', className: 'btn btn-ghost btn-sm', dataset: { openStudentProfile: student.id } }, 'Ver'),
-        el('button', { type: 'button', className: 'btn btn-danger btn-sm', dataset: { deleteStudent: student.id } }, 'Quitar'),
+      el('td', { className: 'planilla-hide-mobile' },
+        el('div', { className: 'planilla-actions' },
+          el('button', { type: 'button', className: 'btn btn-ghost btn-sm', dataset: { openStudentProfile: student.id } }, 'Ver'),
+          el('button', { type: 'button', className: 'btn btn-danger btn-sm', dataset: { deleteStudent: student.id } }, 'Quitar'),
+        ),
       ),
     );
     return { cells };
   });
 
-  renderTable(list, headers, rows, null, { wrapClass: 'planilla' });
+  renderTable(list, headers, rows, null, { wrapClass: 'planilla planilla--compact' });
 }
 
 function attendanceDraftKey(studentId, subjectId, date) {
@@ -1977,9 +1985,10 @@ function initAttendance() {
   const takeView = root.querySelector('[data-attendance-take-view]');
   const list = root.querySelector('[data-attendance-list]');
   const rollHost = root.querySelector('[data-attendance-roll]');
+  const rollDialog = root.querySelector('[data-attendance-roll-dialog]');
   const saveBar = root.querySelector('[data-attendance-save-bar]');
   const saveHint = root.querySelector('[data-attendance-save-hint]');
-  const saveButton = root.querySelector('[data-attendance-save]');
+  const saveButtons = [...root.querySelectorAll('[data-attendance-save]')];
   let attendanceMode = 'list';
   let rollCallIndex = 0;
   const historySchool = root.querySelector('[data-history-filter-school]');
@@ -2023,12 +2032,13 @@ function initAttendance() {
     const pending = hasUnsavedAttendance();
     list?.classList.toggle('attendance-list--pending', pending);
     rollHost?.classList.toggle('attendance-list--pending', pending && attendanceMode === 'roll');
+    rollDialog?.classList.toggle('is-pending', pending && attendanceMode === 'roll');
     saveBar?.classList.toggle('is-pending', pending);
     saveHint?.classList.toggle('is-hidden', !pending);
-    if (saveButton) {
-      saveButton.disabled = !pending;
-      saveButton.textContent = pending ? 'Guardar asistencias' : 'Asistencias guardadas';
-    }
+    saveButtons.forEach((button) => {
+      button.disabled = !pending;
+      button.textContent = pending ? 'Guardar asistencias' : 'Asistencias guardadas';
+    });
   };
 
   const confirmDiscardAttendanceDraft = () => {
@@ -2188,6 +2198,26 @@ function initAttendance() {
     renderAttendance();
   };
 
+  const openRollDialog = () => {
+    if (!rollDialog || rollDialog.open) return;
+    if (typeof rollDialog.showModal === 'function') rollDialog.showModal();
+    else rollDialog.setAttribute('open', '');
+  };
+
+  const closeRollDialog = () => {
+    if (!rollDialog) return;
+    if (rollDialog.open && typeof rollDialog.close === 'function') rollDialog.close();
+    else rollDialog.removeAttribute('open');
+  };
+
+  rollDialog?.addEventListener('close', () => {
+    if (attendanceMode === 'roll') setAttendanceMode('list');
+  });
+  rollDialog?.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    setAttendanceMode('list');
+  });
+
   root.querySelector('[data-attendance-mode-tabs]')?.addEventListener('click', (event) => {
     const tab = event.target.closest('[data-attendance-mode]');
     if (!tab) return;
@@ -2212,10 +2242,12 @@ function initAttendance() {
     });
   });
 
-  saveButton?.addEventListener('click', async () => {
+  const saveAttendance = async () => {
     if (!hasUnsavedAttendance()) return;
-    saveButton.disabled = true;
-    saveButton.textContent = 'Guardando...';
+    saveButtons.forEach((button) => {
+      button.disabled = true;
+      button.textContent = 'Guardando...';
+    });
     try {
       await commitAttendanceDraft(draftAttendance, attendanceContext());
       notifyDataChanged({ scope: 'attendance' });
@@ -2229,6 +2261,12 @@ function initAttendance() {
     } finally {
       renderAttendance();
     }
+  };
+
+  saveButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      void saveAttendance();
+    });
   });
 
   function renderRollCall(students, date, subjectId) {
@@ -2252,7 +2290,7 @@ function initAttendance() {
       replaceContent(rollHost,
         el('p', { className: 'roll-call-progress' }, `${marked}/${students.length} marcados`),
         el('p', { className: 'roll-call-name' }, 'Lista completa'),
-        el('p', { className: 'roll-call-meta' }, 'Podés volver a corregir o guardar abajo.'),
+        el('p', { className: 'roll-call-meta' }, 'Podés revisar o guardar en esta ventana.'),
         el('div', { className: 'roll-call-nav' },
           el('button', { type: 'button', className: 'btn btn-ghost', dataset: { rollNav: 'start' } }, 'Revisar'),
           el('button', { type: 'button', className: 'btn btn-secondary', dataset: { rollNav: 'list' } }, 'Ver listado'),
@@ -2313,14 +2351,13 @@ function initAttendance() {
     ]);
 
     const isRoll = attendanceMode === 'roll';
-    if (list) list.hidden = isRoll;
-    if (rollHost) rollHost.hidden = !isRoll;
     summaryNode?.classList.toggle('is-hidden', isRoll);
 
     if (isRoll) {
+      openRollDialog();
       renderRollCall(students, date, subjectId);
-      updateAttendanceSaveUi();
-      return;
+    } else {
+      closeRollDialog();
     }
 
     if (!students.length) {
@@ -2361,7 +2398,7 @@ function initAttendance() {
   }
 
   window.addEventListener('keydown', (event) => {
-    if (attendanceMode !== 'roll' || rollHost?.hidden) return;
+    if (attendanceMode !== 'roll' || (rollDialog ? !rollDialog.open : rollHost?.hidden)) return;
     if (root.classList.contains('spa-view--hidden')) return;
     if (event.target.closest?.('input, select, textarea')) return;
     const students = currentAttendanceStudents();
@@ -2853,16 +2890,18 @@ function initGrades() {
         cells: [
           el('strong', { className: 'planilla-name' }, student.nombre),
           gradeControl,
-          el('input', {
-            type: 'text',
-            className: `grade-motivo-field${hasValue ? '' : ' is-hidden'}`,
-            attrs: {
-              placeholder: 'Observación (opcional)',
-              'aria-label': `Motivo de la nota de ${student.nombre}`,
-            },
-            dataset: { gradeBulkStudent: student.id, gradeBulkField: 'motivo' },
-            value: displayed.motivo || '',
-          }),
+          el('td', { className: 'planilla-hide-mobile' },
+            el('input', {
+              type: 'text',
+              className: `grade-motivo-field${hasValue ? '' : ' is-hidden'}`,
+              attrs: {
+                placeholder: 'Observación (opcional)',
+                'aria-label': `Motivo de la nota de ${student.nombre}`,
+              },
+              dataset: { gradeBulkStudent: student.id, gradeBulkField: 'motivo' },
+              value: displayed.motivo || '',
+            }),
+          ),
         ],
       };
     });
@@ -2872,11 +2911,11 @@ function initGrades() {
       [
         { text: 'Alumno', className: 'planilla-name-col' },
         { text: 'Nota', className: 'planilla-num' },
-        'Observación',
+        { text: 'Observación', className: 'planilla-hide-mobile' },
       ],
       rows,
       null,
-      { wrapClass: 'planilla' },
+      { wrapClass: 'planilla planilla--compact' },
     );
 
     updateGradesSaveUi();
