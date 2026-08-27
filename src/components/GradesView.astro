@@ -10,7 +10,7 @@ const { spaMode = false } = Astro.props;
   <div class="header-content">
     <p class="eyebrow">Calificaciones</p>
     <h1>Notas</h1>
-    <p class="copy-collapse-mobile">Cargá notas del curso actual.</p>
+    <p class="copy-collapse-mobile">Cargá y mirá las notas como en una planilla del curso.</p>
   </div>
   <div class="actions-group">
     <button class="btn btn-ghost btn-block" type="button" data-print-course-notes>
@@ -126,10 +126,10 @@ const { spaMode = false } = Astro.props;
 
     <div class="section-title">
       <h3>Alumnos</h3>
-      <p data-grade-bulk-summary>Seleccioná curso y materia para ver el listado.</p>
+      <p data-grade-bulk-summary>Seleccioná curso y materia para ver la planilla.</p>
     </div>
 
-    <div class="list grade-bulk-list" data-grade-bulk-list></div>
+    <div class="table-container grade-bulk-list" data-grade-bulk-list></div>
 
     <div class="attendance-save-bar" data-grades-save-bar>
       <p class="attendance-save-hint is-hidden" data-grades-save-hint>
@@ -144,8 +144,8 @@ const { spaMode = false } = Astro.props;
 
   <section class="panel">
     <div class="section-title">
-      <h2>Estado académico</h2>
-      <p>Vista consolidada por alumno para lectura rápida.</p>
+      <h2>Planilla de notas</h2>
+      <p>Una fila por alumno. Las columnas son las evaluaciones de esta materia. Tocá una nota para editarla.</p>
     </div>
     <div class="table-container" data-grade-table></div>
   </section>
@@ -174,7 +174,7 @@ const { spaMode = false } = Astro.props;
   <section class="summary-strip" data-grades-detail-summary></section>
 
   <div class="section-title">
-    <h3>Actividades y notas</h3>
+    <h3>Planilla del período</h3>
   </div>
   <div class="table-container" data-grades-detail-table></div>
 

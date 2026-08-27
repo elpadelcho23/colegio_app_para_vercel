@@ -138,7 +138,7 @@ const { initialView = 'panel' } = Astro.props;
       <div class="header-content">
         <p class="eyebrow">Alumnos</p>
         <h1>Alumnos</h1>
-        <p class="copy-collapse-mobile">Listado del curso. La importación masiva está en Herramientas.</p>
+        <p class="copy-collapse-mobile">Planilla del curso. Tocá un nombre para ver el perfil. La importación masiva está en Herramientas.</p>
       </div>
       <div class="actions-group">
         <button type="button" class="btn btn-primary btn-block" data-tools-focus="importar" data-tools-tab="alumnos">
@@ -154,10 +154,10 @@ const { initialView = 'panel' } = Astro.props;
     <section class="panel student-workspace">
       <section class="panel">
         <div class="section-title">
-          <h2>Alumnos cargados</h2>
-          <p>Listado con curso, materias y promedio actualizado.</p>
+          <h2>Planilla de alumnos</h2>
+          <p data-student-list-caption>Elegí un curso arriba para ver la planilla de esa división.</p>
         </div>
-        <div class="list" data-student-list></div>
+        <div class="table-container" data-student-list></div>
       </section>
 
       <details class="panel panel-collapsible student-manual-details" data-student-mode-panel="manual">

@@ -196,26 +196,54 @@ export function th(text) {
   return el('th', {}, text);
 }
 
-export function buildTable(headers, rows) {
-  const thead = el('thead', {},
-    el('tr', {}, ...headers.map((header) => th(header))),
-  );
-  const tbody = el('tbody', {},
-    ...rows.map((row) => el('tr', {}, ...row.map((cell) => {
-      if (cell instanceof HTMLElement) return td(cell);
-      if (Array.isArray(cell)) return td(...cell);
-      return td(String(cell ?? ''));
-    }))),
-  );
-  return el('div', { className: 'table-wrap' }, el('table', {}, thead, tbody));
+function headerCell(header) {
+  if (header instanceof HTMLElement) {
+    return header.tagName === 'TH' ? header : el('th', {}, header);
+  }
+  if (header && typeof header === 'object') {
+    const { text = '', title = '', className = '' } = header;
+    return el('th', {
+      className,
+      attrs: title ? { title } : {},
+    }, text);
+  }
+  return th(header);
 }
 
-export function renderTable(container, headers, rows, empty = null) {
+function bodyCell(cell) {
+  if (cell instanceof HTMLElement && cell.tagName === 'TD') return cell;
+  if (cell instanceof HTMLElement) return td(cell);
+  if (Array.isArray(cell)) return td(...cell);
+  return td(String(cell ?? ''));
+}
+
+function rowConfig(row) {
+  if (row && typeof row === 'object' && !Array.isArray(row) && Array.isArray(row.cells)) {
+    return row;
+  }
+  return { cells: row };
+}
+
+export function buildTable(headers, rows, options = {}) {
+  const wrapClass = ['table-wrap', options.wrapClass].filter(Boolean).join(' ');
+  const thead = el('thead', {},
+    el('tr', {}, ...headers.map((header) => headerCell(header))),
+  );
+  const tbody = el('tbody', {},
+    ...rows.map((row) => {
+      const cfg = rowConfig(row);
+      return el('tr', { className: cfg.className || '', dataset: cfg.dataset }, ...cfg.cells.map((cell) => bodyCell(cell)));
+    }),
+  );
+  return el('div', { className: wrapClass }, el('table', { className: options.tableClass || '' }, thead, tbody));
+}
+
+export function renderTable(container, headers, rows, empty = null, options = {}) {
   if (!rows.length) {
     replaceContent(container, empty || emptyState('Sin datos'));
     return;
   }
-  replaceContent(container, buildTable(headers, rows));
+  replaceContent(container, buildTable(headers, rows, options));
 }
 
 export function fillSelectOptions(select, items, placeholder, valueKey = 'id', labeler = (item) => item.nombre) {

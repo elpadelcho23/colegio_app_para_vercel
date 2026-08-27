@@ -564,6 +564,121 @@ function formatShortDate(iso) {
   return day && month ? `${day}/${month}${year ? `/${year.slice(-2)}` : ''}` : (iso || '-');
 }
 
+function evaluationColumnKey(grade) {
+  return [grade.titulo || '', grade.periodo || inferGradePeriod(grade), grade.tipoEvaluacion || ''].join('|');
+}
+
+function collectEvaluationColumns(students, subjectId, period = '') {
+  const map = new Map();
+  students.forEach((student) => {
+    let grades = gradesForStudent(student.id, subjectId);
+    if (period) grades = gradesForPeriod(grades, period);
+    grades.forEach((grade) => {
+      const key = evaluationColumnKey(grade);
+      const current = map.get(key);
+      if (!current || String(grade.fecha || '') > String(current.fecha || '')) {
+        map.set(key, grade);
+      }
+    });
+  });
+  return [...map.values()].sort((a, b) =>
+    String(a.fecha || '').localeCompare(String(b.fecha || ''))
+    || String(a.titulo || '').localeCompare(String(b.titulo || ''), 'es')
+  );
+}
+
+function gradeForEvaluationColumn(studentId, subjectId, columnGrade) {
+  const key = evaluationColumnKey(columnGrade);
+  const matches = gradesForStudent(studentId, subjectId).filter((grade) => evaluationColumnKey(grade) === key);
+  if (!matches.length) return null;
+  return matches.sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))[0];
+}
+
+function planillaEvalHeader(grade) {
+  const title = String(grade.titulo || grade.tipoEvaluacion || 'Eval.').trim();
+  const date = formatShortDate(grade.fecha);
+  return el('th', {
+    className: 'planilla-num',
+    attrs: {
+      title: [title, grade.tipoEvaluacion, date !== '-' ? date : ''].filter(Boolean).join(' · '),
+    },
+  },
+    el('span', { className: 'planilla-th-title' }, title),
+    date !== '-' ? el('small', {}, date) : null,
+  );
+}
+
+function planillaGradeCell(grade, { editable = false } = {}) {
+  if (!grade) return el('span', { className: 'planilla-empty' }, '—');
+  const label = gradeLabel(grade);
+  const numeric = Number(grade.valor);
+  const low = Number.isFinite(numeric) && numeric < GRADE_PASS_THRESHOLD;
+  const title = grade.motivo ? `${label} · ${grade.motivo}` : label;
+  const className = `planilla-grade${low ? ' is-low' : ''}`;
+  if (!editable) {
+    return el('span', { className, attrs: { title } }, label);
+  }
+  return el('button', {
+    type: 'button',
+    className,
+    dataset: { editGrade: grade.id },
+    attrs: { title: `${title}. Tocá para editar.` },
+  }, label);
+}
+
+function renderGradePlanilla(container, {
+  students,
+  subjectId,
+  period = '',
+  empty = null,
+  editable = false,
+} = {}) {
+  const columns = collectEvaluationColumns(students, subjectId, period);
+  const headers = [
+    { text: 'Alumno', className: 'planilla-name-col' },
+    ...columns.map((grade) => planillaEvalHeader(grade)),
+    { text: 'Prom.', className: 'planilla-num' },
+    { text: 'Asist.', className: 'planilla-num' },
+    'Estado',
+  ];
+  const rows = students.map((student) => {
+    const grades = period
+      ? gradesForPeriod(gradesForStudent(student.id, subjectId), period)
+      : gradesForStudent(student.id, subjectId);
+    const avg = average(grades);
+    const rate = attendanceRate(student.id, subjectId);
+    const status = avg !== null && avg < GRADE_PASS_THRESHOLD
+      ? 'danger'
+      : rate !== null && rate < attendancePassThreshold()
+        ? 'warning'
+        : 'ok';
+    return {
+      cells: [
+        el('strong', { className: 'planilla-name' }, student.nombre),
+        ...columns.map((column) => planillaGradeCell(gradeForEvaluationColumn(student.id, subjectId, column), { editable })),
+        el('span', {
+          className: `planilla-grade${avg !== null && avg < GRADE_PASS_THRESHOLD ? ' is-low' : ''}`,
+        }, avg === null ? '—' : avg.toFixed(1)),
+        rate === null ? '—' : `${rate.toFixed(0)}%`,
+        tag(
+          status === 'danger' ? 'Riesgo' : status === 'warning' ? 'Atención' : 'OK',
+          `tag ${status}`,
+        ),
+      ],
+    };
+  });
+  renderTable(
+    container,
+    headers,
+    rows,
+    empty || emptyState('Sin alumnos', 'Importá alumnos con Excel (recomendado) o cargá uno a uno en Alumnos.', {
+      ctaLabel: 'Importar con Excel',
+      spaNav: 'registro',
+    }),
+    { wrapClass: 'planilla' },
+  );
+}
+
 function attendanceRowMeta(parts) {
   return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' · ');
 }
@@ -684,35 +799,34 @@ function renderGradesDetail(root) {
     ]);
   }
 
-  renderTable(
-    table,
-    ['Alumno', 'Curso', 'Actividad', 'Tipo', 'Fecha', 'Nota', 'Motivo', 'Período'],
-    rows.map(({ student, grade, course }) => [
-      el('strong', {}, student.nombre),
-      `${displayRecordName(course, '-') } ${course?.turno || ''}`,
-      grade.titulo,
-      grade.tipoEvaluacion || 'Eval.',
-      grade.fecha || '-',
-      gradeLabel(grade),
-      grade.motivo || '-',
-      periodLabel(inferGradePeriod(grade)),
-    ]),
-    emptyState('Sin calificaciones en este período', 'Cargá notas o cambiá el filtro de período.'),
-  );
+  renderGradePlanilla(table, {
+    students,
+    subjectId,
+    period,
+    empty: emptyState('Sin calificaciones en este período', 'Cargá notas o cambiá el filtro de período.'),
+  });
 
   if (averages) {
     renderTable(
       averages,
-      ['Alumno', 'Curso', 'Materia', 'Evaluaciones', 'Promedio', 'Estado'],
-      averageRows.map((item) => [
-        el('strong', {}, item.student.nombre),
-        `${item.course?.nombre || '-'} ${item.course?.turno || ''}`,
-        item.subject?.nombre || '-',
-        item.grades.length,
-        item.avg === null ? '-' : item.avg.toFixed(1),
-        tag(item.aprueba ? 'Aprueba' : 'No aprueba', `tag ${item.aprueba ? 'ok' : 'danger'}`),
-      ]),
+      [
+        { text: 'Alumno', className: 'planilla-name-col' },
+        { text: 'Eval.', className: 'planilla-num' },
+        { text: 'Prom.', className: 'planilla-num' },
+        'Estado',
+      ],
+      averageRows.map((item) => ({
+        cells: [
+          el('strong', { className: 'planilla-name' }, item.student.nombre),
+          item.grades.length,
+          el('span', {
+            className: `planilla-grade${item.avg !== null && item.avg < GRADE_PASS_THRESHOLD ? ' is-low' : ''}`,
+          }, item.avg === null ? '—' : item.avg.toFixed(1)),
+          tag(item.aprueba ? 'Aprueba' : 'No aprueba', `tag ${item.aprueba ? 'ok' : 'danger'}`),
+        ],
+      })),
       emptyState('Sin promedios calculables', 'No hay calificaciones numéricas en el período seleccionado.'),
+      { wrapClass: 'planilla' },
     );
   }
 }
@@ -1707,6 +1821,7 @@ function initStudents() {
   });
 
   renderStudents(list);
+  window.addEventListener('aula-clara:teaching-context-changed', () => renderStudents(list));
   onPanelRefresh(() => {
     refreshSchoolOptions();
     renderStudents(list);
@@ -1781,36 +1896,72 @@ function renderStudentSubjectPicker(container, selectedIds = []) {
 }
 
 function renderStudents(list) {
-  const students = studentsInCiclo();
+  const caption = list?.closest('[data-students]')?.querySelector('[data-student-list-caption]');
+  const ctx = getTeachingContext();
+  const filtered = Boolean(ctx.cursoId);
+  const students = [...(filtered
+    ? studentsInCiclo(ctx.escuela || '', ctx.cursoId)
+    : studentsInCiclo()
+  )].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+
+  if (caption) {
+    caption.textContent = filtered
+      ? `Planilla de ${describeTeachingContext(ctx)} · ${students.length} alumno${students.length === 1 ? '' : 's'}.`
+      : 'Elegí un curso arriba para ver la planilla de esa división, o mirá todos los del ciclo.';
+  }
+
   if (!students.length) {
-    replaceContent(list, emptyState('No hay alumnos en este ciclo', `Importá desde Excel (recomendado) o cargá uno a uno. Ciclo ${activeCicloLectivo()}.`, {
-      ctaLabel: 'Importar con Excel',
-      spaNav: 'registro',
-    }));
+    replaceContent(list, emptyState(
+      filtered ? 'Este curso no tiene alumnos' : 'No hay alumnos en este ciclo',
+      `Importá desde Excel (recomendado) o cargá uno a uno. Ciclo ${activeCicloLectivo()}.`,
+      {
+        ctaLabel: 'Importar con Excel',
+        spaNav: 'registro',
+      },
+    ));
     return;
   }
-  replaceContent(list, ...students.map((student) => {
+
+  const headers = [
+    { text: 'Alumno', className: 'planilla-name-col' },
+    'DNI',
+    ...(filtered ? [] : ['Curso']),
+    'Materias',
+    { text: 'Prom.', className: 'planilla-num' },
+    'Acciones',
+  ];
+
+  const rows = students.map((student) => {
     const course = courseById(student.cursoId);
     const avg = average(gradesForStudent(student.id));
     const assignedIds = studentSubjectIds(student);
     const subjects = subjectsForStudent(student).map((subject) => displayRecordName(subject, '')).filter(Boolean).join(', ')
-      || (assignedIds.length ? 'Materia' : 'Sin materias');
-    return el('article', { className: 'student-row' },
-      el('div', { className: 'student-row-info' },
-        el('div', { className: 'student-row-head' },
-          el('strong', {}, student.nombre),
-          tag(`Promedio ${avg === null ? '-' : avg.toFixed(1)}`, `tag ${avg !== null && avg < 6 ? 'danger' : 'ok'}`),
-        ),
-        el('small', { className: 'student-row-meta' }, `${course?.escuela || 'Sin escuela'} · ${displayRecordName(course, 'Sin curso')} ${course?.turno || ''} · ${subjects}`),
-        el('small', {}, student.tutor ? `Contacto: ${student.tutor}` : 'Sin contacto cargado'),
-      ),
-      el('div', { className: 'row-actions' },
-        el('button', { className: 'btn btn-ghost', dataset: { openStudentProfile: student.id } }, 'Ver perfil'),
-        el('button', { className: 'btn btn-ghost', dataset: { editStudent: student.id } }, 'Editar'),
-        el('button', { className: 'btn btn-danger', dataset: { deleteStudent: student.id } }, 'Eliminar'),
+      || (assignedIds.length ? 'Materia' : '—');
+    const cells = [
+      el('button', {
+        type: 'button',
+        className: 'planilla-name',
+        dataset: { openStudentProfile: student.id },
+      }, student.nombre),
+      student.dni || '—',
+    ];
+    if (!filtered) {
+      cells.push(`${displayRecordName(course, 'Sin curso')} ${course?.turno || ''}`.trim());
+    }
+    cells.push(
+      el('span', { className: 'planilla-subjects', attrs: { title: subjects } }, subjects),
+      el('span', {
+        className: `planilla-grade${avg !== null && avg < GRADE_PASS_THRESHOLD ? ' is-low' : ''}`,
+      }, avg === null ? '—' : avg.toFixed(1)),
+      el('div', { className: 'planilla-actions' },
+        el('button', { type: 'button', className: 'btn btn-ghost btn-sm', dataset: { openStudentProfile: student.id } }, 'Ver'),
+        el('button', { type: 'button', className: 'btn btn-danger btn-sm', dataset: { deleteStudent: student.id } }, 'Quitar'),
       ),
     );
-  }));
+    return { cells };
+  });
+
+  renderTable(list, headers, rows, null, { wrapClass: 'planilla' });
 }
 
 function attendanceDraftKey(studentId, subjectId, date) {
@@ -2641,8 +2792,7 @@ function initGrades() {
       return;
     }
 
-    replaceContent(bulkList, ...students.map((student) => {
-      const course = courseById(student.cursoId);
+    const rows = students.map((student) => {
       const key = gradeDraftKey(student.id, meta.subjectId, meta.titulo, meta.periodo);
       const saved = savedGradeForEvaluation(student.id, meta.subjectId, meta.titulo, meta.periodo);
       const draft = draftGrades.get(key) || {
@@ -2698,29 +2848,36 @@ function initGrades() {
 
       const hasValue = gradeDraftHasValue(displayed, meta.modoCalificacion);
 
-      return el('article', {
-        className: `student-row grade-bulk-row${dirty ? ' grade-row--dirty' : ''}${hasValue ? ' grade-row--scored' : ''}`,
-      },
-        el('div', {},
-          el('strong', {}, student.nombre),
-          el('small', {}, [course?.escuela, `${displayRecordName(course, '')} ${course?.turno || ''}`.trim(), displayRecordName(subjectById(meta.subjectId), '')].filter(Boolean).join(' · ')),
-          saved ? el('small', {}, `Guardada: ${gradeLabel(saved)}`) : null,
-        ),
-        el('div', { className: 'grade-bulk-inputs' },
+      return {
+        className: `grade-bulk-row${dirty ? ' grade-row--dirty' : ''}${hasValue ? ' grade-row--scored' : ''}`,
+        cells: [
+          el('strong', { className: 'planilla-name' }, student.nombre),
           gradeControl,
           el('input', {
             type: 'text',
             className: `grade-motivo-field${hasValue ? '' : ' is-hidden'}`,
             attrs: {
-              placeholder: 'Motivo u observación (opcional)',
+              placeholder: 'Observación (opcional)',
               'aria-label': `Motivo de la nota de ${student.nombre}`,
             },
             dataset: { gradeBulkStudent: student.id, gradeBulkField: 'motivo' },
             value: displayed.motivo || '',
           }),
-        ),
-      );
-    }));
+        ],
+      };
+    });
+
+    renderTable(
+      bulkList,
+      [
+        { text: 'Alumno', className: 'planilla-name-col' },
+        { text: 'Nota', className: 'planilla-num' },
+        'Observación',
+      ],
+      rows,
+      null,
+      { wrapClass: 'planilla' },
+    );
 
     updateGradesSaveUi();
   };
@@ -3031,49 +3188,15 @@ function initGrades() {
 }
 
 function renderGrades(table, subjectId = '', courseId = '', escuela = '') {
-  const students = studentsInCiclo(escuela, courseId).filter((student) =>
-    studentHasSubject(student, subjectId)
-  );
+  const students = studentsInCiclo(escuela, courseId)
+    .filter((student) => studentHasSubject(student, subjectId))
+    .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
 
-  const rows = students.map((student) => {
-    const avg = average(gradesForStudent(student.id, subjectId));
-    const rate = attendanceRate(student.id, subjectId);
-    const grades = gradesForStudent(student.id, subjectId);
-    const status = avg !== null && avg < 6 ? 'danger' : rate !== null && rate < 75 ? 'warning' : 'ok';
-    const notesList = el('div', { className: 'notes-list' },
-      grades.length
-        ? grades.map((grade) =>
-          el('span', { className: 'tag' },
-            `${grade.tipoEvaluacion || 'Eval.'} - ${grade.titulo}: ${gradeLabel(grade)} `,
-            grade.motivo ? el('small', {}, `· ${grade.motivo}`) : null,
-            el('small', {}, importanceLabel(grade.peso)),
-            el('button', { dataset: { editGrade: grade.id }, attrs: { title: 'Editar' } }, 'Editar'),
-            el('button', { dataset: { deleteGrade: grade.id }, attrs: { title: 'Eliminar' } }, 'Eliminar'),
-          ),
-        )
-        : tag('Sin notas'),
-    );
-    return [
-      [
-        el('strong', {}, student.nombre),
-        el('small', {}, displayRecordName(courseById(student.cursoId), 'Sin curso')),
-      ],
-      avg === null ? '-' : avg.toFixed(1),
-      rate === null ? '-' : `${rate.toFixed(0)}%`,
-      notesList,
-      tag(status === 'danger' ? 'Riesgo' : status === 'warning' ? 'Atencion' : 'Correcto', `tag ${status}`),
-    ];
+  renderGradePlanilla(table, {
+    students,
+    subjectId,
+    editable: true,
   });
-
-  renderTable(
-    table,
-    ['Alumno', 'Promedio', 'Asistencia', 'Calificaciones', 'Estado'],
-    rows,
-    emptyState('Sin alumnos', 'Importá alumnos con Excel (recomendado) o cargá uno a uno en Alumnos.', {
-      ctaLabel: 'Importar con Excel',
-      spaNav: 'registro',
-    }),
-  );
 }
 
 function renderInlineSubjects(list) {

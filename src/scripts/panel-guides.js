@@ -162,7 +162,7 @@ export const PANEL_GUIDES = {
     tips: [
       {
         title: 'Cargar calificaciones',
-        body: 'La planilla usa el curso y materia activos de arriba.',
+        body: 'La planilla usa el curso y materia activos de arriba. Abajo ves una fila por alumno y una columna por evaluación.',
         action: 'Ingresá la nota en la celda del alumno.',
         connects: 'Solo aparecen alumnos con esa materia asignada.',
         target: '[data-spa-view="notas"] [data-grades-take-view]',
