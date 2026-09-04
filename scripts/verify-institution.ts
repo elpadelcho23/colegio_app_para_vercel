@@ -23,8 +23,6 @@ import {
 import {
   issueEmailVerification,
   issuePasswordReset,
-  consumeEmailVerificationToken,
-  consumePasswordResetToken,
 } from '../src/server/auth-email.ts';
 import { verifyLogin, isEmailVerified } from '../src/server/auth.ts';
 
