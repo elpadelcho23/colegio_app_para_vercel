@@ -2,26 +2,31 @@
 import Layout from '../../layouts/Layout.astro';
 import { listBackups } from '../../server/backup';
 import { db } from '../../server/db';
+import { listUsersForInstitutionAdmin } from '../../server/tenant';
 
-const docentes = (await db.prepare(`
-  SELECT usuarios.id, usuarios.nombre, usuarios.email, usuarios.rol, usuarios.created_at, tenants.nombre AS tenant
-  FROM usuarios
-  LEFT JOIN tenants ON tenants.id = usuarios.tenant_id
-  ORDER BY created_at DESC
-`).all()) as Array<{ id: string; nombre: string; email: string; rol: string; tenant: string; created_at: string }>;
+const currentUser = Astro.locals.user;
+if (!currentUser || currentUser.rol !== 'admin') {
+  return Astro.redirect('/');
+}
+
+const tenantId = currentUser.tenant_id;
+
+const listed = await listUsersForInstitutionAdmin(currentUser);
+const docentes = listed.ok ? listed.users : [];
 
 const cursos = (await db.prepare(`
   SELECT id, escuela, nombre, turno
   FROM cursos
+  WHERE tenant_id = ?
   ORDER BY escuela, nombre
-`).all()) as Array<{ id: string; escuela: string; nombre: string; turno: string }>;
+`).all(tenantId)) as Array<{ id: string; escuela: string; nombre: string; turno: string }>;
 
 const materias = (await db.prepare(`
   SELECT id, nombre
   FROM materias
-  WHERE activo = 1
+  WHERE activo = 1 AND tenant_id = ?
   ORDER BY nombre
-`).all()) as Array<{ id: string; nombre: string }>;
+`).all(tenantId)) as Array<{ id: string; nombre: string }>;
 
 const backups = listBackups();
 ---
@@ -79,7 +84,7 @@ const backups = listBackups();
       <div class="panel">
         <div class="section-title">
           <h2>Usuarios</h2>
-          <p>Lista de cuentas institucionales registradas.</p>
+          <p>Lista de cuentas de esta institución.</p>
         </div>
         <div class="table-wrap">
           <table>

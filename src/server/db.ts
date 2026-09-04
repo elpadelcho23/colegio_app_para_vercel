@@ -25,11 +25,20 @@ export interface User {
   email_verified_at?: string | null;
 }
 
+/** Slug estable derivado del id (único); el admin puede personalizarlo luego vía updateTenant. */
+function defaultTenantSlug(id: string) {
+  return String(id)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || id;
+}
+
 export async function createTenant(nombre: string, id = `tenant-${randomBytes(8).toString('hex')}`) {
   await db.prepare(`
-    INSERT OR IGNORE INTO tenants (id, nombre)
-    VALUES (?, ?)
-  `).run(id, nombre.trim() || 'Cuenta docente');
+    INSERT OR IGNORE INTO tenants (id, nombre, slug, status)
+    VALUES (?, ?, ?, 'active')
+  `).run(id, nombre.trim() || 'Cuenta docente', defaultTenantSlug(id));
   return id;
 }
 
@@ -441,6 +450,12 @@ async function initSchema() {
   CREATE TABLE IF NOT EXISTS tenants (
     id TEXT PRIMARY KEY,
     nombre TEXT NOT NULL,
+    slug TEXT,
+    email TEXT,
+    telefono TEXT,
+    direccion TEXT,
+    logo_url TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
@@ -797,6 +812,7 @@ async function initSchema() {
   await migrateAulaTemporal();
   await migrateDocenteClientState();
   await migrateAuthEmail();
+  await migrateInstitutionModel();
   await createIndexes();
   await setSchemaVersion(1);
 
@@ -896,6 +912,58 @@ async function migrateAuthEmail() {
     WHERE COALESCE(is_guest, 0) = 0
       AND email_verified_at IS NULL
   `).run();
+}
+
+/**
+ * Fase 2 Institutional Foundation: modelo de institución sobre `tenants`.
+ * Additive / reversible: no renombra la tabla, no elimina columnas, no toca FKs.
+ * status inicial: active | suspended (validado en backend).
+ */
+async function migrateInstitutionModel() {
+  await ensureColumn('tenants', 'slug', 'slug TEXT');
+  await ensureColumn('tenants', 'email', 'email TEXT');
+  await ensureColumn('tenants', 'telefono', 'telefono TEXT');
+  await ensureColumn('tenants', 'direccion', 'direccion TEXT');
+  await ensureColumn('tenants', 'logo_url', 'logo_url TEXT');
+  await ensureColumn('tenants', 'status', "status TEXT NOT NULL DEFAULT 'active'");
+
+  await db.prepare(`
+    UPDATE tenants
+    SET status = 'active'
+    WHERE status IS NULL OR status = '' OR status NOT IN ('active', 'suspended')
+  `).run();
+
+  const missingSlug = (await db.prepare(`
+    SELECT id, nombre FROM tenants
+    WHERE slug IS NULL OR trim(slug) = ''
+  `).all()) as Array<{ id: string; nombre: string }>;
+
+  for (const row of missingSlug) {
+    const base = defaultTenantSlug(row.id);
+    let candidate = base;
+    let n = 2;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const taken = (await db.prepare(`
+        SELECT id FROM tenants WHERE lower(slug) = lower(?) AND id != ? LIMIT 1
+      `).get(candidate, row.id)) as { id: string } | undefined;
+      if (!taken) break;
+      candidate = `${base}-${n}`.slice(0, 80);
+      n += 1;
+      if (n > 500) {
+        candidate = `${base}-${randomBytes(3).toString('hex')}`;
+        break;
+      }
+    }
+    await db.prepare('UPDATE tenants SET slug = ? WHERE id = ?').run(candidate, row.id);
+  }
+
+  await db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_slug_unique
+      ON tenants(slug)
+      WHERE slug IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+  `);
 }
 
 async function migrateDocenteClientState() {
@@ -1147,6 +1215,7 @@ async function migrateTenancy() {
 
 async function createIndexes() {
   await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
     CREATE INDEX IF NOT EXISTS idx_usuarios_tenant ON usuarios(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_cursos_tenant ON cursos(tenant_id);
