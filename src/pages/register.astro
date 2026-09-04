@@ -46,7 +46,11 @@ const error = Astro.url.searchParams.get('error');
           <p class="muted">Registrá tu cuenta docente para comenzar a organizar tus cursos.</p>
         </header>
 
-        {error === '1' && <p class="tag danger auth-alert">Completá todos los campos correctamente y usá una contraseña válida (mínimo 5 caracteres, con letras y números).</p>}
+        {error === '1' && (
+          <p class="tag danger auth-alert">
+            Completá todos los campos con un email válido y una contraseña correcta (mínimo 5 caracteres, con letras y números).
+          </p>
+        )}
         {error === '2' && <p class="tag danger auth-alert">Ya existe una cuenta con ese email.</p>}
         {error === '3' && (
           <p class="tag danger auth-alert">
@@ -62,6 +66,7 @@ const error = Astro.url.searchParams.get('error');
           <label>
             <span>Email</span>
             <input type="email" name="email" autocomplete="email" required />
+            <small>Te enviaremos un enlace para verificar tu email.</small>
           </label>
           <label>
             <span>Contraseña</span>

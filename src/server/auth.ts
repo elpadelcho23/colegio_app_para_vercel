@@ -220,7 +220,11 @@ export function isStrongPassword(password: string) {
   );
 }
 
-function mapUserRow(row: Omit<User, 'is_guest'> & { is_guest?: number | boolean; password_hash?: string }): User {
+function mapUserRow(row: Omit<User, 'is_guest' | 'email_verified_at'> & {
+  is_guest?: number | boolean;
+  email_verified_at?: string | null;
+  password_hash?: string;
+}): User {
   return {
     id: row.id,
     tenant_id: row.tenant_id,
@@ -228,15 +232,22 @@ function mapUserRow(row: Omit<User, 'is_guest'> & { is_guest?: number | boolean;
     email: row.email,
     rol: row.rol,
     is_guest: Boolean(row.is_guest),
+    email_verified_at: row.email_verified_at || null,
   };
 }
 
 export async function verifyLogin(email: string, password: string): Promise<User | null> {
   const row = (await db.prepare(`
-    SELECT id, tenant_id, nombre, email, password_hash, rol, COALESCE(is_guest, 0) AS is_guest
+    SELECT id, tenant_id, nombre, email, password_hash, rol,
+           COALESCE(is_guest, 0) AS is_guest,
+           email_verified_at
     FROM usuarios
     WHERE lower(email) = lower(?)
-  `).get(email)) as (Omit<User, 'is_guest'> & { password_hash: string; is_guest: number }) | undefined;
+  `).get(email)) as (Omit<User, 'is_guest' | 'email_verified_at'> & {
+    password_hash: string;
+    is_guest: number;
+    email_verified_at: string | null;
+  }) | undefined;
 
   if (!row || !bcrypt.compareSync(password, row.password_hash)) return null;
   return mapUserRow(row);
@@ -247,14 +258,30 @@ export async function getUserFromToken(token?: string): Promise<User | null> {
 
   const row = (await db.prepare(`
     SELECT usuarios.id, usuarios.tenant_id, usuarios.nombre, usuarios.email, usuarios.rol,
-           COALESCE(usuarios.is_guest, 0) AS is_guest
+           COALESCE(usuarios.is_guest, 0) AS is_guest,
+           usuarios.email_verified_at
     FROM sessions
     JOIN usuarios ON usuarios.id = sessions.user_id
     WHERE sessions.token_hash = ?
       AND sessions.expires_at > datetime('now')
-  `).get(hashToken(token))) as (Omit<User, 'is_guest'> & { is_guest: number }) | undefined;
+  `).get(hashToken(token))) as (Omit<User, 'is_guest' | 'email_verified_at'> & {
+    is_guest: number;
+    email_verified_at: string | null;
+  }) | undefined;
 
   return row ? mapUserRow(row) : null;
+}
+
+/** Invalida todas las sesiones de un usuario (p. ej. tras reset de contraseña). */
+export async function deleteSessionsForUser(userId: string) {
+  if (!userId) return;
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+}
+
+export function isEmailVerified(user: User | null | undefined) {
+  if (!user) return false;
+  if (user.is_guest) return true;
+  return Boolean(user.email_verified_at);
 }
 
 export async function deleteSession(token?: string) {

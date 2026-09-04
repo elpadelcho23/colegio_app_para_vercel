@@ -1,7 +1,14 @@
 ---
 import '../styles/global.css';
+
 const error = Astro.url.searchParams.get('error');
 const registered = Astro.url.searchParams.get('registered');
+const verify = Astro.url.searchParams.get('verify');
+const unverified = Astro.url.searchParams.get('unverified');
+const verified = Astro.url.searchParams.get('verified');
+const resent = Astro.url.searchParams.get('resent');
+const reset = Astro.url.searchParams.get('reset');
+const emailHint = Astro.url.searchParams.get('email') || '';
 ---
 
 <!doctype html>
@@ -54,6 +61,29 @@ const registered = Astro.url.searchParams.get('registered');
         </header>
 
         {registered && <p class="tag ok auth-alert">Cuenta creada. Ahora podés iniciar sesión.</p>}
+        {verify && (
+          <p class="tag ok auth-alert">
+            Te enviamos un email de verificación. Revisá tu bandeja y confirmá antes de entrar.
+          </p>
+        )}
+        {verified && <p class="tag ok auth-alert">Email verificado. Ya podés iniciar sesión.</p>}
+        {reset && <p class="tag ok auth-alert">Contraseña actualizada. Iniciá sesión con la nueva.</p>}
+        {resent && (
+          <p class="tag ok auth-alert">
+            Si el email está registrado y pendiente, te enviamos un nuevo enlace de verificación.
+          </p>
+        )}
+        {unverified && (
+          <div class="auth-alert-stack">
+            <p class="tag danger auth-alert">
+              Tu email todavía no está verificado. Revisá tu bandeja o reenviá el enlace.
+            </p>
+            <form method="post" action="/api/auth/resend-verification" class="auth-form auth-inline-form">
+              <input type="hidden" name="email" value={emailHint} />
+              <button class="btn btn-secondary btn-block" type="submit">Reenviar verificación</button>
+            </form>
+          </div>
+        )}
         {error && <p class="tag danger auth-alert">Credenciales inválidas</p>}
 
         <form method="post" action="/api/auth/login" class="auth-form">
@@ -64,6 +94,7 @@ const registered = Astro.url.searchParams.get('registered');
               name="email"
               placeholder="usuario@ejemplo.com"
               autocomplete="email"
+              value={emailHint}
               required
             />
           </label>
@@ -77,6 +108,9 @@ const registered = Astro.url.searchParams.get('registered');
               required
             />
           </label>
+          <p class="auth-forgot">
+            <a href="/forgot-password">¿Olvidaste tu contraseña?</a>
+          </p>
           <button class="btn btn-primary btn-block" type="submit">Entrar</button>
         </form>
 

@@ -168,7 +168,20 @@ export async function rehydrateUserFromPassport(
     email: passport.email,
     rol: passport.rol,
     is_guest: isGuest,
+    // Passport legacy no incluye verified_at; se rehidrata desde DB si existe.
+    email_verified_at: null,
   };
+
+  if (!isGuest) {
+    try {
+      const row = (await db.prepare(`
+        SELECT email_verified_at FROM usuarios WHERE id = ?
+      `).get(user.id)) as { email_verified_at: string | null } | undefined;
+      user.email_verified_at = row?.email_verified_at || null;
+    } catch {
+      // best-effort
+    }
+  }
 
   if (isGuest) {
     try {

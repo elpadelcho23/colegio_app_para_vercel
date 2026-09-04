@@ -21,6 +21,8 @@ export interface User {
   email: string;
   rol: 'admin' | 'docente';
   is_guest?: boolean;
+  /** ISO timestamp cuando el email fue verificado; null = pendiente. */
+  email_verified_at?: string | null;
 }
 
 export async function createTenant(nombre: string, id = `tenant-${randomBytes(8).toString('hex')}`) {
@@ -31,16 +33,22 @@ export async function createTenant(nombre: string, id = `tenant-${randomBytes(8)
   return id;
 }
 
-export async function createUser(user: Omit<User, 'id' | 'tenant_id'> & { password: string; tenant_id?: string }) {
+export async function createUser(user: Omit<User, 'id' | 'tenant_id'> & {
+  password: string;
+  tenant_id?: string;
+  /** Si true, marca el email como verificado al crear (p. ej. alta por admin). */
+  markEmailVerified?: boolean;
+}) {
   const email = String(user.email).trim().toLowerCase();
   const existing = await db.prepare('SELECT id FROM usuarios WHERE lower(email) = lower(?)').get(email);
   if (existing) return null;
 
   const id = `docente-${randomBytes(8).toString('hex')}`;
   const tenantId = user.tenant_id || (await createTenant(`Cuenta de ${user.nombre.trim() || email}`));
+  const verifiedAt = user.markEmailVerified ? new Date().toISOString() : null;
   await db.prepare(`
-    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, email_verified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run([
     id,
     tenantId,
@@ -48,9 +56,18 @@ export async function createUser(user: Omit<User, 'id' | 'tenant_id'> & { passwo
     email,
     bcrypt.hashSync(user.password, 12),
     user.rol ?? null,
+    verifiedAt,
   ]);
 
-  return { id, tenant_id: tenantId, nombre: user.nombre.trim(), email, rol: user.rol, is_guest: false } as User;
+  return {
+    id,
+    tenant_id: tenantId,
+    nombre: user.nombre.trim(),
+    email,
+    rol: user.rol,
+    is_guest: false,
+    email_verified_at: verifiedAt,
+  } as User;
 }
 
 /** Cuenta efímera aislada: tenant propio, sin persistencia entre visitas. */
@@ -81,6 +98,7 @@ export async function createGuestUser(): Promise<User> {
     email,
     rol: 'docente',
     is_guest: true,
+    email_verified_at: null,
   };
 
   await seedGuestDemoData(user);
@@ -286,10 +304,15 @@ export async function ensureTeachingContextRows(input: {
 
 export async function getUserById(userId: string): Promise<User | null> {
   const row = (await db.prepare(`
-    SELECT id, tenant_id, nombre, email, rol, COALESCE(is_guest, 0) AS is_guest
+    SELECT id, tenant_id, nombre, email, rol,
+           COALESCE(is_guest, 0) AS is_guest,
+           email_verified_at
     FROM usuarios
     WHERE id = ?
-  `).get(userId)) as (Omit<User, 'is_guest'> & { is_guest: number }) | undefined;
+  `).get(userId)) as (Omit<User, 'is_guest' | 'email_verified_at'> & {
+    is_guest: number;
+    email_verified_at: string | null;
+  }) | undefined;
 
   if (!row) return null;
   return {
@@ -299,6 +322,7 @@ export async function getUserById(userId: string): Promise<User | null> {
     email: row.email,
     rol: row.rol,
     is_guest: Boolean(row.is_guest),
+    email_verified_at: row.email_verified_at || null,
   };
 }
 
@@ -772,6 +796,7 @@ async function initSchema() {
   await migrateGuestFlag();
   await migrateAulaTemporal();
   await migrateDocenteClientState();
+  await migrateAuthEmail();
   await createIndexes();
   await setSchemaVersion(1);
 
@@ -828,6 +853,49 @@ async function migrateTrabajoCorreccion() {
 
 async function migrateGuestFlag() {
   await ensureColumn('usuarios', 'is_guest', 'is_guest INTEGER NOT NULL DEFAULT 0');
+}
+
+/**
+ * Fase 1 Institutional Foundation: verificación de email + reset de contraseña.
+ * - email_verified_at en usuarios (NULL = pendiente)
+ * - Backfill: usuarios existentes no-guest quedan verificados (no bloquear cuentas legacy)
+ * - Tablas de tokens con hash + expiración + used_at
+ */
+async function migrateAuthEmail() {
+  await ensureColumn('usuarios', 'email_verified_at', 'email_verified_at TEXT');
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS email_verification_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_email_verification_user ON email_verification_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
+  `);
+
+  // Cuentas ya existentes (no invitados) no deben quedar bloqueadas al activar la feature.
+  await db.prepare(`
+    UPDATE usuarios
+    SET email_verified_at = COALESCE(email_verified_at, created_at, CURRENT_TIMESTAMP)
+    WHERE COALESCE(is_guest, 0) = 0
+      AND email_verified_at IS NULL
+  `).run();
 }
 
 async function migrateDocenteClientState() {
@@ -1121,6 +1189,7 @@ async function insertUser(user: User & { password: string }) {
   if (exists) return;
 
   // LibSQL/Turso: SOLO array posicional de longitud exacta a los `?`. Nunca spread/{...user}/password.
+  const verifiedAt = user.email_verified_at || new Date().toISOString();
   const params = [
     user.id ?? null,
     user.tenant_id ?? null,
@@ -1128,11 +1197,12 @@ async function insertUser(user: User & { password: string }) {
     user.email ?? null,
     bcrypt.hashSync(user.password, 12),
     user.rol ?? null,
+    verifiedAt,
   ];
 
   await db.prepare(`
-    INSERT OR IGNORE INTO usuarios (id, tenant_id, nombre, email, password_hash, rol)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, email_verified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(params);
 }
 

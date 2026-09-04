@@ -4101,6 +4101,32 @@ label.checkbox-row {
   margin: 0 0 var(--space-3);
 }
 
+.auth-alert-stack {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.auth-forgot {
+  margin: -0.35rem 0 0.15rem;
+  text-align: right;
+  font-size: 0.9rem;
+}
+
+.auth-forgot a {
+  color: var(--brand-strong, var(--brand));
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-forgot a:hover {
+  text-decoration: underline;
+}
+
+.auth-inline-form {
+  margin: 0;
+}
+
 .is-hidden,
 .spa-view--hidden {
   display: none !important;

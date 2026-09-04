@@ -1,0 +1,66 @@
+---
+import '../styles/global.css';
+
+const status = Astro.url.searchParams.get('status') || '';
+const token = Astro.url.searchParams.get('token') || '';
+
+const messages: Record<string, { tone: 'ok' | 'danger'; text: string }> = {
+  missing: { tone: 'danger', text: 'Falta el enlace de verificación.' },
+  invalid: { tone: 'danger', text: 'El enlace no es válido.' },
+  expired: { tone: 'danger', text: 'El enlace venció. Pedí uno nuevo desde el login.' },
+  used: { tone: 'danger', text: 'Este enlace ya fue usado. Si ya verificaste, iniciá sesión.' },
+};
+
+const info = status ? messages[status] : null;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#226c5f" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <title>Verificar email | Aula Clara</title>
+    <script is:inline>
+      document.documentElement.dataset.theme =
+        localStorage.getItem('aula_clara_theme') || 'light';
+    </script>
+  </head>
+  <body class="auth-body">
+    <main class="auth-container">
+      <section class="auth-card">
+        <header class="auth-header">
+          <p class="eyebrow">Verificación</p>
+          <h1>Confirmá tu email</h1>
+          <p class="muted">Activá tu cuenta para poder iniciar sesión.</p>
+        </header>
+
+        {info && <p class={`tag ${info.tone} auth-alert`}>{info.text}</p>}
+
+        {!status && token && (
+          <form method="post" action="/api/auth/verify-email" class="auth-form">
+            <input type="hidden" name="token" value={token} />
+            <button class="btn btn-primary btn-block" type="submit">Verificar ahora</button>
+          </form>
+        )}
+
+        {!status && !token && (
+          <p class="muted">
+            Abrí el enlace que te enviamos por email, o pedí uno nuevo desde el login.
+          </p>
+        )}
+
+        <footer class="auth-footer">
+          <p><a href="/login">Ir al login</a></p>
+          <p><a href="/forgot-password">¿Olvidaste tu contraseña?</a></p>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>

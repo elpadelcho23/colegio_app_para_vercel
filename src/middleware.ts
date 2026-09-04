@@ -9,6 +9,10 @@ const publicApiRoutes = new Set([
   '/api/auth/logout',
   '/api/auth/register',
   '/api/auth/guest',
+  '/api/auth/verify-email',
+  '/api/auth/resend-verification',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
   '/api/aula-temporal/join',
 ]);
 
@@ -20,7 +24,14 @@ function isPublicApi(path: string) {
 }
 
 function isPublicPage(path: string) {
-  return path === '/login' || path === '/register' || path.startsWith('/s/');
+  return (
+    path === '/login'
+    || path === '/register'
+    || path === '/forgot-password'
+    || path === '/reset-password'
+    || path === '/verify-email'
+    || path.startsWith('/s/')
+  );
 }
 
 const protectedPagePrefixes = [
