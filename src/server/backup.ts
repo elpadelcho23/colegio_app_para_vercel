@@ -98,7 +98,16 @@ export async function restoreBackup(name: string) {
         await db.prepare(`DELETE FROM main.${table}`).run();
       }
       for (const table of [...availableTables].reverse()) {
-        await db.prepare(`INSERT INTO main.${table} SELECT * FROM backup.${table}`).run();
+        // Compatible con migraciones additive: solo columnas presentes en ambos lados.
+        // Columnas nuevas en main conservan DEFAULT; no falla si el backup es más viejo.
+        const mainCols = ((await db.prepare(`PRAGMA main.table_info(${table})`).all()) as Array<{ name: string }>)
+          .map((col) => col.name);
+        const backupCols = ((await db.prepare(`PRAGMA backup.table_info(${table})`).all()) as Array<{ name: string }>)
+          .map((col) => col.name);
+        const common = mainCols.filter((name) => backupCols.includes(name));
+        if (common.length === 0) continue;
+        const cols = common.join(', ');
+        await db.prepare(`INSERT INTO main.${table} (${cols}) SELECT ${cols} FROM backup.${table}`).run();
       }
     });
     await tx();

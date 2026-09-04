@@ -12,7 +12,8 @@
     "preview": "astro preview",
     "astro": "astro",
     "verify:guides": "node scripts/verify-product-guides.mjs",
-    "verify:auth-email": "tsx scripts/verify-auth-email.ts"
+    "verify:auth-email": "tsx scripts/verify-auth-email.ts",
+    "verify:institution": "tsx scripts/verify-institution.ts"
   },
   "dependencies": {
     "@astrojs/vercel": "^10.0.8",
