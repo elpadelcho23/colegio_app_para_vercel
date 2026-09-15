@@ -5,11 +5,12 @@ import { db } from '../../server/db';
 import { listUsersForInstitutionAdmin } from '../../server/tenant';
 
 const currentUser = Astro.locals.user;
-if (!currentUser || currentUser.rol !== 'admin') {
+const auth = Astro.locals.auth;
+if (!currentUser || !auth || auth.role !== 'admin') {
   return Astro.redirect('/');
 }
 
-const tenantId = currentUser.tenant_id;
+const tenantId = auth.tenantId;
 
 const listed = await listUsersForInstitutionAdmin(currentUser);
 const docentes = listed.ok ? listed.users : [];

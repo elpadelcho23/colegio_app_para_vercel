@@ -69,16 +69,6 @@ function newMembershipId() {
   return `mem-${randomBytes(10).toString('hex')}`;
 }
 
-function assertActorCanManageTenant(actor: User | null | undefined, tenantId: string): MembershipWriteResult | null {
-  if (!actor || actor.rol !== 'admin') {
-    return { ok: false, error: 'Requiere rol admin.', code: 'forbidden' };
-  }
-  if (actor.tenant_id !== tenantId) {
-    return { ok: false, error: 'No puede administrar memberships de otra institución.', code: 'forbidden' };
-  }
-  return null;
-}
-
 export async function getMembershipByUserAndTenant(
   userId: string,
   tenantId: string,
@@ -96,9 +86,16 @@ export async function getActiveMembership(
   userId: string,
   tenantId: string,
 ): Promise<InstitutionMembership | null> {
-  const membership = await getMembershipByUserAndTenant(userId, tenantId);
-  if (!membership || membership.status !== 'active') return null;
-  return membership;
+  if (!userId || !tenantId) return null;
+  const row = (await db.prepare(`
+    SELECT ${MEMBERSHIP_SELECT}
+    FROM institution_memberships
+    WHERE user_id = ?
+      AND tenant_id = ?
+      AND status = 'active'
+      AND (revoked_at IS NULL OR revoked_at = '')
+  `).get(userId, tenantId)) as Record<string, unknown> | undefined;
+  return mapMembership(row);
 }
 
 export async function getUserMemberships(
@@ -125,10 +122,12 @@ export async function getUserMemberships(
 
 /**
  * Lista memberships de la institución del admin autenticado.
- * El tenant_id SIEMPRE sale de actor.tenant_id (nunca del cliente).
+ * El tenant_id SIEMPRE sale del AuthContext (nunca del cliente).
  */
 export async function listMembershipsForInstitutionAdmin(actor: User) {
-  if (!actor || actor.rol !== 'admin') {
+  const { resolveAuthContext } = await import('./auth-context');
+  const ctx = await resolveAuthContext(actor);
+  if (!ctx || ctx.role !== 'admin') {
     return { ok: false as const, error: 'Requiere rol admin.', code: 'forbidden' as const, memberships: [] as InstitutionMembership[] };
   }
 
@@ -137,7 +136,7 @@ export async function listMembershipsForInstitutionAdmin(actor: User) {
     FROM institution_memberships
     WHERE tenant_id = ?
     ORDER BY created_at DESC
-  `).all(actor.tenant_id)) as Array<Record<string, unknown>>;
+  `).all(ctx.tenantId)) as Array<Record<string, unknown>>;
 
   return {
     ok: true as const,
@@ -166,8 +165,11 @@ export async function createMembership(
   }
 
   if (!options.system) {
-    const denied = assertActorCanManageTenant(options.actor, tenantId);
-    if (denied) return denied;
+    const { resolveAuthContext } = await import('./auth-context');
+    const ctx = await resolveAuthContext(options.actor);
+    if (!ctx || ctx.role !== 'admin' || ctx.tenantId !== tenantId) {
+      return { ok: false, error: 'No puede administrar memberships de otra institución.', code: 'forbidden' };
+    }
   }
 
   const userRow = (await db.prepare(`
@@ -224,8 +226,11 @@ export async function revokeMembership(
   options: { actor?: User; system?: boolean } = {},
 ): Promise<MembershipWriteResult> {
   if (!options.system) {
-    const denied = assertActorCanManageTenant(options.actor, tenantId);
-    if (denied) return denied;
+    const { resolveAuthContext } = await import('./auth-context');
+    const ctx = await resolveAuthContext(options.actor);
+    if (!ctx || ctx.role !== 'admin' || ctx.tenantId !== tenantId) {
+      return { ok: false, error: 'No puede administrar memberships de otra institución.', code: 'forbidden' };
+    }
   }
 
   const existing = await getMembershipByUserAndTenant(userId, tenantId);

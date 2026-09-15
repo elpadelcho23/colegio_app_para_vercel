@@ -5,37 +5,35 @@ import {
   updateTenant,
   type TenantUpdateInput,
 } from '../../../server/tenant';
+import { isInstitutionAdmin } from '../../../server/auth-context';
 
 /**
  * GET: datos + stats de la institución del admin autenticado.
- * El tenant se resuelve SIEMPRE desde la sesión (actor.tenant_id), no desde query.
+ * El tenant se resuelve SIEMPRE desde AuthContext, no desde query.
  */
 export const GET: APIRoute = async ({ locals, url }) => {
   const user = locals.user;
-  if (!user || user.rol !== 'admin') {
+  const auth = locals.auth;
+  if (!user || !isInstitutionAdmin(auth)) {
     return Response.json({ error: 'Requiere rol admin.' }, { status: 403 });
   }
 
-  // Ignorar intentos de leer otro tenant vía ?id= / ?tenantId=
   const requestedId = url.searchParams.get('id') || url.searchParams.get('tenantId');
-  if (requestedId && requestedId !== user.tenant_id) {
+  if (requestedId && requestedId !== auth!.tenantId) {
     return Response.json({ error: 'No puede consultar otra institución.' }, { status: 403 });
   }
 
-  const tenant = await getTenantById(user.tenant_id);
+  const tenant = await getTenantById(auth!.tenantId);
   if (!tenant) return Response.json({ error: 'Institución no encontrada.' }, { status: 404 });
 
-  const stats = await getTenantStats(user.tenant_id);
+  const stats = await getTenantStats(auth!.tenantId);
   return Response.json({ tenant, stats });
 };
 
-/**
- * POST/PATCH: actualizar datos institucionales del propio tenant.
- * Cualquier id enviado en el body distinto al del admin se rechaza.
- */
 async function handleUpdate({ request, locals }: { request: Request; locals: App.Locals }) {
   const user = locals.user;
-  if (!user || user.rol !== 'admin') {
+  const auth = locals.auth;
+  if (!user || !isInstitutionAdmin(auth)) {
     return Response.json({ error: 'Requiere rol admin.' }, { status: 403 });
   }
 
@@ -48,8 +46,8 @@ async function handleUpdate({ request, locals }: { request: Request; locals: App
     body = Object.fromEntries(form.entries());
   }
 
-  const requestedId = String(body.id || body.tenantId || body.tenant_id || user.tenant_id);
-  if (requestedId !== user.tenant_id) {
+  const requestedId = String(body.id || body.tenantId || body.tenant_id || auth!.tenantId);
+  if (requestedId !== auth!.tenantId) {
     return Response.json({ error: 'No puede modificar otra institución.' }, { status: 403 });
   }
 
@@ -62,7 +60,7 @@ async function handleUpdate({ request, locals }: { request: Request; locals: App
   if ('logo_url' in body) input.logo_url = body.logo_url == null ? null : String(body.logo_url);
   if ('status' in body) input.status = body.status as TenantUpdateInput['status'];
 
-  const result = await updateTenant(user.tenant_id, input, { actor: user });
+  const result = await updateTenant(auth!.tenantId, input, { actor: user });
   if (!result.ok) {
     const status = result.code === 'forbidden' ? 403
       : result.code === 'not_found' ? 404

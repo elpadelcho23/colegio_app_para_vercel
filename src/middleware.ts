@@ -1,5 +1,9 @@
 import { defineMiddleware } from 'astro:middleware';
 import { getUserFromToken, SESSION_COOKIE } from './server/auth';
+import {
+  applyAuthContextToUser,
+  resolveAuthContext,
+} from './server/auth-context';
 import { SESSION_PASSPORT_COOKIE, rehydrateUserFromPassport } from './server/guest-passport';
 import { startBackupScheduler } from './server/backup';
 import { ensureDbReady } from './server/db';
@@ -53,14 +57,21 @@ export const onRequest = defineMiddleware(async (context, next) => {
   await ensureDbReady();
 
   const token = context.cookies.get(SESSION_COOKIE)?.value;
-  let user = await getUserFromToken(token);
-  if (!user && token) {
+  let rawUser = await getUserFromToken(token);
+  if (!rawUser && token) {
     const passport =
       context.cookies.get(SESSION_PASSPORT_COOKIE)?.value
       || context.cookies.get('aula_clara_guest_passport')?.value;
-    user = await rehydrateUserFromPassport(token, passport);
+    // Rehydrate recrea filas desde Passport, pero la autoridad sigue siendo DB/membership.
+    rawUser = await rehydrateUserFromPassport(token, passport);
   }
+
+  // Membership (o guest-legacy) se revalida en DB en cada request.
+  const auth = rawUser ? await resolveAuthContext(rawUser) : null;
+  const user = rawUser && auth ? applyAuthContextToUser(rawUser, auth) : rawUser;
+
   context.locals.user = user;
+  context.locals.auth = auth;
 
   const path = context.url.pathname;
   const isProtectedApi = path.startsWith('/api/') && !isPublicApi(path);
@@ -75,11 +86,21 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect('/login');
   }
 
-  if (user && (path === '/login' || path === '/register')) {
+  // Sesión presente pero sin AuthContext válido (membership revoked/missing, tenant suspended).
+  // Guests siempre resuelven guest-legacy si el user es válido.
+  if (user && !auth && (isProtectedApi || (isProtectedPage && !isPublicPage(path)))) {
+    if (isProtectedApi) {
+      return Response.json({ error: 'Sin acceso institucional', code: 'no_auth_context' }, { status: 403 });
+    }
+    return context.redirect('/login?membership=0');
+  }
+
+  // Login/register: solo redirigir al panel si hay contexto válido.
+  if (user && auth && (path === '/login' || path === '/register')) {
     return context.redirect('/');
   }
 
-  if (isAdminArea && user?.rol !== 'admin') {
+  if (isAdminArea && auth?.role !== 'admin') {
     return Response.json({ error: 'Requiere rol admin' }, { status: 403 });
   }
 
