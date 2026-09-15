@@ -2,7 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import { listBackups } from '../../server/backup';
 import { db } from '../../server/db';
-import { listUsersForInstitutionAdmin } from '../../server/tenant';
+import { listTeachersForInstitutionAdmin } from '../../server/institution-teachers';
 
 const currentUser = Astro.locals.user;
 const auth = Astro.locals.auth;
@@ -12,8 +12,8 @@ if (!currentUser || !auth || auth.role !== 'admin') {
 
 const tenantId = auth.tenantId;
 
-const listed = await listUsersForInstitutionAdmin(currentUser);
-const docentes = listed.ok ? listed.users : [];
+const listed = await listTeachersForInstitutionAdmin(currentUser);
+const teachers = listed.ok ? listed.teachers : [];
 
 const cursos = (await db.prepare(`
   SELECT id, escuela, nombre, turno
@@ -30,6 +30,24 @@ const materias = (await db.prepare(`
 `).all(tenantId)) as Array<{ id: string; nombre: string }>;
 
 const backups = listBackups();
+
+const flashOk = Astro.url.searchParams.get('ok');
+const flashError = Astro.url.searchParams.get('error');
+const flashMessage = flashOk === 'teacher'
+  ? 'Docente agregado correctamente.'
+  : flashOk === 'revoked'
+    ? 'Membership de docente revocada.'
+    : flashOk === 'reactivated'
+      ? 'Docente reactivado.'
+      : flashError === 'conflict'
+        ? 'Ese email ya pertenece activamente a esta institución.'
+        : flashError === 'needs_reactivation'
+          ? 'Ese docente ya tiene membership revocada: usá Reactivar.'
+          : flashError === 'validation'
+            ? 'Datos inválidos. Revisá nombre, email y contraseña.'
+            : flashError
+              ? 'No se pudo completar la operación.'
+              : null;
 ---
 
 <Layout title="Administración">
@@ -37,17 +55,23 @@ const backups = listBackups();
     <header class="page-header">
       <div>
         <p class="eyebrow">Administración institucional</p>
-        <h1>Usuarios y respaldos</h1>
-        <p>Alta controlada de profesores, asignación pedagógica y resguardo de base de datos.</p>
+        <h1>Docentes y respaldos</h1>
+        <p>Gestión de docentes de tu institución: alta, estado, revocación y reactivación.</p>
       </div>
       <a class="btn btn-secondary" href="/">Volver al panel</a>
     </header>
 
+    {flashMessage && (
+      <p class={`notice ${flashError ? 'notice-error' : 'notice-ok'}`} role="status">
+        {flashMessage}
+      </p>
+    )}
+
     <section class="grid-2">
-      <form class="panel form-grid" method="post" action="/api/admin/register-teacher">
+      <form class="panel form-grid" method="post" action="/api/admin/teachers">
         <div class="section-title span-2">
-          <h2>Registrar profesor</h2>
-          <p>El registro es administrado: solo un admin puede crear usuarios docentes.</p>
+          <h2>Agregar docente</h2>
+          <p>Se crea en tu institución (sin tenant nuevo). Si omitís la contraseña, se envía un enlace de restablecimiento.</p>
         </div>
         <label>
           <span>Nombre</span>
@@ -58,8 +82,8 @@ const backups = listBackups();
           <input type="email" name="email" required />
         </label>
         <label class="span-2">
-          <span>Contraseña temporal</span>
-          <input type="password" name="password" minlength="5" required />
+          <span>Contraseña temporal (opcional)</span>
+          <input type="password" name="password" minlength="5" autocomplete="new-password" />
         </label>
         <fieldset class="span-2 checkbox-grid">
           <legend>Cursos asignados</legend>
@@ -79,26 +103,57 @@ const backups = listBackups();
             </label>
           ))}
         </fieldset>
-        <button class="btn btn-primary span-2" type="submit">Crear profesor</button>
+        <button class="btn btn-primary span-2" type="submit">Agregar docente</button>
       </form>
 
       <div class="panel">
         <div class="section-title">
-          <h2>Usuarios</h2>
-          <p>Lista de cuentas de esta institución.</p>
+          <h2>Docentes de la institución</h2>
+          <p>Memberships con rol docente en tu tenant activo.</p>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cuenta</th></tr>
+              <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Estado</th>
+                <th>Alta</th>
+                <th>Acción</th>
+              </tr>
             </thead>
             <tbody>
-              {docentes.map((docente) => (
+              {teachers.length === 0 && (
                 <tr>
-                  <td data-label="Nombre">{docente.nombre}</td>
-                  <td data-label="Email">{docente.email}</td>
-                  <td data-label="Rol"><span class="tag">{docente.rol}</span></td>
-                  <td data-label="Cuenta">{docente.tenant}</td>
+                  <td colspan="5">Todavía no hay docentes en esta institución.</td>
+                </tr>
+              )}
+              {teachers.map((teacher) => (
+                <tr>
+                  <td data-label="Nombre">{teacher.nombre}</td>
+                  <td data-label="Email">{teacher.email}</td>
+                  <td data-label="Estado">
+                    <span class={`tag ${teacher.status === 'active' ? 'tag-ok' : 'tag-muted'}`}>
+                      {teacher.status}
+                    </span>
+                    {teacher.revoked_at && (
+                      <span class="muted-inline"> · revocado {new Date(teacher.revoked_at).toLocaleDateString('es-AR')}</span>
+                    )}
+                  </td>
+                  <td data-label="Alta">{teacher.created_at ? new Date(teacher.created_at).toLocaleDateString('es-AR') : '—'}</td>
+                  <td data-label="Acción">
+                    {teacher.status === 'active' ? (
+                      <form method="post" action="/api/admin/teachers/revoke" onsubmit="return confirm('¿Revocar acceso de este docente a la institución?')">
+                        <input type="hidden" name="membershipId" value={teacher.membershipId} />
+                        <button class="btn btn-danger" type="submit">Revocar</button>
+                      </form>
+                    ) : (
+                      <form method="post" action="/api/admin/teachers/reactivate">
+                        <input type="hidden" name="membershipId" value={teacher.membershipId} />
+                        <button class="btn btn-secondary" type="submit">Reactivar</button>
+                      </form>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -140,3 +195,30 @@ const backups = listBackups();
     </section>
   </main>
 </Layout>
+
+<style>
+  .notice {
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+    border: 1px solid transparent;
+  }
+  .notice-ok {
+    background: color-mix(in srgb, var(--color-primary, #226c5f) 12%, white);
+    border-color: color-mix(in srgb, var(--color-primary, #226c5f) 28%, white);
+  }
+  .notice-error {
+    background: color-mix(in srgb, #b42318 10%, white);
+    border-color: color-mix(in srgb, #b42318 28%, white);
+  }
+  .tag-ok {
+    background: color-mix(in srgb, var(--color-primary, #226c5f) 16%, white);
+  }
+  .tag-muted {
+    opacity: 0.8;
+  }
+  .muted-inline {
+    color: var(--color-muted, #667);
+    font-size: 0.85em;
+  }
+</style>
