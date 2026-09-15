@@ -37,3 +37,4 @@ pnpm-debug.log*
 aula-clara*
 .vercel
 .env*
+.data/
