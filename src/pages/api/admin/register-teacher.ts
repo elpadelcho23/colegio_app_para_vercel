@@ -7,7 +7,8 @@ import { validateEmailFormat } from '../../../server/auth-email';
 
 export const POST: APIRoute = async ({ request, redirect, locals }) => {
   const admin = locals.user;
-  if (!admin || admin.rol !== 'admin') {
+  const auth = locals.auth;
+  if (!admin || !auth || auth.role !== 'admin') {
     return Response.json({ error: 'Requiere rol admin.' }, { status: 403 });
   }
 
@@ -25,9 +26,8 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   const exists = await db.prepare('SELECT id FROM usuarios WHERE lower(email) = lower(?)').get(email);
   if (exists) return Response.json({ error: 'El email ya esta registrado.' }, { status: 409 });
 
-  // Fase 2: el docente pertenece al mismo tenant del admin institucional.
-  // No se crea un tenant nuevo ni memberships (eso es fase posterior).
-  const tenantId = admin.tenant_id;
+  // Tenant del AuthContext (membership), nunca del cliente.
+  const tenantId = auth.tenantId;
 
   const allowedCourses = new Set(
     ((await db.prepare('SELECT id FROM cursos WHERE tenant_id = ?').all(tenantId)) as Array<{ id: string }>)

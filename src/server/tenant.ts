@@ -144,11 +144,12 @@ export async function updateTenant(
   input: TenantUpdateInput,
   options: { actor: User },
 ): Promise<TenantUpdateResult> {
-  const actor = options.actor;
-  if (!actor || actor.rol !== 'admin') {
+  const { resolveAuthContext } = await import('./auth-context');
+  const ctx = await resolveAuthContext(options.actor);
+  if (!ctx || ctx.role !== 'admin') {
     return { ok: false, error: 'Requiere rol admin.', code: 'forbidden' };
   }
-  if (actor.tenant_id !== tenantId) {
+  if (ctx.tenantId !== tenantId) {
     return { ok: false, error: 'No puede modificar otra institución.', code: 'forbidden' };
   }
 
@@ -273,10 +274,12 @@ export async function getTenantStats(tenantId: string): Promise<TenantStats | nu
 
 /**
  * Lista usuarios del tenant del admin autenticado.
- * Nunca acepta un tenant_id externo: siempre usa actor.tenant_id.
+ * Nunca acepta un tenant_id externo: siempre usa AuthContext del actor.
  */
 export async function listUsersForInstitutionAdmin(actor: User) {
-  if (!actor || actor.rol !== 'admin') {
+  const { resolveAuthContext } = await import('./auth-context');
+  const ctx = await resolveAuthContext(actor);
+  if (!ctx || ctx.role !== 'admin') {
     return { ok: false as const, error: 'Requiere rol admin.', code: 'forbidden' as const, users: [] };
   }
 
@@ -293,7 +296,7 @@ export async function listUsersForInstitutionAdmin(actor: User) {
     LEFT JOIN tenants ON tenants.id = usuarios.tenant_id
     WHERE usuarios.tenant_id = ?
     ORDER BY usuarios.created_at DESC
-  `).all(actor.tenant_id)) as Array<{
+  `).all(ctx.tenantId)) as Array<{
     id: string;
     nombre: string;
     email: string;

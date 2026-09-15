@@ -1,4 +1,5 @@
 import { db, type User } from './db';
+import { resolveAuthContext } from './auth-context';
 
 export interface CourseSeed {
   id: string;
@@ -25,21 +26,25 @@ async function subjectOwnedByOtherTenant(subjectId: string, tenantId: string) {
 }
 
 export async function ensureDocenteCourseAccess(user: User, course: CourseSeed): Promise<string | null> {
-  if (user.rol === 'admin') return null;
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return 'No autorizado.';
   if (!course.id) return 'Curso inválido.';
 
-  if (await courseOwnedByOtherTenant(course.id, user.tenant_id)) {
+  // Primero aislamiento de tenant (también para admin).
+  if (await courseOwnedByOtherTenant(course.id, ctx.tenantId)) {
     return 'Este curso pertenece a otra cuenta.';
   }
+
+  if (ctx.role === 'admin') return null;
 
   const linked = await db.prepare(`
     SELECT 1
     FROM docente_cursos
     WHERE tenant_id = ? AND docente_id = ? AND curso_id = ?
-  `).get(user.tenant_id, user.id, course.id);
+  `).get(ctx.tenantId, user.id, course.id);
   if (linked) return null;
 
-  const existing = await db.prepare('SELECT id FROM cursos WHERE id = ? AND tenant_id = ?').get(course.id, user.tenant_id);
+  const existing = await db.prepare('SELECT id FROM cursos WHERE id = ? AND tenant_id = ?').get(course.id, ctx.tenantId);
   const updatedAt = new Date().toISOString();
 
   if (!existing) {
@@ -55,7 +60,7 @@ export async function ensureDocenteCourseAccess(user: User, course: CourseSeed):
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       course.id,
-      user.tenant_id,
+      ctx.tenantId,
       escuela,
       nombre,
       turno,
@@ -67,27 +72,30 @@ export async function ensureDocenteCourseAccess(user: User, course: CourseSeed):
   await db.prepare(`
     INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id)
     VALUES (?, ?, ?)
-  `).run(user.tenant_id, user.id, course.id);
+  `).run(ctx.tenantId, user.id, course.id);
 
   return null;
 }
 
 export async function ensureDocenteSubjectAccess(user: User, subject: SubjectSeed): Promise<string | null> {
-  if (user.rol === 'admin') return null;
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return 'No autorizado.';
   if (!subject.id) return 'Materia inválida.';
 
-  if (await subjectOwnedByOtherTenant(subject.id, user.tenant_id)) {
+  if (await subjectOwnedByOtherTenant(subject.id, ctx.tenantId)) {
     return 'Esta materia pertenece a otra cuenta.';
   }
+
+  if (ctx.role === 'admin') return null;
 
   const linked = await db.prepare(`
     SELECT 1
     FROM docente_materias
     WHERE tenant_id = ? AND docente_id = ? AND materia_id = ?
-  `).get(user.tenant_id, user.id, subject.id);
+  `).get(ctx.tenantId, user.id, subject.id);
   if (linked) return null;
 
-  const existing = await db.prepare('SELECT id FROM materias WHERE id = ? AND tenant_id = ?').get(subject.id, user.tenant_id);
+  const existing = await db.prepare('SELECT id FROM materias WHERE id = ? AND tenant_id = ?').get(subject.id, ctx.tenantId);
   const updatedAt = new Date().toISOString();
 
   if (!existing) {
@@ -99,13 +107,13 @@ export async function ensureDocenteSubjectAccess(user: User, subject: SubjectSee
     await db.prepare(`
       INSERT INTO materias (id, tenant_id, nombre, activo, updated_at)
       VALUES (?, ?, ?, ?, ?)
-    `).run(subject.id, user.tenant_id, nombre, subject.activo === false ? 0 : 1, updatedAt);
+    `).run(subject.id, ctx.tenantId, nombre, subject.activo === false ? 0 : 1, updatedAt);
   }
 
   await db.prepare(`
     INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id)
     VALUES (?, ?, ?)
-  `).run(user.tenant_id, user.id, subject.id);
+  `).run(ctx.tenantId, user.id, subject.id);
 
   return null;
 }

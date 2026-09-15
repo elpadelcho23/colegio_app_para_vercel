@@ -1,23 +1,30 @@
 import { db, type User } from './db';
+import { resolveAuthContext } from './auth-context';
 import { recoveredDisplayName } from '../lib/record-display-name';
 
 /**
- * Filtro estricto por sesión: tenant siempre; docente_id cuando la tabla lo tiene.
- * Nunca confiar en IDs del cliente — solo `user` de la sesión autenticada.
+ * Filtro estricto por AuthContext: tenant siempre; docente_id cuando la tabla lo tiene.
+ * Nunca confiar en IDs del cliente — solo sesión autenticada + membership.
  */
-function tenantFilter(user: User, table: string) {
-  if (user.rol === 'admin') {
-    return { clause: `WHERE ${table}.tenant_id = @tenant_id`, params: { tenant_id: user.tenant_id } };
+function tenantFilter(tenantId: string, docenteId: string, role: 'admin' | 'docente', table: string) {
+  if (role === 'admin') {
+    return { clause: `WHERE ${table}.tenant_id = @tenant_id`, params: { tenant_id: tenantId } };
   }
   return {
     clause: `WHERE ${table}.tenant_id = @tenant_id AND ${table}.docente_id = @docente_id`,
-    params: { tenant_id: user.tenant_id, docente_id: user.id },
+    params: { tenant_id: tenantId, docente_id: docenteId },
   };
 }
 
 export async function pullClientData(user: User) {
-  const { tenant_id: tenantId, id: docenteId } = user;
-  const isAdmin = user.rol === 'admin';
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) {
+    throw new Error('Sin acceso institucional');
+  }
+
+  const tenantId = ctx.tenantId;
+  const docenteId = user.id;
+  const isAdmin = ctx.role === 'admin';
 
   const courses = (await (isAdmin
     ? db.prepare(`
@@ -156,7 +163,7 @@ export async function pullClientData(user: User) {
     }
   }
 
-  const attendanceFilter = tenantFilter(user, 'asistencias');
+  const attendanceFilter = tenantFilter(tenantId, docenteId, ctx.role, 'asistencias');
   const attendance = (await db.prepare(`
     SELECT id, alumno_id AS studentId, materia_id AS subjectId, fecha, estado, updated_at AS updatedAt
     FROM asistencias
@@ -170,7 +177,7 @@ export async function pullClientData(user: User) {
     updatedAt: string;
   }>;
 
-  const gradesFilter = tenantFilter(user, 'notas');
+  const gradesFilter = tenantFilter(tenantId, docenteId, ctx.role, 'notas');
   const grades = (await db.prepare(`
     SELECT
       id,
