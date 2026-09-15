@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { db, type User } from './db';
 
 export async function getActividadForUser(user: User, actividadId: string) {
+  const { resolveAuthorizedUser } = await import('./auth-context');
+  const effective = await resolveAuthorizedUser(user);
+  if (!effective) return undefined;
+
   const row = (await db.prepare(`
     SELECT
       actividades.id,
@@ -20,11 +24,11 @@ export async function getActividadForUser(user: User, actividadId: string) {
     FROM actividades
     WHERE actividades.id = ?
       AND actividades.tenant_id = ?
-      ${user.rol === 'admin' ? '' : 'AND actividades.docente_id = ?'}
+      ${effective.rol === 'admin' ? '' : 'AND actividades.docente_id = ?'}
   `).get(
     actividadId,
-    user.tenant_id,
-    ...(user.rol === 'admin' ? [] : [user.id]),
+    effective.tenant_id,
+    ...(effective.rol === 'admin' ? [] : [effective.id]),
   )) as Record<string, string> | undefined;
 
   return row;

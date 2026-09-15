@@ -1464,6 +1464,11 @@ function docenteScopeClause(alias = 'c') {
 export async function getCourseViewSnapshot(user: User, filters: CourseViewFilters): Promise<CourseViewSnapshot | null> {
   if (!filters.subjectId) return null;
 
+  // Defensa en profundidad: no confiar en usuarios.rol crudo (drift vs membership).
+  const { resolveAuthorizedUser } = await import('./auth-context');
+  const effective = await resolveAuthorizedUser(user);
+  if (!effective) return null;
+
   const courseFilter = filters.courseId
     ? 'AND c.id = @course_id'
     : filters.courseKey
@@ -1473,7 +1478,7 @@ export async function getCourseViewSnapshot(user: User, filters: CourseViewFilte
   if (!filters.courseId && !filters.courseKey) return null;
 
   const parsedKey = filters.courseKey ? parseCourseKey(filters.courseKey) : null;
-  const permissionClause = user.rol === 'admin' ? '' : docenteScopeClause();
+  const permissionClause = effective.rol === 'admin' ? '' : docenteScopeClause();
 
   const rows = (await db.prepare(`
     SELECT
@@ -1512,20 +1517,20 @@ export async function getCourseViewSnapshot(user: User, filters: CourseViewFilte
       ON n.alumno_id = a.id
      AND n.materia_id = m.id
      AND n.tenant_id = c.tenant_id
-     ${user.rol === 'admin' ? '' : 'AND n.docente_id = @docente_id'}
+     ${effective.rol === 'admin' ? '' : 'AND n.docente_id = @docente_id'}
     LEFT JOIN asistencias ast
       ON ast.alumno_id = a.id
      AND ast.materia_id = m.id
      AND ast.tenant_id = c.tenant_id
-     ${user.rol === 'admin' ? '' : 'AND ast.docente_id = @docente_id'}
+     ${effective.rol === 'admin' ? '' : 'AND ast.docente_id = @docente_id'}
     WHERE c.tenant_id = @tenant_id
       AND m.id = @subject_id
       ${courseFilter}
       ${permissionClause}
     ORDER BY a.nombre, n.fecha DESC, ast.fecha DESC
   `).all({
-    tenant_id: user.tenant_id,
-    docente_id: user.id,
+    tenant_id: effective.tenant_id,
+    docente_id: effective.id,
     course_id: filters.courseId || null,
     escuela: parsedKey?.escuela || null,
     curso_nombre: parsedKey?.curso_nombre || null,

@@ -99,7 +99,9 @@ const cicloOptionalFilter = cicloLectivoOptionalCourseFilter('cursos', 'base', '
 
 export const GET: APIRoute = async ({ locals, url }) => {
   const user = locals.user;
+  const auth = locals.auth;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+  if (!auth) return Response.json({ error: 'Sin acceso institucional' }, { status: 403 });
 
   const currentScope = scope(user);
   const params = filters(url, user);
@@ -286,7 +288,9 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
 export const POST: APIRoute = async ({ locals, request }) => {
   const user = locals.user;
+  const auth = locals.auth;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+  if (!auth) return Response.json({ error: 'Sin acceso institucional' }, { status: 403 });
 
   const body = await request.json().catch(() => null);
 

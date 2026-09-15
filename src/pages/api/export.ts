@@ -23,6 +23,7 @@ function sanitizeExportRows(rows: ExportRow[]): ExportRow[] {
 }
 
 function docenteCourseClause(user: User) {
+  // user.rol debe venir de AuthContext (middleware overlay / resolveAuthorizedUser).
   if (user.rol === 'admin') {
     return 'AND cursos.tenant_id = @tenant_id';
   }
@@ -116,15 +117,17 @@ function addWorksheet(workbook: ExcelJS.Workbook, name: string, rows: ExportRow[
 
 export const GET: APIRoute = async ({ locals, url }) => {
   const user = locals.user;
+  const auth = locals.auth;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+  if (!auth) return Response.json({ error: 'Sin acceso institucional' }, { status: 403 });
 
   const params = buildParams(url, user);
   const exportType = parseExportType(url.searchParams.get('type'));
   const coursePermission = docenteCourseClause(user);
-  const attendanceTenantFilter = user.rol === 'admin'
+  const attendanceTenantFilter = auth.role === 'admin'
     ? 'AND asistencias.tenant_id = @tenant_id'
     : 'AND asistencias.tenant_id = @tenant_id AND asistencias.docente_id = @docente_id';
-  const gradeTenantFilter = user.rol === 'admin'
+  const gradeTenantFilter = auth.role === 'admin'
     ? 'AND notas.tenant_id = @tenant_id'
     : 'AND notas.tenant_id = @tenant_id AND notas.docente_id = @docente_id';
 
@@ -248,7 +251,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
         AND valor IS NOT NULL
         AND fecha BETWEEN @desde AND @hasta
         AND (@materia_id IS NULL OR materia_id = @materia_id)
-        ${user.rol === 'admin' ? 'AND tenant_id = @tenant_id' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
+        ${auth.role === 'admin' ? 'AND tenant_id = @tenant_id' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
     `).all({ ...params, alumno_id: alumno.id })) as Array<{ valor: number; peso: number }>;
 
     const attendanceRows = (await db.prepare(`
@@ -257,7 +260,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       WHERE alumno_id = @alumno_id
         AND fecha BETWEEN @desde AND @hasta
         AND (@materia_id IS NULL OR materia_id = @materia_id)
-        ${user.rol === 'admin' ? 'AND tenant_id = @tenant_id' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
+        ${auth.role === 'admin' ? 'AND tenant_id = @tenant_id' : 'AND tenant_id = @tenant_id AND docente_id = @docente_id'}
     `).all({ ...params, alumno_id: alumno.id })) as Array<{ estado: string }>;
 
     const totalPeso = grades.reduce((acc, grade) => acc + Number(grade.peso || 100), 0);

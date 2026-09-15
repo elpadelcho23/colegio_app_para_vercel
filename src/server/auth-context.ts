@@ -3,12 +3,14 @@ import { getActiveMembership, type MembershipRole } from './memberships';
 import { getTenantById } from './tenant';
 
 /**
- * Fase 4B — AuthContext (single-context).
+ * Fase 4B/4C — AuthContext (single-context).
  *
  * - No-guest: autoridad = membership active para (user.id, user.tenant_id).
  * - Guest: legacy usuarios.tenant_id / usuarios.rol.
  * - Sin fallback de seguridad ante membership faltante/revocada o drift.
  * - usuarios.tenant_id solo identifica el contexto institucional actual (compat).
+ * - usuarios.rol es cache/legacy: NUNCA autoriza por sí solo para no-guest.
+ *   Middleware aplica applyAuthContextToUser() para que handlers vean membership.role.
  */
 
 export type AuthContextSource = 'membership' | 'guest-legacy';
@@ -105,6 +107,17 @@ export function applyAuthContextToUser(user: User, context: AuthContext): User {
     tenant_id: context.tenantId,
     rol: context.role,
   };
+}
+
+/**
+ * Resuelve AuthContext y devuelve User con rol/tenant efectivos.
+ * null = sin acceso institucional (membership inválida / tenant suspended / etc.).
+ */
+export async function resolveAuthorizedUser(user: User | null | undefined): Promise<User | null> {
+  if (!user) return null;
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return null;
+  return applyAuthContextToUser(user, ctx);
 }
 
 export function isInstitutionAdmin(context: AuthContext | null | undefined): boolean {
