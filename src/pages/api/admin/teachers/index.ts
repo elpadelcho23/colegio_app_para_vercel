@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
-import { isInstitutionAdmin } from '../../../server/auth-context';
+import { isInstitutionAdmin } from '../../../../server/auth-context';
 import {
   addOrInviteTeacher,
   listTeachersForInstitutionAdmin,
   teacherWriteStatus,
-} from '../../../server/institution-teachers';
+} from '../../../../server/institution-teachers';
 
 /**
  * GET /api/admin/teachers — lista docentes de auth.tenantId (role=docente).
