@@ -58,5 +58,14 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   });
   await tx();
 
+  // Fase 3: sync membership (fuente de tenant sigue siendo usuarios.tenant_id).
+  const { ensureActiveMembershipForUser } = await import('../../../server/memberships');
+  await ensureActiveMembershipForUser({
+    id,
+    tenant_id: tenantId,
+    rol: 'docente',
+    is_guest: false,
+  });
+
   return redirect('/admin/usuarios', 303);
 };

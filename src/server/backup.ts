@@ -78,6 +78,7 @@ export async function restoreBackup(name: string) {
     'alumnos',
     'materias',
     'cursos',
+    'institution_memberships',
     'sessions',
     'usuarios',
     'tenants',
