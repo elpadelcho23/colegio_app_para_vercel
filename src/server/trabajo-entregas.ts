@@ -52,6 +52,10 @@ export async function listTrabajoEntregas(user: User, filters: {
   desde?: string | null;
   hasta?: string | null;
 }) {
+  const { resolveAuthorizedUser } = await import('./auth-context');
+  const effective = await resolveAuthorizedUser(user);
+  if (!effective) return [];
+
   const rows = (await db.prepare(`
     SELECT
       te.id,
@@ -81,7 +85,7 @@ export async function listTrabajoEntregas(user: User, filters: {
     LEFT JOIN alumnos ON alumnos.id = te.alumno_id
     LEFT JOIN actividades ON actividades.id = te.actividad_id
     WHERE te.tenant_id = @tenant_id
-      ${user.rol === 'admin' ? '' : 'AND te.docente_id = @docente_id'}
+      ${effective.rol === 'admin' ? '' : 'AND te.docente_id = @docente_id'}
       AND (@curso_id IS NULL OR te.curso_id = @curso_id)
       AND (@materia_id IS NULL OR te.materia_id = @materia_id)
       AND (@actividad_id IS NULL OR te.actividad_id = @actividad_id)
@@ -90,8 +94,8 @@ export async function listTrabajoEntregas(user: User, filters: {
       AND (@hasta IS NULL OR date(te.submitted_at) <= date(@hasta))
     ORDER BY te.submitted_at DESC
   `).all({
-    tenant_id: user.tenant_id,
-    docente_id: user.id,
+    tenant_id: effective.tenant_id,
+    docente_id: effective.id,
     curso_id: filters.cursoId || null,
     materia_id: filters.materiaId || null,
     actividad_id: filters.actividadId || null,
