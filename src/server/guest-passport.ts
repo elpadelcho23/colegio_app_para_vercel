@@ -119,13 +119,18 @@ export async function rehydrateUserFromPassport(
 
   const tx = db.transaction(async () => {
     await db.prepare(`
-      INSERT OR IGNORE INTO tenants (id, nombre)
-      VALUES (?, ?)
+      INSERT OR IGNORE INTO tenants (id, nombre, slug, status)
+      VALUES (?, ?, ?, 'active')
     `).run(
       passport.tenantId,
       isGuest
         ? `Invitado ${passport.userId.replace(/^guest-/, '')}`
         : `Cuenta ${passport.nombre || passport.email}`,
+      String(passport.tenantId)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || passport.tenantId,
     );
 
     await db.prepare(`

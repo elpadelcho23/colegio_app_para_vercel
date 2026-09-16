@@ -15,5 +15,7 @@ declare module 'virtual:pwa-register' {
 declare namespace App {
     interface Locals {
         user: import('./server/db').User | null;
+        /** Contexto de autorización membership-aware (Fase 4B). null = sin acceso institucional. */
+        auth: import('./server/auth-context').AuthContext | null;
     }
 }

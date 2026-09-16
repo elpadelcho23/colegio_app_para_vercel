@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { db, getUserById, type User } from './db';
+import { resolveAuthContext } from './auth-context';
 import {
   createSessionPassportCookieValue,
   SESSION_PASSPORT_COOKIE,
@@ -305,39 +306,67 @@ export function cookieOptions(url: URL) {
 }
 
 export async function canAccessStudent(user: User, studentId: string) {
-  if (user.rol === 'admin') return true;
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return false;
+
+  const student = (await db.prepare(`
+    SELECT id, tenant_id, curso_id FROM alumnos WHERE id = ?
+  `).get(studentId)) as { id: string; tenant_id: string; curso_id: string } | undefined;
+  if (!student || student.tenant_id !== ctx.tenantId) return false;
+
+  if (ctx.role === 'admin') return true;
+
   const row = await db.prepare(`
     SELECT alumnos.id
     FROM alumnos
     JOIN docente_cursos ON docente_cursos.curso_id = alumnos.curso_id
+      AND docente_cursos.tenant_id = alumnos.tenant_id
     WHERE alumnos.id = ?
       AND docente_cursos.docente_id = ?
       AND alumnos.tenant_id = ?
       AND docente_cursos.tenant_id = ?
-  `).get(studentId, user.id, user.tenant_id, user.tenant_id);
+  `).get(studentId, user.id, ctx.tenantId, ctx.tenantId);
   return Boolean(row);
 }
 
 export async function canAccessSubject(user: User, subjectId: string) {
-  if (user.rol === 'admin') return true;
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return false;
+
+  const subject = (await db.prepare(`
+    SELECT id, tenant_id FROM materias WHERE id = ?
+  `).get(subjectId)) as { id: string; tenant_id: string } | undefined;
+  if (!subject || subject.tenant_id !== ctx.tenantId) return false;
+
+  if (ctx.role === 'admin') return true;
+
   const row = await db.prepare(`
     SELECT materia_id
     FROM docente_materias
     WHERE materia_id = ?
       AND docente_id = ?
       AND tenant_id = ?
-  `).get(subjectId, user.id, user.tenant_id);
+  `).get(subjectId, user.id, ctx.tenantId);
   return Boolean(row);
 }
 
 export async function canAccessCourse(user: User, courseId: string) {
-  if (user.rol === 'admin') return true;
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return false;
+
+  const course = (await db.prepare(`
+    SELECT id, tenant_id FROM cursos WHERE id = ?
+  `).get(courseId)) as { id: string; tenant_id: string } | undefined;
+  if (!course || course.tenant_id !== ctx.tenantId) return false;
+
+  if (ctx.role === 'admin') return true;
+
   const row = await db.prepare(`
     SELECT curso_id
     FROM docente_cursos
     WHERE curso_id = ?
       AND docente_id = ?
       AND tenant_id = ?
-  `).get(courseId, user.id, user.tenant_id);
+  `).get(courseId, user.id, ctx.tenantId);
   return Boolean(row);
 }

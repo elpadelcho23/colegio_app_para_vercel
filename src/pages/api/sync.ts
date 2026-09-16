@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { canAccessCourse, canAccessStudent, canAccessSubject } from '../../server/auth';
+import { applyAuthContextToUser, resolveAuthContext } from '../../server/auth-context';
 import { db, type User } from '../../server/db';
 
 type SyncEntity = 'attendance' | 'student' | 'grade' | 'subject' | 'course' | 'school' | 'clientState';
@@ -97,16 +98,27 @@ type SyncApplyResult =
   | { status: 'synced'; ignoredOlderWrite?: boolean }
   | { status: 'error'; message: string };
 
-/** Siempre usa el tenant de la sesión; nunca confía en el payload del cliente. */
-function syncTenantId(user: User) {
-  return user.tenant_id;
+/** Tenant de autorización = AuthContext.tenantId (membership o guest-legacy). Nunca del payload. */
+async function syncTenantId(user: User): Promise<string | null> {
+  const ctx = await resolveAuthContext(user);
+  return ctx?.tenantId ?? null;
 }
 
-function rejectPayloadTenantMismatch(user: User, payload: unknown): string | null {
+async function syncAuth(user: User): Promise<{ tenantId: string; role: 'admin' | 'docente'; user: User } | null> {
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return null;
+  return {
+    tenantId: ctx.tenantId,
+    role: ctx.role,
+    user: applyAuthContextToUser(user, ctx),
+  };
+}
+
+function rejectPayloadTenantMismatch(sessionTenantId: string, payload: unknown): string | null {
   if (!payload || typeof payload !== 'object') return null;
   const item = payload as { tenantId?: unknown; tenant_id?: unknown };
   const claimed = item.tenantId ?? item.tenant_id;
-  if (claimed !== undefined && String(claimed) !== user.tenant_id) {
+  if (claimed !== undefined && String(claimed) !== sessionTenantId) {
     return 'El tenant del payload no coincide con la sesión.';
   }
   return null;
@@ -128,7 +140,10 @@ async function rejectForeignPrimaryKey(
 }
 
 async function resolveSyncDocenteId(user: User, payload: { docenteId: string }): Promise<string | { error: string }> {
-  if (payload.docenteId !== user.id && user.rol !== 'admin') {
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return { error: 'Sin acceso institucional.' };
+
+  if (payload.docenteId !== user.id && ctx.role !== 'admin') {
     return { error: 'La operacion pertenece a otro docente.' };
   }
 
@@ -139,7 +154,7 @@ async function resolveSyncDocenteId(user: User, payload: { docenteId: string }):
     FROM usuarios
     WHERE id = ?
       AND tenant_id = ?
-  `).get(payload.docenteId, user.tenant_id)) as { id: string } | undefined;
+  `).get(payload.docenteId, ctx.tenantId)) as { id: string } | undefined;
 
   if (!docente) {
     return { error: 'El docente no pertenece a esta institución.' };
@@ -169,15 +184,17 @@ function hasIdAndUpdatedAt(payload: unknown): payload is { id: string; docenteId
 }
 
 async function validateAttendancePermission(user: User, payload: AttendancePayload) {
-  if (user.rol !== 'admin' && payload.docenteId !== user.id) {
+  const auth = await syncAuth(user);
+  if (!auth) return 'Sin acceso institucional.';
+  if (auth.role !== 'admin' && payload.docenteId !== user.id) {
     return 'La operacion pertenece a otro docente.';
   }
 
-  if (!(await canAccessStudent(user, payload.studentId))) {
+  if (!(await canAccessStudent(auth.user, payload.studentId))) {
     return 'El docente no tiene permiso sobre este alumno.';
   }
 
-  if (!(await canAccessSubject(user, payload.subjectId))) {
+  if (!(await canAccessSubject(auth.user, payload.subjectId))) {
     return 'El docente no tiene permiso sobre esta materia.';
   }
 
@@ -186,10 +203,10 @@ async function validateAttendancePermission(user: User, payload: AttendancePaylo
 
 async function applyAttendance(operation: PendingOperation<AttendancePayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
-  const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
+  const tenantId = await syncTenantId(user);
+  if (!tenantId) return { status: 'error', message: 'Sin acceso institucional.' };
+  const tenantMismatch = rejectPayloadTenantMismatch(tenantId, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
-
-  const tenantId = syncTenantId(user);
   const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
@@ -242,11 +259,14 @@ async function validateDocentePayload(user: User, payload: { docenteId: string }
 
 async function applyStudent(operation: PendingOperation<StudentPayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
-  const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
+  const auth = await syncAuth(user);
+  if (!auth) return { status: 'error', message: 'Sin acceso institucional.' };
+  const tenantId = auth.tenantId;
+  const isAdmin = auth.role === 'admin';
+  const effective = auth.user;
+  const tenantMismatch = rejectPayloadTenantMismatch(tenantId, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
-
-  const tenantId = syncTenantId(user);
-  const docenteResult = await resolveSyncDocenteId(user, payload);
+  const docenteResult = await resolveSyncDocenteId(effective, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
 
@@ -254,7 +274,7 @@ async function applyStudent(operation: PendingOperation<StudentPayload>, user: U
     const existing = await db.prepare('SELECT id FROM alumnos WHERE id = ? AND tenant_id = ?')
       .get(payload.id, tenantId);
     if (!existing) return { status: 'error', message: 'Alumno no encontrado en esta institución.' };
-    if (user.rol !== 'admin' && !(await canAccessStudent(user, payload.id))) {
+    if (!isAdmin && !(await canAccessStudent(effective, payload.id))) {
       return { status: 'error', message: 'El docente no tiene permiso sobre este alumno.' };
     }
 
@@ -266,8 +286,8 @@ async function applyStudent(operation: PendingOperation<StudentPayload>, user: U
       WHERE tenant_id = ? AND alumno_id = ? AND (? = 1 OR docente_id = ?)
       LIMIT 1
     `).get(
-      tenantId, payload.id, user.rol === 'admin' ? 1 : 0, docenteId,
-      tenantId, payload.id, user.rol === 'admin' ? 1 : 0, docenteId,
+      tenantId, payload.id, isAdmin ? 1 : 0, docenteId,
+      tenantId, payload.id, isAdmin ? 1 : 0, docenteId,
     );
 
     if (hasDependencies) {
@@ -290,11 +310,11 @@ async function applyStudent(operation: PendingOperation<StudentPayload>, user: U
   if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
     return { status: 'synced', ignoredOlderWrite: true };
   }
-  if (existing && user.rol !== 'admin' && !(await canAccessStudent(user, payload.id))) {
+  if (existing && !isAdmin && !(await canAccessStudent(effective, payload.id))) {
     return { status: 'error', message: 'El docente no tiene permiso sobre este alumno.' };
   }
 
-  if (user.rol !== 'admin') {
+  if (!isAdmin) {
     const course = await db.prepare('SELECT curso_id FROM docente_cursos WHERE tenant_id = ? AND docente_id = ? AND curso_id = ?').get(tenantId, docenteId, payload.cursoId);
     if (!course) return { status: 'error', message: 'El docente no tiene permiso sobre el curso.' };
   }
@@ -304,7 +324,7 @@ async function applyStudent(operation: PendingOperation<StudentPayload>, user: U
     for (const subjectId of subjectIds) {
       const subjectInTenant = await db.prepare('SELECT id FROM materias WHERE id = ? AND tenant_id = ?').get(subjectId, tenantId);
       if (!subjectInTenant) return { status: 'error', message: 'Una materia no pertenece a esta institución.' };
-      if (user.rol !== 'admin' && !(await canAccessSubject(user, subjectId))) {
+      if (!isAdmin && !(await canAccessSubject(effective, subjectId))) {
         return { status: 'error', message: 'El docente no tiene permiso sobre una materia del alumno.' };
       }
     }
@@ -346,10 +366,10 @@ async function applyStudent(operation: PendingOperation<StudentPayload>, user: U
 
 async function applyCourse(operation: PendingOperation<CoursePayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
-  const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
+  const tenantId = await syncTenantId(user);
+  if (!tenantId) return { status: 'error', message: 'Sin acceso institucional.' };
+  const tenantMismatch = rejectPayloadTenantMismatch(tenantId, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
-
-  const tenantId = syncTenantId(user);
   const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
@@ -358,13 +378,13 @@ async function applyCourse(operation: PendingOperation<CoursePayload>, user: Use
     const existing = await db.prepare('SELECT id FROM cursos WHERE id = ? AND tenant_id = ?')
       .get(payload.id, tenantId);
     if (!existing) return { status: 'error', message: 'Curso no encontrado en esta institución.' };
-    if (user.rol !== 'admin' && !(await canAccessCourse(user, payload.id))) {
+    if ((await resolveAuthContext(user))?.role !== 'admin' && !(await canAccessCourse(user, payload.id))) {
       return { status: 'error', message: 'El docente no tiene permiso sobre este curso.' };
     }
 
     const hasStudents = await db.prepare('SELECT 1 FROM alumnos WHERE tenant_id = ? AND curso_id = ? LIMIT 1').get(tenantId, payload.id);
     if (hasStudents) return { status: 'error', message: 'El curso tiene alumnos vinculados.' };
-    if (user.rol === 'admin') {
+    if ((await resolveAuthContext(user))?.role === 'admin') {
       await db.prepare('DELETE FROM docente_cursos WHERE tenant_id = ? AND curso_id = ?').run(tenantId, payload.id);
       await db.prepare('DELETE FROM cursos WHERE tenant_id = ? AND id = ?').run(tenantId, payload.id);
     } else {
@@ -388,7 +408,7 @@ async function applyCourse(operation: PendingOperation<CoursePayload>, user: Use
   if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
     return { status: 'synced', ignoredOlderWrite: true };
   }
-  if (existing && user.rol !== 'admin' && !(await canAccessCourse(user, payload.id))) {
+  if (existing && (await resolveAuthContext(user))?.role !== 'admin' && !(await canAccessCourse(user, payload.id))) {
     return { status: 'error', message: 'El docente no tiene permiso sobre este curso.' };
   }
 
@@ -422,10 +442,10 @@ async function applyCourse(operation: PendingOperation<CoursePayload>, user: Use
 
 async function applyGrade(operation: PendingOperation<GradePayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
-  const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
+  const tenantId = await syncTenantId(user);
+  if (!tenantId) return { status: 'error', message: 'Sin acceso institucional.' };
+  const tenantMismatch = rejectPayloadTenantMismatch(tenantId, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
-
-  const tenantId = syncTenantId(user);
   const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
@@ -434,7 +454,7 @@ async function applyGrade(operation: PendingOperation<GradePayload>, user: User)
     const existing = await db.prepare('SELECT id FROM notas WHERE id = ? AND tenant_id = ?')
       .get(payload.id, tenantId);
     if (!existing) return { status: 'error', message: 'Nota no encontrada en esta institución.' };
-    await db.prepare('DELETE FROM notas WHERE id = ? AND tenant_id = ? AND (? = 1 OR docente_id = ?)').run(payload.id, tenantId, user.rol === 'admin' ? 1 : 0, docenteId);
+    await db.prepare('DELETE FROM notas WHERE id = ? AND tenant_id = ? AND (? = 1 OR docente_id = ?)').run(payload.id, tenantId, (await resolveAuthContext(user))?.role === 'admin' ? 1 : 0, docenteId);
     return { status: 'synced' };
   }
 
@@ -501,10 +521,10 @@ async function applyGrade(operation: PendingOperation<GradePayload>, user: User)
 
 async function applySubject(operation: PendingOperation<SubjectPayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
-  const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
+  const tenantId = await syncTenantId(user);
+  if (!tenantId) return { status: 'error', message: 'Sin acceso institucional.' };
+  const tenantMismatch = rejectPayloadTenantMismatch(tenantId, payload);
   if (tenantMismatch) return { status: 'error', message: tenantMismatch };
-
-  const tenantId = syncTenantId(user);
   const docenteResult = await resolveSyncDocenteId(user, payload);
   if (typeof docenteResult !== 'string') return { status: 'error', message: docenteResult.error };
   const docenteId = docenteResult;
@@ -513,7 +533,7 @@ async function applySubject(operation: PendingOperation<SubjectPayload>, user: U
     const existing = await db.prepare('SELECT id FROM materias WHERE id = ? AND tenant_id = ?')
       .get(payload.id, tenantId);
     if (!existing) return { status: 'error', message: 'Materia no encontrada en esta institución.' };
-    if (user.rol !== 'admin' && !(await canAccessSubject(user, payload.id))) {
+    if ((await resolveAuthContext(user))?.role !== 'admin' && !(await canAccessSubject(user, payload.id))) {
       return { status: 'error', message: 'El docente no tiene permiso sobre esta materia.' };
     }
 
@@ -525,18 +545,18 @@ async function applySubject(operation: PendingOperation<SubjectPayload>, user: U
       WHERE tenant_id = ? AND materia_id = ? AND (? = 1 OR docente_id = ?)
       LIMIT 1
     `).get(
-      tenantId, payload.id, user.rol === 'admin' ? 1 : 0, docenteId,
-      tenantId, payload.id, user.rol === 'admin' ? 1 : 0, docenteId,
+      tenantId, payload.id, (await resolveAuthContext(user))?.role === 'admin' ? 1 : 0, docenteId,
+      tenantId, payload.id, (await resolveAuthContext(user))?.role === 'admin' ? 1 : 0, docenteId,
     );
 
     if (hasDependencies) {
-      if (user.rol === 'admin') {
+      if ((await resolveAuthContext(user))?.role === 'admin') {
         await db.prepare('UPDATE materias SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
       } else {
         await db.prepare('DELETE FROM docente_materias WHERE tenant_id = ? AND docente_id = ? AND materia_id = ?')
           .run(tenantId, docenteId, payload.id);
       }
-    } else if (user.rol === 'admin') {
+    } else if ((await resolveAuthContext(user))?.role === 'admin') {
       await db.prepare('DELETE FROM docente_materias WHERE tenant_id = ? AND materia_id = ?').run(tenantId, payload.id);
       await db.prepare('DELETE FROM materias WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
     } else {
@@ -557,7 +577,7 @@ async function applySubject(operation: PendingOperation<SubjectPayload>, user: U
   if (existing && new Date(existing.updated_at).getTime() > new Date(payload.updatedAt).getTime()) {
     return { status: 'synced', ignoredOlderWrite: true };
   }
-  if (existing && user.rol !== 'admin' && !(await canAccessSubject(user, payload.id))) {
+  if (existing && (await resolveAuthContext(user))?.role !== 'admin' && !(await canAccessSubject(user, payload.id))) {
     return { status: 'error', message: 'El docente no tiene permiso sobre esta materia.' };
   }
 
@@ -587,17 +607,24 @@ async function applySubject(operation: PendingOperation<SubjectPayload>, user: U
 
 async function applySchool(operation: PendingOperation<SchoolPayload>, user: User): Promise<SyncApplyResult> {
   const payload = operation.payload;
-  const docenteId = user.rol === 'admin' ? payload.docenteId : user.id;
-  const tenantId = user.rol === 'admin'
-    ? ((await db.prepare('SELECT tenant_id FROM usuarios WHERE id = ?').get(docenteId)) as { tenant_id: string } | undefined)?.tenant_id || user.tenant_id
-    : user.tenant_id;
+  const sessionTenantId = await syncTenantId(user);
+  if (!sessionTenantId) return { status: 'error', message: 'Sin acceso institucional.' };
+  const tenantMismatch = rejectPayloadTenantMismatch(sessionTenantId, payload);
+  if (tenantMismatch) return { status: 'error', message: tenantMismatch };
+
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return { status: 'error', message: 'Sin acceso institucional.' };
+  const isAdmin = ctx.role === 'admin';
+  const docenteId = isAdmin ? payload.docenteId : user.id;
+  // Admin opera siempre en su tenant de contexto; no heredar tenant de otro docente.
+  const tenantId = sessionTenantId;
 
   if (operation.action === 'delete') {
     const school = (await db.prepare('SELECT nombre FROM escuelas WHERE id = ? AND tenant_id = ?').get(payload.id, tenantId)) as { nombre: string } | undefined;
     if (school) {
       const hasCourses = await db.prepare('SELECT 1 FROM cursos WHERE tenant_id = ? AND escuela = ? LIMIT 1').get(tenantId, school.nombre);
       if (hasCourses) {
-        if (user.rol === 'admin') {
+        if (isAdmin) {
           await db.prepare('UPDATE escuelas SET activo = 0, updated_at = ? WHERE id = ? AND tenant_id = ?').run(payload.updatedAt, payload.id, tenantId);
         } else {
           await db.prepare('DELETE FROM docente_escuelas WHERE tenant_id = ? AND docente_id = ? AND escuela_id = ?')
@@ -607,11 +634,11 @@ async function applySchool(operation: PendingOperation<SchoolPayload>, user: Use
       }
     }
     await db.prepare(
-      user.rol === 'admin'
+      isAdmin
         ? 'DELETE FROM docente_escuelas WHERE tenant_id = ? AND escuela_id = ?'
         : 'DELETE FROM docente_escuelas WHERE tenant_id = ? AND docente_id = ? AND escuela_id = ?',
-    ).run(...(user.rol === 'admin' ? [tenantId, payload.id] : [tenantId, docenteId, payload.id]));
-    if (user.rol === 'admin') {
+    ).run(...(isAdmin ? [tenantId, payload.id] : [tenantId, docenteId, payload.id]));
+    if (isAdmin) {
       await db.prepare('DELETE FROM escuelas WHERE id = ? AND tenant_id = ?').run(payload.id, tenantId);
     } else {
       const remaining = await db.prepare('SELECT 1 FROM docente_escuelas WHERE tenant_id = ? AND escuela_id = ? LIMIT 1')
@@ -660,9 +687,16 @@ async function applyClientState(operation: PendingOperation<ClientStatePayload>,
     return { status: 'error', message: 'El estado del docente no se elimina.' };
   }
 
-  const tenantId = syncTenantId(user);
-  const docenteId = user.rol === 'admin' ? (payload.docenteId || user.id) : user.id;
-  if (user.rol !== 'admin' && payload.id !== user.id && payload.docenteId !== user.id) {
+  const tenantId = await syncTenantId(user);
+  if (!tenantId) return { status: 'error', message: 'Sin acceso institucional.' };
+  const tenantMismatch = rejectPayloadTenantMismatch(tenantId, payload);
+  if (tenantMismatch) return { status: 'error', message: tenantMismatch };
+
+  const ctx = await resolveAuthContext(user);
+  if (!ctx) return { status: 'error', message: 'Sin acceso institucional.' };
+  const isAdmin = ctx.role === 'admin';
+  const docenteId = isAdmin ? (payload.docenteId || user.id) : user.id;
+  if (!isAdmin && payload.id !== user.id && payload.docenteId !== user.id) {
     return { status: 'error', message: 'El estado pertenece a otro docente.' };
   }
 
@@ -699,7 +733,9 @@ async function applyClientState(operation: PendingOperation<ClientStatePayload>,
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;
+  const auth = locals.auth;
   if (!user) return Response.json({ success: false, error: 'No autenticado' }, { status: 401 });
+  if (!auth) return Response.json({ success: false, error: 'Sin acceso institucional' }, { status: 403 });
 
   try {
     const body = await request.json().catch(() => null);
@@ -709,6 +745,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return Response.json({ success: false, error: 'Sin operaciones', results: [] }, { status: 400 });
     }
 
+    const sessionTenantId = auth.tenantId;
     const results: SyncResult[] = [];
     const tx = db.transaction(async () => {
       for (const operation of operations) {
@@ -722,7 +759,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           FROM sync_log
           WHERE client_mutation_id = ?
             AND tenant_id = ?
-        `).get([operation.clientMutationId, user.tenant_id]);
+        `).get([operation.clientMutationId, sessionTenantId]);
 
         if (duplicate) {
           results.push({ clientMutationId: operation.clientMutationId, status: 'duplicate' });
@@ -749,11 +786,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
         }
 
         // Forzar docente/tenant de la sesión (no confiar en el cliente).
-        if (user.rol !== 'admin') {
+        if (auth.role !== 'admin') {
           (payload as { docenteId: string }).docenteId = user.id;
         }
 
-        const tenantMismatch = rejectPayloadTenantMismatch(user, payload);
+        const tenantMismatch = rejectPayloadTenantMismatch(sessionTenantId, payload);
         if (tenantMismatch) {
           results.push({
             clientMutationId: operation.clientMutationId,
@@ -816,7 +853,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           VALUES (?, ?, ?, ?, ?, ?)
         `).run([
           operation.clientMutationId,
-          user.tenant_id,
+          sessionTenantId,
           docenteIdForLog,
           operation.entity,
           operation.id,

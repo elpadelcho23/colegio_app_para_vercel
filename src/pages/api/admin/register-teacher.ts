@@ -1,43 +1,45 @@
 import type { APIRoute } from 'astro';
-import bcrypt from 'bcryptjs';
-import { randomUUID } from 'node:crypto';
-import { isStrongPassword } from '../../../server/auth';
-import { createTenant, db } from '../../../server/db';
-import { validateEmailFormat } from '../../../server/auth-email';
+import { isInstitutionAdmin } from '../../../server/auth-context';
+import { addOrInviteTeacher, teacherWriteStatus } from '../../../server/institution-teachers';
 
-export const POST: APIRoute = async ({ request, redirect }) => {
+/**
+ * Compat: formulario legacy de /admin/usuarios.
+ * Migrado a addOrInviteTeacher (AuthContext + membership, sin createTenant).
+ * Preferir POST /api/admin/teachers para clientes nuevos.
+ */
+export const POST: APIRoute = async ({ request, redirect, locals, url }) => {
+  const admin = locals.user;
+  const auth = locals.auth;
+  if (!admin || !auth || !isInstitutionAdmin(auth)) {
+    return Response.json({ error: 'Requiere rol admin.' }, { status: 403 });
+  }
+
   const form = await request.formData();
   const nombre = String(form.get('nombre') || '').trim();
-  const email = validateEmailFormat(String(form.get('email') || ''));
+  const email = String(form.get('email') || '');
   const password = String(form.get('password') || '');
   const cursoIds = form.getAll('cursoIds').map(String);
   const materiaIds = form.getAll('materiaIds').map(String);
 
-  if (!nombre || !email || !isStrongPassword(password)) {
-    return Response.json({ error: 'Datos invalidos o contrasena debil.' }, { status: 400 });
+  const result = await addOrInviteTeacher(admin, {
+    nombre,
+    email,
+    password: password || null,
+    cursoIds,
+    materiaIds,
+    origin: url.origin,
+  });
+
+  if (!result.ok) {
+    const accept = request.headers.get('accept') || '';
+    if (accept.includes('application/json')) {
+      return Response.json(
+        { error: result.error, code: result.code },
+        { status: teacherWriteStatus(result.code) },
+      );
+    }
+    return redirect(`/admin/usuarios?error=${encodeURIComponent(result.code)}`, 303);
   }
 
-  const exists = await db.prepare('SELECT id FROM usuarios WHERE lower(email) = lower(?)').get(email);
-  if (exists) return Response.json({ error: 'El email ya esta registrado.' }, { status: 409 });
-
-  const id = `docente-${randomUUID()}`;
-  const tenantId = await createTenant(`Cuenta de ${nombre}`);
-  const verifiedAt = new Date().toISOString();
-  const tx = db.transaction(async () => {
-    // Alta administrativa: se marca verificado (contraseña temporal entregada por el admin).
-    // Las invitaciones por email llegan en una fase posterior.
-    await db.prepare(`
-      INSERT INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, email_verified_at)
-      VALUES (?, ?, ?, ?, ?, 'docente', ?)
-    `).run(id, tenantId, nombre, email, bcrypt.hashSync(password, 12), verifiedAt);
-
-    const assignCourse = db.prepare('INSERT OR IGNORE INTO docente_cursos (tenant_id, docente_id, curso_id) VALUES (?, ?, ?)');
-    for (const cursoId of cursoIds) await assignCourse.run(tenantId, id, cursoId);
-
-    const assignSubject = db.prepare('INSERT OR IGNORE INTO docente_materias (tenant_id, docente_id, materia_id) VALUES (?, ?, ?)');
-    for (const materiaId of materiaIds) await assignSubject.run(tenantId, id, materiaId);
-  });
-  await tx();
-
-  return redirect('/admin/usuarios', 303);
+  return redirect('/admin/usuarios?ok=teacher', 303);
 };

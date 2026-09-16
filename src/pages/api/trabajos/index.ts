@@ -8,7 +8,9 @@ import { listTrabajoEntregas } from '../../../server/trabajo-entregas';
 
 export const GET: APIRoute = async ({ locals, url }) => {
   const user = locals.user;
+  const auth = locals.auth;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+  if (!auth) return Response.json({ error: 'Sin acceso institucional' }, { status: 403 });
 
   const entregas = await listTrabajoEntregas(user, {
     cursoId: url.searchParams.get('curso') || url.searchParams.get('cursoId'),
@@ -24,7 +26,9 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
 export const POST: APIRoute = async ({ locals, request }) => {
   const user = locals.user;
+  const auth = locals.auth;
   if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+  if (!auth) return Response.json({ error: 'Sin acceso institucional' }, { status: 403 });
 
   const form = await request.formData().catch(() => null);
   if (!form) return Response.json({ error: 'Formulario inválido.' }, { status: 400 });

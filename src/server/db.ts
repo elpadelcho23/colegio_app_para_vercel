@@ -25,11 +25,20 @@ export interface User {
   email_verified_at?: string | null;
 }
 
+/** Slug estable derivado del id (único); el admin puede personalizarlo luego vía updateTenant. */
+function defaultTenantSlug(id: string) {
+  return String(id)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || id;
+}
+
 export async function createTenant(nombre: string, id = `tenant-${randomBytes(8).toString('hex')}`) {
   await db.prepare(`
-    INSERT OR IGNORE INTO tenants (id, nombre)
-    VALUES (?, ?)
-  `).run(id, nombre.trim() || 'Cuenta docente');
+    INSERT OR IGNORE INTO tenants (id, nombre, slug, status)
+    VALUES (?, ?, ?, 'active')
+  `).run(id, nombre.trim() || 'Cuenta docente', defaultTenantSlug(id));
   return id;
 }
 
@@ -59,7 +68,7 @@ export async function createUser(user: Omit<User, 'id' | 'tenant_id'> & {
     verifiedAt,
   ]);
 
-  return {
+  const created: User = {
     id,
     tenant_id: tenantId,
     nombre: user.nombre.trim(),
@@ -67,7 +76,13 @@ export async function createUser(user: Omit<User, 'id' | 'tenant_id'> & {
     rol: user.rol,
     is_guest: false,
     email_verified_at: verifiedAt,
-  } as User;
+  };
+
+  // Fase 3: segunda representación sincronizada (no cambia la fuente de tenant en auth).
+  const { ensureActiveMembershipForUser } = await import('./memberships');
+  await ensureActiveMembershipForUser(created);
+
+  return created;
 }
 
 /** Cuenta efímera aislada: tenant propio, sin persistencia entre visitas. */
@@ -441,6 +456,12 @@ async function initSchema() {
   CREATE TABLE IF NOT EXISTS tenants (
     id TEXT PRIMARY KEY,
     nombre TEXT NOT NULL,
+    slug TEXT,
+    email TEXT,
+    telefono TEXT,
+    direccion TEXT,
+    logo_url TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
@@ -797,6 +818,8 @@ async function initSchema() {
   await migrateAulaTemporal();
   await migrateDocenteClientState();
   await migrateAuthEmail();
+  await migrateInstitutionModel();
+  await migrateInstitutionMemberships();
   await createIndexes();
   await setSchemaVersion(1);
 
@@ -806,10 +829,13 @@ async function initSchema() {
     const message = error instanceof Error ? error.message : String(error ?? '');
     if (/UNIQUE constraint failed/i.test(message)) {
       console.warn('[db] seed omitido (datos ya existentes):', message);
-      return;
+    } else {
+      throw error;
     }
-    throw error;
   }
+
+  // Seed puede crear usuarios después del primer backfill; re-sync idempotente.
+  await migrateInstitutionMemberships();
 }
 
 async function setSchemaVersion(version: number) {
@@ -896,6 +922,135 @@ async function migrateAuthEmail() {
     WHERE COALESCE(is_guest, 0) = 0
       AND email_verified_at IS NULL
   `).run();
+}
+
+/**
+ * Fase 2 Institutional Foundation: modelo de institución sobre `tenants`.
+ * Additive / reversible: no renombra la tabla, no elimina columnas, no toca FKs.
+ * status inicial: active | suspended (validado en backend).
+ */
+async function migrateInstitutionModel() {
+  await ensureColumn('tenants', 'slug', 'slug TEXT');
+  await ensureColumn('tenants', 'email', 'email TEXT');
+  await ensureColumn('tenants', 'telefono', 'telefono TEXT');
+  await ensureColumn('tenants', 'direccion', 'direccion TEXT');
+  await ensureColumn('tenants', 'logo_url', 'logo_url TEXT');
+  await ensureColumn('tenants', 'status', "status TEXT NOT NULL DEFAULT 'active'");
+
+  await db.prepare(`
+    UPDATE tenants
+    SET status = 'active'
+    WHERE status IS NULL OR status = '' OR status NOT IN ('active', 'suspended')
+  `).run();
+
+  const missingSlug = (await db.prepare(`
+    SELECT id, nombre FROM tenants
+    WHERE slug IS NULL OR trim(slug) = ''
+  `).all()) as Array<{ id: string; nombre: string }>;
+
+  for (const row of missingSlug) {
+    const base = defaultTenantSlug(row.id);
+    let candidate = base;
+    let n = 2;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const taken = (await db.prepare(`
+        SELECT id FROM tenants WHERE lower(slug) = lower(?) AND id != ? LIMIT 1
+      `).get(candidate, row.id)) as { id: string } | undefined;
+      if (!taken) break;
+      candidate = `${base}-${n}`.slice(0, 80);
+      n += 1;
+      if (n > 500) {
+        candidate = `${base}-${randomBytes(3).toString('hex')}`;
+        break;
+      }
+    }
+    await db.prepare('UPDATE tenants SET slug = ? WHERE id = ?').run(candidate, row.id);
+  }
+
+  await db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_slug_unique
+      ON tenants(slug)
+      WHERE slug IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+  `);
+}
+
+/**
+ * Fase 3: institution_memberships — segunda representación del vínculo user↔tenant.
+ * - Additive: no toca usuarios.tenant_id ni FKs existentes.
+ * - Backfill idempotente para usuarios no-guest.
+ * - Guests excluidos (cuentas efímeras).
+ */
+async function migrateInstitutionMemberships() {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS institution_memberships (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('admin', 'docente')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      revoked_at TEXT,
+      UNIQUE (user_id, tenant_id),
+      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_memberships_user ON institution_memberships(user_id);
+    CREATE INDEX IF NOT EXISTS idx_memberships_tenant ON institution_memberships(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_memberships_tenant_status ON institution_memberships(tenant_id, status);
+    CREATE INDEX IF NOT EXISTS idx_memberships_user_status ON institution_memberships(user_id, status);
+  `);
+
+  const users = (await db.prepare(`
+    SELECT id, tenant_id, rol
+    FROM usuarios
+    WHERE COALESCE(is_guest, 0) = 0
+      AND tenant_id IS NOT NULL
+      AND trim(tenant_id) != ''
+      AND rol IN ('admin', 'docente')
+  `).all()) as Array<{ id: string; tenant_id: string; rol: 'admin' | 'docente' }>;
+
+  const insert = db.prepare(`
+    INSERT INTO institution_memberships (id, user_id, tenant_id, role, status, created_at, revoked_at)
+    VALUES (?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, NULL)
+    ON CONFLICT(user_id, tenant_id) DO UPDATE SET
+      role = excluded.role,
+      status = CASE
+        WHEN institution_memberships.status = 'revoked' THEN institution_memberships.status
+        ELSE 'active'
+      END,
+      revoked_at = CASE
+        WHEN institution_memberships.status = 'revoked' THEN institution_memberships.revoked_at
+        ELSE NULL
+      END
+  `);
+
+  for (const user of users) {
+    const existing = (await db.prepare(`
+      SELECT id, status FROM institution_memberships
+      WHERE user_id = ? AND tenant_id = ?
+    `).get(user.id, user.tenant_id)) as { id: string; status: string } | undefined;
+
+    if (existing) {
+      // Consistencia: si ya hay fila activa, alinear role con usuarios.rol (fuente actual).
+      // Si está revoked, no la reactivamos automáticamente en backfill (respetar revoke explícito).
+      if (existing.status === 'active') {
+        await db.prepare(`
+          UPDATE institution_memberships SET role = ? WHERE id = ?
+        `).run(user.rol, existing.id);
+      }
+      continue;
+    }
+
+    await insert.run(
+      `mem-${randomBytes(10).toString('hex')}`,
+      user.id,
+      user.tenant_id,
+      user.rol,
+    );
+  }
 }
 
 async function migrateDocenteClientState() {
@@ -1147,6 +1302,9 @@ async function migrateTenancy() {
 
 async function createIndexes() {
   await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+    CREATE INDEX IF NOT EXISTS idx_memberships_user ON institution_memberships(user_id);
+    CREATE INDEX IF NOT EXISTS idx_memberships_tenant ON institution_memberships(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_usuarios_tenant ON usuarios(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_cursos_tenant ON cursos(tenant_id);
@@ -1204,6 +1362,16 @@ async function insertUser(user: User & { password: string }) {
     INSERT OR IGNORE INTO usuarios (id, tenant_id, nombre, email, password_hash, rol, email_verified_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(params);
+
+  if (user.id && user.tenant_id && (user.rol === 'admin' || user.rol === 'docente') && !user.is_guest) {
+    const { ensureActiveMembershipForUser } = await import('./memberships');
+    await ensureActiveMembershipForUser({
+      id: user.id,
+      tenant_id: user.tenant_id,
+      rol: user.rol,
+      is_guest: false,
+    });
+  }
 }
 
 export interface CourseViewFilters {
@@ -1296,6 +1464,11 @@ function docenteScopeClause(alias = 'c') {
 export async function getCourseViewSnapshot(user: User, filters: CourseViewFilters): Promise<CourseViewSnapshot | null> {
   if (!filters.subjectId) return null;
 
+  // Defensa en profundidad: no confiar en usuarios.rol crudo (drift vs membership).
+  const { resolveAuthorizedUser } = await import('./auth-context');
+  const effective = await resolveAuthorizedUser(user);
+  if (!effective) return null;
+
   const courseFilter = filters.courseId
     ? 'AND c.id = @course_id'
     : filters.courseKey
@@ -1305,7 +1478,7 @@ export async function getCourseViewSnapshot(user: User, filters: CourseViewFilte
   if (!filters.courseId && !filters.courseKey) return null;
 
   const parsedKey = filters.courseKey ? parseCourseKey(filters.courseKey) : null;
-  const permissionClause = user.rol === 'admin' ? '' : docenteScopeClause();
+  const permissionClause = effective.rol === 'admin' ? '' : docenteScopeClause();
 
   const rows = (await db.prepare(`
     SELECT
@@ -1344,20 +1517,20 @@ export async function getCourseViewSnapshot(user: User, filters: CourseViewFilte
       ON n.alumno_id = a.id
      AND n.materia_id = m.id
      AND n.tenant_id = c.tenant_id
-     ${user.rol === 'admin' ? '' : 'AND n.docente_id = @docente_id'}
+     ${effective.rol === 'admin' ? '' : 'AND n.docente_id = @docente_id'}
     LEFT JOIN asistencias ast
       ON ast.alumno_id = a.id
      AND ast.materia_id = m.id
      AND ast.tenant_id = c.tenant_id
-     ${user.rol === 'admin' ? '' : 'AND ast.docente_id = @docente_id'}
+     ${effective.rol === 'admin' ? '' : 'AND ast.docente_id = @docente_id'}
     WHERE c.tenant_id = @tenant_id
       AND m.id = @subject_id
       ${courseFilter}
       ${permissionClause}
     ORDER BY a.nombre, n.fecha DESC, ast.fecha DESC
   `).all({
-    tenant_id: user.tenant_id,
-    docente_id: user.id,
+    tenant_id: effective.tenant_id,
+    docente_id: effective.id,
     course_id: filters.courseId || null,
     escuela: parsedKey?.escuela || null,
     curso_nombre: parsedKey?.curso_nombre || null,
