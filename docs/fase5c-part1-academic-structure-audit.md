@@ -317,24 +317,24 @@ Solo documentación:
 
 ## 14. Tests
 
-Ejecutados tras la auditoría (sin cambios funcionales esperados):
+Ejecutados tras la auditoría (sin cambios funcionales):
 
 | Script | Resultado |
 |--------|-----------|
-| `verify:auth-memberships` | (ejecutar) |
-| `verify:memberships` | |
-| `verify:institution` | |
-| `verify:institution-teachers` | |
-| `verify:institution-settings` | |
-| `verify:auth-email` | |
-| `verify:guides` | |
-| `npm run build` | |
+| `verify:auth-memberships` | OK (19) |
+| `verify:memberships` | OK (12) |
+| `verify:institution` | OK (12) |
+| `verify:institution-teachers` | OK (18) |
+| `verify:institution-settings` | OK (15) |
+| `verify:auth-email` | OK (15) |
+| `verify:guides` | OK |
+| `npm run build` | OK |
 
 ---
 
 ## 15. Build
 
-Ver sección de resultados en el PR / commit final.
+`npm run build` — **OK** (Astro + Vercel adapter).
 
 ---
 
