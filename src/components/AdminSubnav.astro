@@ -1,0 +1,42 @@
+---
+interface Props {
+  current: 'institucion' | 'docentes' | 'escuelas' | 'cursos' | 'materias';
+}
+
+const { current } = Astro.props;
+
+const links = [
+  { id: 'institucion', href: '/admin/institucion', label: 'Institución' },
+  { id: 'docentes', href: '/admin/usuarios', label: 'Docentes' },
+  { id: 'escuelas', href: '/admin/escuelas', label: 'Escuelas' },
+  { id: 'cursos', href: '/admin/cursos', label: 'Cursos' },
+  { id: 'materias', href: '/admin/materias', label: 'Materias' },
+] as const;
+---
+
+<nav class="admin-subnav" aria-label="Administración institucional">
+  {links.map((link) => (
+    <a
+      class:list={['btn', 'btn-secondary', current === link.id && 'is-active']}
+      href={link.href}
+      aria-current={current === link.id ? 'page' : undefined}
+    >
+      {link.label}
+    </a>
+  ))}
+  <a class="btn btn-secondary" href="/">Volver al panel</a>
+</nav>
+
+<style>
+  .admin-subnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .admin-subnav .is-active {
+    border-color: color-mix(in srgb, var(--color-primary, #226c5f) 45%, white);
+    background: color-mix(in srgb, var(--color-primary, #226c5f) 14%, white);
+    font-weight: 700;
+  }
+</style>

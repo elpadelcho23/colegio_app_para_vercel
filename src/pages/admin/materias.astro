@@ -1,0 +1,122 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AdminSubnav from '../../components/AdminSubnav.astro';
+import { listSubjectsForInstitutionAdmin } from '../../server/institution-academic';
+
+const currentUser = Astro.locals.user;
+const auth = Astro.locals.auth;
+if (!currentUser || !auth || auth.role !== 'admin') {
+  return Astro.redirect('/');
+}
+
+const listed = await listSubjectsForInstitutionAdmin(currentUser, { includeInactive: true });
+const subjects = listed.ok ? listed.subjects : [];
+
+const flashOk = Astro.url.searchParams.get('ok');
+const flashError = Astro.url.searchParams.get('error');
+const flashMessage = flashOk === 'created'
+  ? 'Materia creada.'
+  : flashOk === 'saved'
+    ? 'Materia actualizada.'
+    : flashOk === 'deactivated'
+      ? 'Materia desactivada.'
+      : flashOk === 'activated'
+        ? 'Materia reactivada.'
+        : flashError === 'forbidden'
+          ? 'No podés administrar otra institución.'
+          : flashError === 'validation'
+            ? 'Datos inválidos.'
+            : flashError
+              ? 'No se pudo completar la operación.'
+              : null;
+---
+
+<Layout title="Materias">
+  <main class="page page-stack">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Administración institucional</p>
+        <h1>Materias</h1>
+        <p>Catálogo institucional del tenant. Sin relación curso-materia nueva.</p>
+      </div>
+      <AdminSubnav current="materias" />
+    </header>
+
+    {flashMessage && (
+      <p class={`notice ${flashError ? 'notice-error' : 'notice-ok'}`} role="status">{flashMessage}</p>
+    )}
+
+    <section class="grid-2">
+      <form class="panel form-grid" method="post" action="/api/admin/subjects">
+        <div class="section-title span-2">
+          <h2>Nueva materia</h2>
+          <p>Se crea activa en tu institución.</p>
+        </div>
+        <label class="span-2">
+          <span>Nombre</span>
+          <input name="nombre" required maxlength="200" />
+        </label>
+        <button class="btn btn-primary span-2" type="submit">Crear materia</button>
+      </form>
+
+      <div class="panel">
+        <div class="section-title">
+          <h2>Listado</h2>
+          <p>Soft-delete con campo activo (sin hard-delete).</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr>
+            </thead>
+            <tbody>
+              {subjects.length === 0 && <tr><td colspan="3">Sin materias.</td></tr>}
+              {subjects.map((subject) => (
+                <tr>
+                  <td data-label="Nombre">
+                    <form method="post" action="/api/admin/subjects" class="inline-edit">
+                      <input type="hidden" name="action" value="update" />
+                      <input type="hidden" name="id" value={subject.id} />
+                      <input name="nombre" value={subject.nombre} required maxlength="200" />
+                      <button class="btn btn-secondary" type="submit">Guardar</button>
+                    </form>
+                  </td>
+                  <td data-label="Estado">
+                    <span class={`tag ${subject.activo ? 'tag-ok' : 'tag-muted'}`}>
+                      {subject.activo ? 'activa' : 'inactiva'}
+                    </span>
+                  </td>
+                  <td data-label="Acciones">
+                    {subject.activo ? (
+                      <form method="post" action="/api/admin/subjects">
+                        <input type="hidden" name="action" value="deactivate" />
+                        <input type="hidden" name="id" value={subject.id} />
+                        <button class="btn btn-danger" type="submit">Desactivar</button>
+                      </form>
+                    ) : (
+                      <form method="post" action="/api/admin/subjects">
+                        <input type="hidden" name="action" value="activate" />
+                        <input type="hidden" name="id" value={subject.id} />
+                        <button class="btn btn-secondary" type="submit">Activar</button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</Layout>
+
+<style>
+  .notice { margin: 0; padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid transparent; }
+  .notice-ok { background: color-mix(in srgb, var(--color-primary, #226c5f) 12%, white); border-color: color-mix(in srgb, var(--color-primary, #226c5f) 28%, white); }
+  .notice-error { background: color-mix(in srgb, #b42318 10%, white); border-color: color-mix(in srgb, #b42318 28%, white); }
+  .tag-ok { background: color-mix(in srgb, var(--color-primary, #226c5f) 16%, white); }
+  .tag-muted { opacity: 0.75; }
+  .inline-edit { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+  .inline-edit input { min-width: 10rem; flex: 1; }
+</style>

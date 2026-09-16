@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import AdminSubnav from '../../components/AdminSubnav.astro';
 import { listBackups } from '../../server/backup';
 import { db } from '../../server/db';
 import { listTeachersForInstitutionAdmin } from '../../server/institution-teachers';
@@ -58,10 +59,7 @@ const flashMessage = flashOk === 'teacher'
         <h1>Docentes y respaldos</h1>
         <p>Gestión de docentes de tu institución: alta, estado, revocación y reactivación.</p>
       </div>
-      <div class="button-row">
-        <a class="btn btn-secondary" href="/admin/institucion">Configuración</a>
-        <a class="btn btn-secondary" href="/">Volver al panel</a>
-      </div>
+      <AdminSubnav current="docentes" />
     </header>
 
     {flashMessage && (
