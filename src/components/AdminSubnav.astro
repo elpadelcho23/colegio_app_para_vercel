@@ -1,6 +1,6 @@
 ---
 interface Props {
-  current: 'institucion' | 'docentes' | 'escuelas' | 'cursos' | 'materias';
+  current: 'institucion' | 'docentes' | 'asignaciones' | 'escuelas' | 'cursos' | 'materias';
 }
 
 const { current } = Astro.props;
@@ -8,6 +8,7 @@ const { current } = Astro.props;
 const links = [
   { id: 'institucion', href: '/admin/institucion', label: 'Institución' },
   { id: 'docentes', href: '/admin/usuarios', label: 'Docentes' },
+  { id: 'asignaciones', href: '/admin/asignaciones', label: 'Asignaciones' },
   { id: 'escuelas', href: '/admin/escuelas', label: 'Escuelas' },
   { id: 'cursos', href: '/admin/cursos', label: 'Cursos' },
   { id: 'materias', href: '/admin/materias', label: 'Materias' },
