@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import AdminSubnav from '../../components/AdminSubnav.astro';
 import { getTenantById } from '../../server/tenant';
 
 const currentUser = Astro.locals.user;
@@ -40,10 +41,7 @@ const flashMessage = flashOk === 'saved'
         <h1>Configuración de institución</h1>
         <p>Datos básicos de tu institución activa. El estado (active/suspended) no se edita aquí.</p>
       </div>
-      <div class="button-row">
-        <a class="btn btn-secondary" href="/admin/usuarios">Docentes</a>
-        <a class="btn btn-secondary" href="/">Volver al panel</a>
-      </div>
+      <AdminSubnav current="institucion" />
     </header>
 
     {flashMessage && (

@@ -1,0 +1,162 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AdminSubnav from '../../components/AdminSubnav.astro';
+import { currentCalendarYear } from '../../server/ciclo-lectivo';
+import {
+  listCoursesForInstitutionAdmin,
+  listSchoolsForInstitutionAdmin,
+} from '../../server/institution-academic';
+
+const currentUser = Astro.locals.user;
+const auth = Astro.locals.auth;
+if (!currentUser || !auth || auth.role !== 'admin') {
+  return Astro.redirect('/');
+}
+
+const year = currentCalendarYear();
+const listed = await listCoursesForInstitutionAdmin(currentUser);
+const courses = listed.ok ? listed.courses : [];
+const schoolsListed = await listSchoolsForInstitutionAdmin(currentUser, { includeInactive: false });
+const schools = schoolsListed.ok ? schoolsListed.schools : [];
+
+const flashOk = Astro.url.searchParams.get('ok');
+const flashError = Astro.url.searchParams.get('error');
+const flashMessage = flashOk === 'created'
+  ? 'Curso creado.'
+  : flashOk === 'saved'
+    ? 'Curso actualizado.'
+    : flashOk === 'deleted'
+      ? 'Curso eliminado.'
+      : flashError === 'has_dependencies'
+        ? 'No se puede eliminar: el curso tiene alumnos.'
+        : flashError === 'forbidden'
+          ? 'No podés administrar otra institución.'
+          : flashError === 'validation'
+            ? 'Datos inválidos.'
+            : flashError
+              ? 'No se pudo completar la operación.'
+              : null;
+---
+
+<Layout title="Cursos">
+  <main class="page page-stack">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Administración institucional</p>
+        <h1>Cursos</h1>
+        <p>
+          Campos reales del schema: escuela (TEXT), nombre, turno, ciclo_lectivo.
+          No hay FK escuela_id en esta fase.
+        </p>
+      </div>
+      <AdminSubnav current="cursos" />
+    </header>
+
+    {flashMessage && (
+      <p class={`notice ${flashError ? 'notice-error' : 'notice-ok'}`} role="status">{flashMessage}</p>
+    )}
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>Nuevo curso</h2>
+        <p>Si elegís una escuela del listado, se guarda su nombre en cursos.escuela (compatibilidad TEXT).</p>
+      </div>
+      <form class="form-grid" method="post" action="/api/admin/courses">
+        <label>
+          <span>Escuela</span>
+          {schools.length > 0 ? (
+            <select name="escuela" required>
+              {schools.map((s) => <option value={s.nombre}>{s.nombre}</option>)}
+            </select>
+          ) : (
+            <input name="escuela" required maxlength="200" placeholder="Nombre de escuela" />
+          )}
+        </label>
+        <label>
+          <span>Nombre / división</span>
+          <input name="nombre" required maxlength="200" placeholder="4to 1ra" />
+        </label>
+        <label>
+          <span>Turno</span>
+          <input name="turno" required maxlength="80" placeholder="Mañana" />
+        </label>
+        <label>
+          <span>Ciclo lectivo</span>
+          <input type="number" name="ciclo_lectivo" required value={year} min="2000" max="2100" />
+        </label>
+        <button class="btn btn-primary span-2" type="submit">Crear curso</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>Listado</h2>
+        <p>Eliminación física solo si no hay alumnos (igual que sync).</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Escuela</th>
+              <th>Nombre</th>
+              <th>Turno</th>
+              <th>Ciclo</th>
+              <th>Alumnos</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {courses.length === 0 && <tr><td colspan="6">Sin cursos.</td></tr>}
+            {courses.map((course) => (
+              <tr>
+                <td colspan="5" data-label="Editar">
+                  <form method="post" action="/api/admin/courses" class="course-edit form-grid">
+                    <input type="hidden" name="action" value="update" />
+                    <input type="hidden" name="id" value={course.id} />
+                    <label>
+                      <span>Escuela</span>
+                      <input name="escuela" value={course.escuela} required maxlength="200" />
+                    </label>
+                    <label>
+                      <span>Nombre</span>
+                      <input name="nombre" value={course.nombre} required maxlength="200" />
+                    </label>
+                    <label>
+                      <span>Turno</span>
+                      <input name="turno" value={course.turno} required maxlength="80" />
+                    </label>
+                    <label>
+                      <span>Ciclo</span>
+                      <input type="number" name="ciclo_lectivo" value={course.ciclo_lectivo} required min="2000" max="2100" />
+                    </label>
+                    <p class="muted-inline">Alumnos activos: {course.alumnos_count ?? 0}</p>
+                    <button class="btn btn-secondary" type="submit">Guardar</button>
+                  </form>
+                </td>
+                <td data-label="Eliminar">
+                  {(course.alumnos_count || 0) === 0 ? (
+                    <form method="post" action="/api/admin/courses" onsubmit="return confirm('¿Eliminar este curso?')">
+                      <input type="hidden" name="action" value="delete" />
+                      <input type="hidden" name="id" value={course.id} />
+                      <button class="btn btn-danger" type="submit">Eliminar</button>
+                    </form>
+                  ) : (
+                    <span class="muted-inline">Con alumnos</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</Layout>
+
+<style>
+  .notice { margin: 0; padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid transparent; }
+  .notice-ok { background: color-mix(in srgb, var(--color-primary, #226c5f) 12%, white); border-color: color-mix(in srgb, var(--color-primary, #226c5f) 28%, white); }
+  .notice-error { background: color-mix(in srgb, #b42318 10%, white); border-color: color-mix(in srgb, #b42318 28%, white); }
+  .muted-inline { color: var(--color-muted, #667); font-size: 0.9em; }
+  .course-edit { margin: 0.35rem 0; }
+</style>
