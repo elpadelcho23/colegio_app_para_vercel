@@ -1,0 +1,282 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AdminSubnav from '../../components/AdminSubnav.astro';
+import {
+  getTeacherAssignmentsForInstitutionAdmin,
+  listAssignableTeachersForInstitutionAdmin,
+} from '../../server/institution-assignments';
+
+const currentUser = Astro.locals.user;
+const auth = Astro.locals.auth;
+if (!currentUser || !auth || auth.role !== 'admin') {
+  return Astro.redirect('/');
+}
+
+const teachersResult = await listAssignableTeachersForInstitutionAdmin(currentUser);
+const teachers = teachersResult.ok ? teachersResult.teachers : [];
+
+const selectedTeacherId = String(Astro.url.searchParams.get('teacher_id') || '').trim();
+
+let view = null;
+let loadError: string | null = null;
+if (selectedTeacherId) {
+  const result = await getTeacherAssignmentsForInstitutionAdmin(currentUser, selectedTeacherId);
+  if (result.ok) {
+    view = result.view;
+  } else {
+    loadError = result.code === 'revoked'
+      ? 'Este docente está revocado: no se pueden gestionar asignaciones.'
+      : result.code === 'not_found'
+        ? 'Docente no encontrado en esta institución.'
+        : 'No se pudieron cargar las asignaciones.';
+  }
+}
+
+const flashOk = Astro.url.searchParams.get('ok');
+const flashError = Astro.url.searchParams.get('error');
+const flashMessage = flashOk === 'assigned'
+  ? 'Asignación creada.'
+  : flashOk === 'removed'
+    ? 'Asignación quitada.'
+    : flashError === 'forbidden'
+      ? 'No podés administrar otra institución.'
+      : flashError === 'validation'
+        ? 'Datos inválidos.'
+        : flashError === 'conflict'
+          ? 'Esa asignación ya existía.'
+          : flashError === 'revoked'
+            ? 'Docente revocado: no se pueden gestionar asignaciones.'
+            : flashError === 'not_found'
+              ? 'Recurso o docente no encontrado en esta institución.'
+              : flashError
+                ? 'No se pudo completar la operación.'
+                : null;
+---
+
+<Layout title="Asignaciones docentes">
+  <main class="page page-stack">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Administración institucional</p>
+        <h1>Asignaciones docentes</h1>
+        <p>
+          Escuelas, cursos y materias son ejes independientes.
+          Solo se gestionan docentes activos de tu institución.
+        </p>
+      </div>
+      <AdminSubnav current="asignaciones" />
+    </header>
+
+    {flashMessage && (
+      <p class={`notice ${flashError ? 'notice-error' : 'notice-ok'}`} role="status">{flashMessage}</p>
+    )}
+    {loadError && (
+      <p class="notice notice-error" role="status">{loadError}</p>
+    )}
+
+    <section class="panel">
+      <form method="get" action="/admin/asignaciones" class="form-grid teacher-picker">
+        <label class="span-2">
+          <span>Seleccionar docente</span>
+          <select name="teacher_id" required onchange="this.form.submit()">
+            <option value="">— Elegí un docente activo —</option>
+            {teachers.map((teacher) => (
+              <option value={teacher.userId} selected={teacher.userId === selectedTeacherId}>
+                {teacher.nombre} ({teacher.email})
+              </option>
+            ))}
+          </select>
+        </label>
+        <button class="btn btn-secondary" type="submit">Ver asignaciones</button>
+      </form>
+      {teachers.length === 0 && (
+        <p class="muted">No hay docentes activos. Creá o reactivá docentes en la sección Docentes.</p>
+      )}
+    </section>
+
+    {view && (
+      <section class="assign-grid">
+        <div class="panel span-all">
+          <div class="section-title">
+            <h2>{view.teacher.nombre}</h2>
+            <p>{view.teacher.email} · membership activa</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <h2>Escuelas</h2>
+            <p>Visibilidad en pull (`docente_escuelas`).</p>
+          </div>
+          <ul class="assign-list">
+            {view.schools.length === 0 && <li class="muted">Sin escuelas en la institución.</li>}
+            {view.schools.map((school) => (
+              <li class:list={['assign-row', school.assigned && 'is-assigned']}>
+                <div>
+                  <strong>{school.label}</strong>
+                  {school.activo === false && <span class="tag tag-muted">inactiva</span>}
+                  <span class={`tag ${school.assigned ? 'tag-ok' : 'tag-muted'}`}>
+                    {school.assigned ? 'asignada' : 'sin asignar'}
+                  </span>
+                </div>
+                {school.assigned ? (
+                  <form method="post" action="/api/admin/teacher-assignments">
+                    <input type="hidden" name="action" value="unassign" />
+                    <input type="hidden" name="teacher_id" value={view.teacher.userId} />
+                    <input type="hidden" name="type" value="school" />
+                    <input type="hidden" name="resource_id" value={school.id} />
+                    <button class="btn btn-danger" type="submit">Quitar</button>
+                  </form>
+                ) : (
+                  <form method="post" action="/api/admin/teacher-assignments">
+                    <input type="hidden" name="action" value="assign" />
+                    <input type="hidden" name="teacher_id" value={view.teacher.userId} />
+                    <input type="hidden" name="type" value="school" />
+                    <input type="hidden" name="resource_id" value={school.id} />
+                    <button class="btn btn-primary" type="submit" disabled={school.activo === false}>
+                      Asignar
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <h2>Cursos</h2>
+            <p>Autorización pedagógica (`docente_cursos`).</p>
+          </div>
+          <ul class="assign-list">
+            {view.courses.length === 0 && <li class="muted">Sin cursos en la institución.</li>}
+            {view.courses.map((course) => (
+              <li class:list={['assign-row', course.assigned && 'is-assigned']}>
+                <div>
+                  <strong>{course.label}</strong>
+                  {course.meta && <span class="meta">{course.meta}</span>}
+                  <span class={`tag ${course.assigned ? 'tag-ok' : 'tag-muted'}`}>
+                    {course.assigned ? 'asignado' : 'sin asignar'}
+                  </span>
+                </div>
+                {course.assigned ? (
+                  <form method="post" action="/api/admin/teacher-assignments">
+                    <input type="hidden" name="action" value="unassign" />
+                    <input type="hidden" name="teacher_id" value={view.teacher.userId} />
+                    <input type="hidden" name="type" value="course" />
+                    <input type="hidden" name="resource_id" value={course.id} />
+                    <button class="btn btn-danger" type="submit">Quitar</button>
+                  </form>
+                ) : (
+                  <form method="post" action="/api/admin/teacher-assignments">
+                    <input type="hidden" name="action" value="assign" />
+                    <input type="hidden" name="teacher_id" value={view.teacher.userId} />
+                    <input type="hidden" name="type" value="course" />
+                    <input type="hidden" name="resource_id" value={course.id} />
+                    <button class="btn btn-primary" type="submit">Asignar</button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <h2>Materias</h2>
+            <p>Catálogo institucional (`docente_materias`). No dependen de un curso.</p>
+          </div>
+          <ul class="assign-list">
+            {view.subjects.length === 0 && <li class="muted">Sin materias en la institución.</li>}
+            {view.subjects.map((subject) => (
+              <li class:list={['assign-row', subject.assigned && 'is-assigned']}>
+                <div>
+                  <strong>{subject.label}</strong>
+                  {subject.activo === false && <span class="tag tag-muted">inactiva</span>}
+                  <span class={`tag ${subject.assigned ? 'tag-ok' : 'tag-muted'}`}>
+                    {subject.assigned ? 'asignada' : 'sin asignar'}
+                  </span>
+                </div>
+                {subject.assigned ? (
+                  <form method="post" action="/api/admin/teacher-assignments">
+                    <input type="hidden" name="action" value="unassign" />
+                    <input type="hidden" name="teacher_id" value={view.teacher.userId} />
+                    <input type="hidden" name="type" value="subject" />
+                    <input type="hidden" name="resource_id" value={subject.id} />
+                    <button class="btn btn-danger" type="submit">Quitar</button>
+                  </form>
+                ) : (
+                  <form method="post" action="/api/admin/teacher-assignments">
+                    <input type="hidden" name="action" value="assign" />
+                    <input type="hidden" name="teacher_id" value={view.teacher.userId} />
+                    <input type="hidden" name="type" value="subject" />
+                    <input type="hidden" name="resource_id" value={subject.id} />
+                    <button class="btn btn-primary" type="submit" disabled={subject.activo === false}>
+                      Asignar
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    )}
+
+    {!view && !loadError && selectedTeacherId === '' && teachers.length > 0 && (
+      <p class="muted">Seleccioná un docente para ver y editar sus asignaciones.</p>
+    )}
+  </main>
+</Layout>
+
+<style>
+  .notice { margin: 0; padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid transparent; }
+  .notice-ok { background: color-mix(in srgb, var(--color-primary, #226c5f) 12%, white); border-color: color-mix(in srgb, var(--color-primary, #226c5f) 28%, white); }
+  .notice-error { background: color-mix(in srgb, #b42318 10%, white); border-color: color-mix(in srgb, #b42318 28%, white); }
+  .muted { opacity: 0.78; }
+  .teacher-picker { align-items: end; }
+  .assign-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  }
+  .span-all { grid-column: 1 / -1; }
+  .assign-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.65rem;
+  }
+  .assign-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--color-border, #d7ddd9) 80%, white);
+    border-radius: 10px;
+  }
+  .assign-row.is-assigned {
+    background: color-mix(in srgb, var(--color-primary, #226c5f) 8%, white);
+  }
+  .assign-row > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.55rem;
+    align-items: center;
+  }
+  .meta {
+    font-size: 0.85rem;
+    opacity: 0.75;
+  }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+  }
+  .tag-ok { background: color-mix(in srgb, var(--color-primary, #226c5f) 16%, white); }
+  .tag-muted { opacity: 0.75; background: color-mix(in srgb, #667 10%, white); }
+</style>
