@@ -1,5 +1,7 @@
 # FASE 5C Part 1 — Authorization & teacher-side dependencies (academic entities)
 
+> Anexo de `docs/fase5c-part1-academic-structure-audit.md` (informe principal de auditoría y diseño).
+
 Audit of how **escuelas / cursos / materias / alumnos / docente_*** are authorized and touched today. Concrete `file:function` references and tenant-isolation notes for designing admin academic-structure APIs.
 
 ---
