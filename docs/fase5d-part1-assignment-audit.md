@@ -317,7 +317,7 @@ Toda API admin: `locals.auth.role==='admin'`. No `user.rol` solo.
 | Soft-delete escuela/materia | Links quedan | Mantener; listados admin pueden ocultar inactivas |
 | Rename escuela | 5C actualiza `cursos.escuela` TEXT | Assignments por `escuela_id` intactas |
 
-### Cambios que NO son necesarios en 5D Part 2
+## Cambios que NO son necesarios
 
 - Tablas nuevas de asignación.
 - Migrar `cursos.escuela` a FK.
@@ -329,7 +329,7 @@ Toda API admin: `locals.auth.role==='admin'`. No `user.rol` solo.
 
 ---
 
-## Test plan (para Part 2)
+## Test plan
 
 1. Admin A asigna docente A → curso A; docente obtiene `canAccessCourse` / pull.
 2. Docente A no accede curso B (otro tenant o sin assign).
