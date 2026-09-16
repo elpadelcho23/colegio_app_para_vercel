@@ -58,7 +58,10 @@ const flashMessage = flashOk === 'teacher'
         <h1>Docentes y respaldos</h1>
         <p>Gestión de docentes de tu institución: alta, estado, revocación y reactivación.</p>
       </div>
-      <a class="btn btn-secondary" href="/">Volver al panel</a>
+      <div class="button-row">
+        <a class="btn btn-secondary" href="/admin/institucion">Configuración</a>
+        <a class="btn btn-secondary" href="/">Volver al panel</a>
+      </div>
     </header>
 
     {flashMessage && (

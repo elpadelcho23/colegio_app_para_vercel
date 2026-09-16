@@ -192,8 +192,16 @@ export async function updateTenant(
   }
 
   if (input.telefono !== undefined) {
-    const telefono = input.telefono == null ? null : String(input.telefono).trim().slice(0, 60);
-    next.telefono = telefono || null;
+    if (input.telefono == null || input.telefono === '') {
+      next.telefono = null;
+    } else {
+      const telefono = String(input.telefono).trim().slice(0, 60);
+      // Formato flexible (internacional): dígitos y separadores habituales.
+      if (!telefono || telefono.length < 3 || !/^[+\d][\d\s()./-]*$/.test(telefono)) {
+        return { ok: false, error: 'Teléfono institucional inválido.', code: 'validation' };
+      }
+      next.telefono = telefono;
+    }
   }
 
   if (input.direccion !== undefined) {
@@ -213,6 +221,8 @@ export async function updateTenant(
     }
   }
 
+  // status: el helper lo acepta por compat/tests internos.
+  // Fase 5B: /api/admin/tenant rechaza status (sin reactivación suspended / sin superadmin).
   if (input.status !== undefined) {
     const status = validateTenantStatus(input.status);
     if (!status) return { ok: false, error: 'Status inválido (active|suspended).', code: 'validation' };
