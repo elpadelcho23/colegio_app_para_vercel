@@ -16,7 +16,8 @@
     "verify:institution": "tsx scripts/verify-institution.ts",
     "verify:memberships": "tsx scripts/verify-memberships.ts",
     "verify:auth-memberships": "tsx scripts/verify-auth-memberships.ts",
-    "verify:institution-teachers": "tsx scripts/verify-institution-teachers.ts"
+    "verify:institution-teachers": "tsx scripts/verify-institution-teachers.ts",
+    "verify:institution-settings": "tsx scripts/verify-institution-settings.ts"
   },
   "dependencies": {
     "@astrojs/vercel": "^10.0.8",

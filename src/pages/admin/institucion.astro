@@ -1,0 +1,205 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getTenantById } from '../../server/tenant';
+
+const currentUser = Astro.locals.user;
+const auth = Astro.locals.auth;
+if (!currentUser || !auth || auth.role !== 'admin') {
+  return Astro.redirect('/');
+}
+
+const tenant = await getTenantById(auth.tenantId);
+if (!tenant) {
+  return Astro.redirect('/');
+}
+
+const flashOk = Astro.url.searchParams.get('ok');
+const flashError = Astro.url.searchParams.get('error');
+const flashMessage = flashOk === 'saved'
+  ? 'Cambios guardados correctamente.'
+  : flashError === 'validation'
+    ? 'Revisá los datos: hay un error de validación.'
+    : flashError === 'slug_taken'
+      ? 'Ese slug ya pertenece a otra institución.'
+      : flashError === 'status_forbidden'
+        ? 'El estado de la institución no se puede cambiar desde aquí.'
+        : flashError === 'forbidden'
+          ? 'No podés modificar otra institución.'
+          : flashError === 'not_found'
+            ? 'Institución no encontrada.'
+            : flashError
+              ? 'No se pudo guardar. Intentá de nuevo.'
+              : null;
+---
+
+<Layout title="Configuración de institución">
+  <main class="page page-stack">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Administración institucional</p>
+        <h1>Configuración de institución</h1>
+        <p>Datos básicos de tu institución activa. El estado (active/suspended) no se edita aquí.</p>
+      </div>
+      <div class="button-row">
+        <a class="btn btn-secondary" href="/admin/usuarios">Docentes</a>
+        <a class="btn btn-secondary" href="/">Volver al panel</a>
+      </div>
+    </header>
+
+    {flashMessage && (
+      <p class={`notice ${flashError ? 'notice-error' : 'notice-ok'}`} role="status" data-flash>
+        {flashMessage}
+      </p>
+    )}
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>Datos institucionales</h2>
+        <p>Se guardan en tu tenant ({tenant.id}). Status actual: <span class="tag">{tenant.status}</span> (solo lectura).</p>
+      </div>
+
+      <form
+        class="form-grid"
+        method="post"
+        action="/api/admin/tenant"
+        data-institution-settings
+      >
+        <label>
+          <span>Nombre de institución</span>
+          <input name="nombre" required maxlength="200" value={tenant.nombre} />
+        </label>
+        <label>
+          <span>Slug</span>
+          <input name="slug" maxlength="80" value={tenant.slug || ''} placeholder="mi-colegio" />
+        </label>
+        <label>
+          <span>Email institucional</span>
+          <input type="email" name="email" value={tenant.email || ''} />
+        </label>
+        <label>
+          <span>Teléfono</span>
+          <input name="telefono" maxlength="60" value={tenant.telefono || ''} placeholder="+54 11 0000-0000" />
+        </label>
+        <label class="span-2">
+          <span>Dirección</span>
+          <input name="direccion" maxlength="500" value={tenant.direccion || ''} />
+        </label>
+        <label class="span-2">
+          <span>Logo URL</span>
+          <input
+            type="url"
+            name="logo_url"
+            maxlength="2000"
+            value={tenant.logo_url || ''}
+            placeholder="https://…"
+            data-logo-url-input
+          />
+        </label>
+
+        <div class="span-2 logo-preview-wrap" data-logo-preview-wrap {...(tenant.logo_url ? {} : { hidden: true })}>
+          <p class="muted-inline">Vista previa del logo (si la URL no carga, se oculta).</p>
+          {tenant.logo_url ? (
+            <img
+              class="logo-preview"
+              src={tenant.logo_url}
+              alt="Vista previa del logo institucional"
+              data-logo-preview
+              loading="lazy"
+            />
+          ) : (
+            <img class="logo-preview" alt="" data-logo-preview hidden />
+          )}
+        </div>
+
+        <div class="span-2 button-row">
+          <button class="btn btn-primary" type="submit" data-save-btn>Guardar cambios</button>
+          <span class="muted-inline" data-save-status aria-live="polite"></span>
+        </div>
+      </form>
+    </section>
+  </main>
+</Layout>
+
+<style>
+  .notice {
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+    border: 1px solid transparent;
+  }
+  .notice-ok {
+    background: color-mix(in srgb, var(--color-primary, #226c5f) 12%, white);
+    border-color: color-mix(in srgb, var(--color-primary, #226c5f) 28%, white);
+  }
+  .notice-error {
+    background: color-mix(in srgb, #b42318 10%, white);
+    border-color: color-mix(in srgb, #b42318 28%, white);
+  }
+  .muted-inline {
+    color: var(--color-muted, #667);
+    font-size: 0.9em;
+  }
+  .logo-preview-wrap {
+    display: grid;
+    gap: 0.5rem;
+  }
+  .logo-preview {
+    max-width: 160px;
+    max-height: 80px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-primary, #226c5f) 6%, white);
+    padding: 0.35rem;
+  }
+  .button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+  }
+</style>
+
+<script>
+  const form = document.querySelector('[data-institution-settings]');
+  const saveBtn = document.querySelector('[data-save-btn]');
+  const statusEl = document.querySelector('[data-save-status]');
+  const logoInput = document.querySelector('[data-logo-url-input]');
+  const logoPreview = document.querySelector('[data-logo-preview]');
+  const logoWrap = document.querySelector('[data-logo-preview-wrap]');
+
+  function setStatus(text) {
+    if (statusEl) statusEl.textContent = text || '';
+  }
+
+  form?.addEventListener('submit', () => {
+    if (saveBtn instanceof HTMLButtonElement) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Guardando…';
+    }
+    setStatus('Guardando…');
+  });
+
+  function syncLogoPreview() {
+    if (!(logoInput instanceof HTMLInputElement) || !(logoPreview instanceof HTMLImageElement)) return;
+    const value = logoInput.value.trim();
+    if (!value) {
+      logoPreview.hidden = true;
+      logoWrap?.setAttribute('hidden', '');
+      return;
+    }
+    logoPreview.hidden = false;
+    logoWrap?.removeAttribute('hidden');
+    logoPreview.onerror = () => {
+      logoPreview.hidden = true;
+      logoWrap?.setAttribute('hidden', '');
+    };
+    logoPreview.onload = () => {
+      logoPreview.hidden = false;
+      logoWrap?.removeAttribute('hidden');
+    };
+    logoPreview.src = value;
+  }
+
+  logoInput?.addEventListener('change', syncLogoPreview);
+  logoInput?.addEventListener('blur', syncLogoPreview);
+</script>
